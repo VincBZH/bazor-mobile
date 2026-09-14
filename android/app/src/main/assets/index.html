@@ -109,7 +109,7 @@ input[type=text],select{width:100%;background:#11161e;color:var(--text);border:1
 <section id="filesPanel" class="panel">
  <button class="close">Fermer</button>
  <h2>Fichiers de la room</h2>
- <div class="card small">Les fichiers sont transférés au PC via BAZOR API, stockés localement et journalisés. Limite actuelle : 8 Mo par fichier. Aucun fichier n’est exécuté automatiquement.</div>
+ <div class="card small">Les fichiers texte/code joints sont transférés au PC puis lus directement par Qwen/Mistral via BAZOR API. Les formats non pris en charge restent stockés sans être exécutés. Limite : 8 Mo/fichier.</div>
  <div id="filesList"></div>
 </section>
 
@@ -204,6 +204,7 @@ async function send(){
    return;
  }
  try{
+   const uploadedRefs=[];
    if(sentObjects.length){
      for(const f of sentObjects){
        if(f.size>8*1024*1024){
@@ -223,6 +224,7 @@ async function send(){
        });
        const uj=await up.json();
        if(up.ok && uj.ok){
+         uploadedRefs.push({id:uj.file.id,stored_name:uj.file.stored_name,name:uj.file.name});
          addMessage("system","📎 Envoyé au PC : "+f.name+(uj.file&&uj.file.duplicate?" • déjà présent":""));
        }else{
          addMessage("system","Échec fichier "+f.name+" : "+(uj.error||("HTTP "+up.status)));
@@ -236,13 +238,24 @@ async function send(){
        target:route,
        text:sentText,
        room:state.roomName,
-       interaction_mode:state.interactionMode
+       interaction_mode:state.interactionMode,
+       files:uploadedRefs
      })
    });
    const data=await res.json();
    if(!res.ok || !data.ok){
      addMessage("system","BAZOR API : "+(data.message||data.error||("HTTP "+res.status)));
      return;
+   }
+   if(data.files && data.files.length){
+     const okFiles=data.files.filter(x=>x.ok);
+     const badFiles=data.files.filter(x=>!x.ok);
+     if(okFiles.length){
+       addMessage("system","📖 Lu par le modèle : "+okFiles.map(x=>x.name+(x.truncated?" (extrait)":"")).join(", "));
+     }
+     if(badFiles.length){
+       addMessage("system","Non lu automatiquement : "+badFiles.map(x=>x.name||x.stored_name||"fichier").join(", "));
+     }
    }
    if(data.route && data.route.model){
      addMessage("system","AUTO ECO → "+data.route.model+" • "+(data.route.kind||"local")+" • GPT non consommé");
