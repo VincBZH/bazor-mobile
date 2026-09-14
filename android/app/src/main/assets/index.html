@@ -22,7 +22,7 @@ header{padding:12px 14px;border-bottom:1px solid var(--line);background:linear-g
 .ok{background:#153b2a;color:var(--green)} .off{background:#452126;color:#ffb2b2}.wait{background:#403518;color:#ffd66d}
 main{flex:1;min-height:0;display:flex;flex-direction:column}
 .toolbar{padding:10px 12px;border-bottom:1px solid var(--line);background:#11161e}
-.route{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.route{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
 .route button{border:1px solid var(--line);background:var(--panel);color:var(--muted);padding:10px 6px;border-radius:12px;font-weight:800}
 .route button.active{background:#153149;color:#bfe5ff;border-color:#2d78ab}
 .roombar{display:flex;gap:8px;margin-top:8px;align-items:center}
@@ -67,8 +67,9 @@ input[type=text],select{width:100%;background:#11161e;color:var(--text);border:1
 <main>
  <div class="toolbar">
    <div class="route">
-     <button data-route="gpt" class="active">GPT</button>
+     <button data-route="auto" class="active">AUTO ECO</button>
      <button data-route="ollama">OLLAMA</button>
+     <button data-route="gpt">GPT</button>
      <button data-route="both">LES DEUX</button>
    </div>
    <div class="roombar">
@@ -116,7 +117,7 @@ input[type=text],select{width:100%;background:#11161e;color:var(--text);border:1
  <button class="close">Fermer</button>
  <h2>Statut</h2>
  <div class="card"><b>PC :</b> <span id="statusPc">Recherche…</span></div>
- <div class="card"><b>GPT :</b> passe par BAZOR API ; connecteur GPT à configurer côté PC</div>
+ <div class="card"><b>Mode AUTO ECO :</b> local d’abord. BAZOR choisit le modèle Ollama adapté et ne dépense jamais GPT automatiquement.</div><div class="card"><b>GPT :</b> usage manuel uniquement ; connecteur GPT à configurer côté PC</div>
  <div class="card"><b>Ollama :</b> passage réel par BAZOR API ; port Ollama jamais exposé au téléphone</div>
  <div class="card"><b>GO / GO AUTO :</b> prévus dans le canal sécurisé</div>
 </section>
@@ -139,7 +140,7 @@ input[type=text],select{width:100%;background:#11161e;color:var(--text);border:1
 
 <script>
 const KEY="bazor.ai.room.mobile.v1";
-let route="gpt", files=[], pcOnline=false, pcName="", apiBase="", apiHealth=null;
+let route="auto", files=[], pcOnline=false, pcName="", apiBase="", apiHealth=null;
 let state={messages:[],history:[],files:[],roomName:"ROOM PRINCIPALE",interactionMode:"separate"};
 try{state={...state,...JSON.parse(localStorage.getItem(KEY)||"{}")}}catch(e){}
 const el=id=>document.getElementById(id);
@@ -211,6 +212,9 @@ async function send(){
      addMessage("system","BAZOR API : "+(data.message||data.error||("HTTP "+res.status)));
      return;
    }
+   if(data.route && data.route.model){
+     addMessage("system","AUTO ECO → "+data.route.model+" • "+(data.route.kind||"local")+" • GPT non consommé");
+   }
    if(data.ollama){
      if(data.ollama.ok) addMessage("ollama",data.ollama.answer||"(réponse vide)");
      else if(route!=="gpt") addMessage("system","Ollama : "+(data.ollama.message||data.ollama.error));
@@ -275,7 +279,7 @@ window.setBazorApi=async function(base){
 el("roomName").value=state.roomName;
 el("interactionMode").value=state.interactionMode;
 if(!state.messages.length){
- addMessage("system","BAZOR AI ROOM Mobile prête. Choisis GPT, Ollama ou LES DEUX, joins un fichier si besoin, puis écris ton message.");
+ addMessage("system","BAZOR AI ROOM Mobile prête en mode AUTO ECO : BAZOR choisit d’abord le meilleur modèle local pour économiser les crédits. Tu peux forcer Ollama, GPT ou LES DEUX si nécessaire.");
 }
 renderMessages();renderHistory();renderFiles();
 </script>
