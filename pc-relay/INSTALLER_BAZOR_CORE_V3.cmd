@@ -41,12 +41,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [3/8] Verification Python...
+echo [3/8] Verification Python et cle Mammouth...
 where python >nul 2>&1
 if errorlevel 1 (
   echo [BLOQUE] Python introuvable.
   pause
   exit /b 1
+)
+if not defined MAMMOUTH_API_KEY (
+  for /f "usebackq delims=" %%K in (`powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('MAMMOUTH_API_KEY','User')"`) do set "MAMMOUTH_API_KEY=%%K"
+)
+if defined MAMMOUTH_API_KEY (
+  echo [OK] Cle Mammouth detectee depuis Windows.
+) else (
+  echo [INFO] Cle Mammouth non detectee. Installation locale possible quand meme.
 )
 
 echo [4/8] Verification du code...
@@ -76,12 +84,11 @@ popd
 echo [7/8] Creation du raccourci Bureau...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut([Environment]::GetFolderPath('Desktop')+'\BAZOR CORE.lnk'); $s.TargetPath='%INSTALL_DIR%\DEMARRER_BAZOR_PC_RELAY.cmd'; $s.WorkingDirectory='%INSTALL_DIR%'; $s.Save()" >nul 2>&1
 
-echo [8/8] Verification Mammouth...
+echo [8/8] Verification finale Mammouth...
 if defined MAMMOUTH_API_KEY (
-  echo [OK] Cle Mammouth detectee.
+  echo [OK] Cle Mammouth prete pour BAZOR.
 ) else (
-  echo [INFO] Cle Mammouth non detectee dans cette session Windows.
-  echo Ferme et relance cet installateur si tu viens juste de creer la cle.
+  echo [INFO] Mammouth reste desactive; Ollama fonctionnera seul.
 )
 
 echo.
