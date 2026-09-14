@@ -35,6 +35,42 @@ def ollama_tags():
     except Exception:
         return False, []
 
+def pick_local_model(text, models):
+    lower = (text or "").lower()
+    code_words = ("code", "python", "javascript", "java", "bug", "github", "api", "script", "cmd", "powershell", "apk", "gradle", "html", "css", "fonction", "débog", "debug")
+    light_words = ("résume", "resume", "reformule", "classe", "liste", "titre", "court", "simple", "rapide")
+    preferred = []
+    if any(w in lower for w in code_words):
+        preferred = ["qwen2.5-coder:7b", "qwen2.5-coder", "mistral:latest", "mistral"]
+        kind = "code"
+    elif any(w in lower for w in light_words):
+        preferred = ["gemma3:4b", "gemma3", "mistral:latest", "mistral"]
+        kind = "light"
+    else:
+        preferred = ["mistral:latest", "mistral", "qwen2.5-coder:7b", "gemma3:4b"]
+        kind = "general"
+
+    for wanted in preferred:
+        for installed in models:
+            if installed == wanted or installed.startswith(wanted + ":"):
+                return installed, kind
+    return (models[0] if models else None), kind
+
+
+def route_task(text):
+    online, models = ollama_tags()
+    model, kind = pick_local_model(text, models)
+    # ECO CREDITS: never spend GPT automatically.
+    return {
+        "target": "ollama" if online and model else "gpt_manual",
+        "model": model,
+        "kind": kind,
+        "reason": "local_first",
+        "gpt_auto": False,
+        "ollama_online": online,
+        "models": models
+    }
+
 
 def ollama_chat(text, model=None):
     online, models = ollama_tags()
@@ -107,13 +143,16 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "pc": hostname,
                 "time": now_iso(),
                 "ollama": {"online": online, "models": models},
-                "capabilities": ["health", "models", "ollama_chat", "routing"],
+                "capabilities": ["health", "models", "ollama_chat", "routing", "eco_credits"],
                 "security": {
                     "scope": "local-network",
                     "ollama_exposed": False,
                     "shell_commands": False
                 }
             })
+            return
+        if self.path == "/api/v1/route":
+            self._json({"ok": True, "usage": "POST /api/v1/route with text"})
             return
         if self.path == "/api/v1/models":
             online, models = ollama_tags()
@@ -131,13 +170,36 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._json({"ok": False, "error": "invalid_json"}, 400)
             return
 
+        if self.path == "/api/v1/route":
+            text = str(body.get("text", "")).strip()
+            if not text:
+                self._json({"ok": False, "error": "empty_message"}, 400)
+                return
+            self._json({"ok": True, "route": route_task(text)})
+            return
+
         if self.path == "/api/v1/chat":
             text = str(body.get("text", "")).strip()
-            target = str(body.get("target", "ollama")).lower()
+            target = str(body.get("target", "auto")).lower()
             model = body.get("model")
             if not text:
                 self._json({"ok": False, "error": "empty_message"}, 400)
                 return
+
+            route_info = None
+            if target == "auto":
+                route_info = route_task(text)
+                if route_info["target"] == "ollama":
+                    target = "ollama"
+                    model = route_info["model"]
+                else:
+                    self._json({
+                        "ok": False,
+                        "error": "gpt_manual_required",
+                        "message": "Aucun modèle local disponible. GPT n'est jamais dépensé automatiquement en mode ECO.",
+                        "route": route_info
+                    }, 503)
+                    return
 
             result = {
                 "ok": True,
@@ -145,7 +207,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "pc": hostname,
                 "time": now_iso(),
                 "gpt": None,
-                "ollama": None
+                "ollama": None,
+                "route": route_info,
+                "eco_credits": True
             }
 
             if target in ("ollama", "both"):
