@@ -23,25 +23,17 @@ echo Dossier : %INSTALL_DIR%
 echo Donnees : conservees dans BAZOR_DATA
 echo.
 
-echo [1/7] Sauvegarde de l'ancienne version...
-if exist "%INSTALL_DIR%\bazor_pc_relay_v3.py" (
-  mkdir "%QUAR_DIR%" >nul 2>&1
-  move /Y "%INSTALL_DIR%\bazor_pc_relay_v3.py" "%QUAR_DIR%\" >nul
-  echo %date% %time% ^| ARCHIVE ^| bazor_pc_relay_v3.py ^| mise a jour ^| INSTALLER_BAZOR_CORE_V3>>"%LOG_FILE%"
-)
-if exist "%INSTALL_DIR%\mammouth_client.py" (
-  if not exist "%QUAR_DIR%" mkdir "%QUAR_DIR%" >nul 2>&1
-  move /Y "%INSTALL_DIR%\mammouth_client.py" "%QUAR_DIR%\" >nul
-  echo %date% %time% ^| ARCHIVE ^| mammouth_client.py ^| mise a jour ^| INSTALLER_BAZOR_CORE_V3>>"%LOG_FILE%"
-)
-if exist "%INSTALL_DIR%\DEMARRER_BAZOR_PC_RELAY.cmd" (
-  if not exist "%QUAR_DIR%" mkdir "%QUAR_DIR%" >nul 2>&1
-  move /Y "%INSTALL_DIR%\DEMARRER_BAZOR_PC_RELAY.cmd" "%QUAR_DIR%\" >nul
-  echo %date% %time% ^| ARCHIVE ^| DEMARRER_BAZOR_PC_RELAY.cmd ^| mise a jour ^| INSTALLER_BAZOR_CORE_V3>>"%LOG_FILE%"
+echo [1/8] Sauvegarde de l'ancienne version...
+for %%F in (bazor_pc_relay_v3.py mammouth_client.py DEMARRER_BAZOR_PC_RELAY.cmd test_bazor_v3.py) do (
+  if exist "%INSTALL_DIR%\%%F" (
+    if not exist "%QUAR_DIR%" mkdir "%QUAR_DIR%" >nul 2>&1
+    move /Y "%INSTALL_DIR%\%%F" "%QUAR_DIR%\" >nul
+    echo %date% %time% ^| ARCHIVE ^| %%F ^| mise a jour ^| INSTALLER_BAZOR_CORE_V3>>"%LOG_FILE%"
+  )
 )
 
-echo [2/7] Telechargement BAZOR Core v3...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/bazor_pc_relay_v3.py' -OutFile '%INSTALL_DIR%\bazor_pc_relay_v3.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/mammouth_client.py' -OutFile '%INSTALL_DIR%\mammouth_client.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/DEMARRER_BAZOR_PC_RELAY.cmd' -OutFile '%INSTALL_DIR%\DEMARRER_BAZOR_PC_RELAY.cmd'"
+echo [2/8] Telechargement BAZOR Core v3...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/bazor_pc_relay_v3.py' -OutFile '%INSTALL_DIR%\bazor_pc_relay_v3.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/mammouth_client.py' -OutFile '%INSTALL_DIR%\mammouth_client.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/DEMARRER_BAZOR_PC_RELAY.cmd' -OutFile '%INSTALL_DIR%\DEMARRER_BAZOR_PC_RELAY.cmd'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/test_bazor_v3.py' -OutFile '%INSTALL_DIR%\test_bazor_v3.py'"
 if errorlevel 1 (
   echo [BLOQUE] Telechargement impossible.
   echo Verifie Internet puis relance cet installateur.
@@ -49,7 +41,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [3/7] Verification Python...
+echo [3/8] Verification Python...
 where python >nul 2>&1
 if errorlevel 1 (
   echo [BLOQUE] Python introuvable.
@@ -57,8 +49,8 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [4/7] Verification du code...
-python -m py_compile "%INSTALL_DIR%\mammouth_client.py" "%INSTALL_DIR%\bazor_pc_relay_v3.py"
+echo [4/8] Verification du code...
+python -m py_compile "%INSTALL_DIR%\mammouth_client.py" "%INSTALL_DIR%\bazor_pc_relay_v3.py" "%INSTALL_DIR%\test_bazor_v3.py"
 if errorlevel 1 (
   echo [BLOQUE] Verification Python echouee.
   echo Ancienne version conservee dans : %QUAR_DIR%
@@ -66,14 +58,25 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [5/7] Lecture PDF...
+echo [5/8] Lecture PDF...
 python -c "import pypdf" >nul 2>&1
 if errorlevel 1 python -m pip install --user --disable-pip-version-check --quiet pypdf >nul 2>&1
 
-echo [6/7] Creation du raccourci Bureau...
+echo [6/8] Test sans depense...
+pushd "%INSTALL_DIR%"
+python test_bazor_v3.py
+if errorlevel 1 (
+  popd
+  echo [BLOQUE] Le test BAZOR v3 a echoue.
+  pause
+  exit /b 1
+)
+popd
+
+echo [7/8] Creation du raccourci Bureau...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut([Environment]::GetFolderPath('Desktop')+'\BAZOR CORE.lnk'); $s.TargetPath='%INSTALL_DIR%\DEMARRER_BAZOR_PC_RELAY.cmd'; $s.WorkingDirectory='%INSTALL_DIR%'; $s.Save()" >nul 2>&1
 
-echo [7/7] Verification Mammouth...
+echo [8/8] Verification Mammouth...
 if defined MAMMOUTH_API_KEY (
   echo [OK] Cle Mammouth detectee.
 ) else (
