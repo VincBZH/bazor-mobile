@@ -116,8 +116,8 @@ input[type=text],select{width:100%;background:#11161e;color:var(--text);border:1
  <button class="close">Fermer</button>
  <h2>Statut</h2>
  <div class="card"><b>PC :</b> <span id="statusPc">Recherche…</span></div>
- <div class="card"><b>GPT :</b> interface prête, connexion distante à brancher</div>
- <div class="card"><b>Ollama :</b> jamais exposé directement ; passage par relais BAZOR</div>
+ <div class="card"><b>GPT :</b> passe par BAZOR API ; connecteur GPT à configurer côté PC</div>
+ <div class="card"><b>Ollama :</b> passage réel par BAZOR API ; port Ollama jamais exposé au téléphone</div>
  <div class="card"><b>GO / GO AUTO :</b> prévus dans le canal sécurisé</div>
 </section>
 
@@ -139,7 +139,7 @@ input[type=text],select{width:100%;background:#11161e;color:var(--text);border:1
 
 <script>
 const KEY="bazor.ai.room.mobile.v1";
-let route="gpt", files=[], pcOnline=false, pcName="";
+let route="gpt", files=[], pcOnline=false, pcName="", apiBase="", apiHealth=null;
 let state={messages:[],history:[],files:[],roomName:"ROOM PRINCIPALE",interactionMode:"separate"};
 try{state={...state,...JSON.parse(localStorage.getItem(KEY)||"{}")}}catch(e){}
 const el=id=>document.getElementById(id);
@@ -178,15 +178,51 @@ el("fileInput").onchange=e=>{
  el("queue").textContent=files.length?files.join(", "):"Aucun fichier";
 };
 
-function send(){
+async function send(){
  const text=el("input").value.trim();
  if(!text && !files.length)return;
- addMessage("me",text||"(fichier joint)",files);
- state.files.push(...files);
- const target=route==="gpt"?"GPT":route==="ollama"?"Ollama":"GPT + Ollama";
- addMessage("system","Message préparé pour "+target+". Le transport réel via le relais BAZOR sécurisé sera activé à l’étape réseau.");
+ const sentText=text||"(fichier joint)";
+ const sentFiles=[...files];
+ addMessage("me",sentText,sentFiles);
+ state.files.push(...sentFiles);
  el("input").value="";files=[];el("fileInput").value="";el("queue").textContent="Aucun fichier";
  persist();
+
+ if(!pcOnline || !apiBase){
+   addMessage("system","PC non joignable : message conservé dans la room. Relance le relais BAZOR sur le PC.");
+   return;
+ }
+ if(sentFiles.length){
+   addMessage("system","Les fichiers sont mémorisés dans la room ; leur transfert binaire sera ajouté à l’API fichiers.");
+ }
+ try{
+   const res=await fetch(apiBase+"/api/v1/chat",{
+     method:"POST",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({
+       target:route,
+       text:sentText,
+       room:state.roomName,
+       interaction_mode:state.interactionMode
+     })
+   });
+   const data=await res.json();
+   if(!res.ok || !data.ok){
+     addMessage("system","BAZOR API : "+(data.message||data.error||("HTTP "+res.status)));
+     return;
+   }
+   if(data.ollama){
+     if(data.ollama.ok) addMessage("ollama",data.ollama.answer||"(réponse vide)");
+     else if(route!=="gpt") addMessage("system","Ollama : "+(data.ollama.message||data.ollama.error));
+   }
+   if(data.gpt){
+     if(data.gpt.ok) addMessage("gpt",data.gpt.answer||"(réponse vide)");
+     else if(route!=="ollama") addMessage("system","GPT : "+(data.gpt.message||data.gpt.error));
+   }
+ }catch(e){
+   addMessage("system","BAZOR API inaccessible : "+(e && e.message ? e.message : "connexion impossible"));
+   setPcStatus(false,"");
+ }
 }
 el("sendBtn").onclick=send;
 el("input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
@@ -216,6 +252,24 @@ window.setPcStatus=function(online,name){
  const b=el("pcBadge"),s=el("statusPc");
  if(pcOnline){b.className="badge ok";b.textContent="PC EN LIGNE";s.textContent="En ligne"+(pcName?" • "+pcName:"");}
  else{b.className="badge off";b.textContent="PC HORS LIGNE";s.textContent="Hors ligne / relais non détecté";}
+};
+
+window.setBazorApi=async function(base){
+ apiBase=String(base||"").replace(/\/$/,"");
+ if(!apiBase)return;
+ try{
+   const res=await fetch(apiBase+"/api/v1/health",{cache:"no-store"});
+   const data=await res.json();
+   if(!res.ok || !data.ok)throw new Error(data.error||("HTTP "+res.status));
+   apiHealth=data;
+   setPcStatus(true,data.pc||pcName);
+   const ollama=data.ollama||{};
+   const models=(ollama.models||[]).join(", ");
+   el("statusPc").textContent="En ligne • BAZOR API "+(data.version||"")+" • Ollama "+(ollama.online?"OK":"HORS LIGNE")+(models?" • "+models:"");
+ }catch(e){
+   apiHealth=null;
+   setPcStatus(false,"");
+ }
 };
 
 el("roomName").value=state.roomName;
