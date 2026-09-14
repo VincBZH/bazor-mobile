@@ -109,7 +109,7 @@ input[type=text],select{width:100%;background:#11161e;color:var(--text);border:1
 <section id="filesPanel" class="panel">
  <button class="close">Fermer</button>
  <h2>Fichiers de la room</h2>
- <div class="card small">Les fichiers sélectionnés sont mémorisés par nom dans la room mobile. Leur transfert réel au PC sera branché au relais BAZOR sécurisé.</div>
+ <div class="card small">Les fichiers sont transférés au PC via BAZOR API, stockés localement et journalisés. Limite actuelle : 8 Mo par fichier. Aucun fichier n’est exécuté automatiquement.</div>
  <div id="filesList"></div>
 </section>
 
@@ -140,7 +140,7 @@ input[type=text],select{width:100%;background:#11161e;color:var(--text);border:1
 
 <script>
 const KEY="bazor.ai.room.mobile.v1";
-let route="auto", files=[], pcOnline=false, pcName="", apiBase="", apiHealth=null;
+let route="auto", files=[], fileObjects=[], pcOnline=false, pcName="", apiBase="", apiHealth=null;
 let state={messages:[],history:[],files:[],roomName:"ROOM PRINCIPALE",interactionMode:"separate"};
 try{state={...state,...JSON.parse(localStorage.getItem(KEY)||"{}")}}catch(e){}
 const el=id=>document.getElementById(id);
@@ -168,6 +168,14 @@ function renderFiles(){
  el("filesList").innerHTML=unique.map(f=>'<div class="card">📎 '+escapeHtml(f)+'</div>').join("")||'<div class="small">Aucun fichier dans cette room.</div>';
 }
 function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]))}
+function fileToBase64(file){
+ return new Promise((resolve,reject)=>{
+   const r=new FileReader();
+   r.onload=()=>resolve(String(r.result||"").split(",",2)[1]||"");
+   r.onerror=()=>reject(r.error||new Error("Lecture fichier impossible"));
+   r.readAsDataURL(file);
+ });
+}
 
 document.querySelectorAll(".route button").forEach(b=>b.onclick=()=>{
  document.querySelectorAll(".route button").forEach(x=>x.classList.remove("active"));
@@ -175,7 +183,8 @@ document.querySelectorAll(".route button").forEach(b=>b.onclick=()=>{
 });
 
 el("fileInput").onchange=e=>{
- files=[...e.target.files].map(f=>f.name);
+ fileObjects=[...e.target.files];
+ files=fileObjects.map(f=>f.name);
  el("queue").textContent=files.length?files.join(", "):"Aucun fichier";
 };
 
@@ -184,19 +193,42 @@ async function send(){
  if(!text && !files.length)return;
  const sentText=text||"(fichier joint)";
  const sentFiles=[...files];
+ const sentObjects=[...fileObjects];
  addMessage("me",sentText,sentFiles);
  state.files.push(...sentFiles);
- el("input").value="";files=[];el("fileInput").value="";el("queue").textContent="Aucun fichier";
+ el("input").value="";files=[];fileObjects=[];el("fileInput").value="";el("queue").textContent="Aucun fichier";
  persist();
 
  if(!pcOnline || !apiBase){
    addMessage("system","PC non joignable : message conservé dans la room. Relance le relais BAZOR sur le PC.");
    return;
  }
- if(sentFiles.length){
-   addMessage("system","Les fichiers sont mémorisés dans la room ; leur transfert binaire sera ajouté à l’API fichiers.");
- }
  try{
+   if(sentObjects.length){
+     for(const f of sentObjects){
+       if(f.size>8*1024*1024){
+         addMessage("system","Fichier trop volumineux : "+f.name+" (limite 8 Mo)");
+         continue;
+       }
+       const b64=await fileToBase64(f);
+       const up=await fetch(apiBase+"/api/v1/files/upload",{
+         method:"POST",
+         headers:{"Content-Type":"application/json"},
+         body:JSON.stringify({
+           name:f.name,
+           room:state.roomName,
+           mime:f.type||"application/octet-stream",
+           data:b64
+         })
+       });
+       const uj=await up.json();
+       if(up.ok && uj.ok){
+         addMessage("system","📎 Envoyé au PC : "+f.name+(uj.file&&uj.file.duplicate?" • déjà présent":""));
+       }else{
+         addMessage("system","Échec fichier "+f.name+" : "+(uj.error||("HTTP "+up.status)));
+       }
+     }
+   }
    const res=await fetch(apiBase+"/api/v1/chat",{
      method:"POST",
      headers:{"Content-Type":"application/json"},
