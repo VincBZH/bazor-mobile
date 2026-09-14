@@ -35,7 +35,7 @@ public class MainActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
-        webView.loadUrl("file:///android_asset/index_v2.html");
+        webView.loadUrl("file:///android_asset/index_v3.html");
 
         startPcDiscovery();
 
