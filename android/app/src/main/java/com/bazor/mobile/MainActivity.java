@@ -78,13 +78,23 @@ public class MainActivity extends Activity {
                 } catch (Exception ignored) {}
 
                 final boolean online = found;
-                final String name = foundName
-                    .replace("\\", "\\\\")
-                    .replace("'", "\\'");
-                runOnUiThread(() -> webView.evaluateJavascript(
-                    "window.setPcStatus && window.setPcStatus(" + online + ",'" + name + "')",
-                    null
-                ));
+                final String safeName = foundName.replace("\\", "\\\\").replace("'", "\\'");
+                runOnUiThread(() -> {
+                    String js =
+                        "(function(){" +
+                        "var b=document.querySelector('header .badge');" +
+                        "var s=document.querySelector('header .sub');" +
+                        "if(!b||!s)return;" +
+                        "if(" + online + "){" +
+                        "b.className='badge ok';b.textContent='PC EN LIGNE';" +
+                        "s.textContent='Mobile • relais détecté" + (safeName.isEmpty() ? "" : " • " + safeName) + "';" +
+                        "}else{" +
+                        "b.className='badge blocked';b.textContent='PC HORS LIGNE';" +
+                        "s.textContent='Mobile • relais PC introuvable sur ce Wi-Fi';" +
+                        "}" +
+                        "})();";
+                    webView.evaluateJavascript(js, null);
+                });
 
                 try {
                     Thread.sleep(4000);
