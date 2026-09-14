@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 chcp 65001 >nul
 title BAZOR CORE v3
 
@@ -20,6 +20,9 @@ if errorlevel 1 (
 )
 
 echo [1/4] Verification de la cle Mammouth...
+if not defined MAMMOUTH_API_KEY (
+  for /f "usebackq delims=" %%K in (`powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('MAMMOUTH_API_KEY','User')"`) do set "MAMMOUTH_API_KEY=%%K"
+)
 if defined MAMMOUTH_API_KEY (
   echo [OK] Cle Mammouth detectee.
 ) else (
