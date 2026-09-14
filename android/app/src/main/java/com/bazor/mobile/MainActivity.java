@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
@@ -54,6 +55,7 @@ public class MainActivity extends Activity {
             while (running) {
                 boolean found = false;
                 String foundName = "";
+                String apiBase = "";
                 try (DatagramSocket socket = new DatagramSocket()) {
                     socket.setBroadcast(true);
                     socket.setSoTimeout(1800);
@@ -72,26 +74,23 @@ public class MainActivity extends Activity {
 
                     if (msg.startsWith("BAZOR_PC_OK")) {
                         found = true;
-                        String[] parts = msg.split("\\|", 2);
+                        String[] parts = msg.split("\\|");
                         if (parts.length > 1) foundName = parts[1];
+                        String port = parts.length > 2 ? parts[2] : "8765";
+                        apiBase = "http://" + reply.getAddress().getHostAddress() + ":" + port;
                     }
                 } catch (Exception ignored) {}
 
                 final boolean online = found;
-                final String safeName = foundName.replace("\\", "\\\\").replace("'", "\\'");
+                final String safeName = jsSafe(foundName);
+                final String safeApi = jsSafe(apiBase);
                 runOnUiThread(() -> {
                     String js =
                         "(function(){" +
-                        "var b=document.querySelector('header .badge');" +
-                        "var s=document.querySelector('header .sub');" +
-                        "if(!b||!s)return;" +
-                        "if(" + online + "){" +
-                        "b.className='badge ok';b.textContent='PC EN LIGNE';" +
-                        "s.textContent='Mobile • relais détecté" + (safeName.isEmpty() ? "" : " • " + safeName) + "';" +
-                        "}else{" +
-                        "b.className='badge blocked';b.textContent='PC HORS LIGNE';" +
-                        "s.textContent='Mobile • relais PC introuvable sur ce Wi-Fi';" +
-                        "}" +
+                        "if(window.setPcStatus)window.setPcStatus(" + online + ",'" + safeName + "');" +
+                        (online
+                            ? "if(window.setBazorApi)window.setBazorApi('" + safeApi + "');"
+                            : "if(window.setBazorApi)window.setBazorApi('');") +
                         "})();";
                     webView.evaluateJavascript(js, null);
                 });
@@ -101,6 +100,11 @@ public class MainActivity extends Activity {
                 } catch (InterruptedException ignored) {}
             }
         }).start();
+    }
+
+    private String jsSafe(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("'", "\\'");
     }
 
     @Override
