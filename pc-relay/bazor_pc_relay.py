@@ -1,11 +1,16 @@
+import base64
 import datetime
+import hashlib
 import ipaddress
 import json
+import os
 import platform
+import re
 import socket
 import threading
 import urllib.error
 import urllib.request
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 UDP_PORT = 8766
@@ -13,10 +18,83 @@ API_PORT = 8765
 MAGIC = b"BAZOR_DISCOVER_V1"
 OLLAMA_URL = "http://127.0.0.1:11434"
 hostname = platform.node() or "BAZOR-PC"
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "BAZOR_DATA"
+FILES_DIR = DATA_DIR / "ROOM_FILES"
+JOURNAL_FILE = DATA_DIR / "journal.jsonl"
+MAX_FILE_BYTES = 8 * 1024 * 1024
+FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def now_iso():
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+
+def safe_name(name):
+    name = os.path.basename(str(name or "fichier.bin")).strip() or "fichier.bin"
+    name = re.sub(r"[^A-Za-z0-9._() -]+", "_", name)
+    return name[:180]
+
+
+def journal(event, details):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    row = {"time": now_iso(), "event": event, **details}
+    with JOURNAL_FILE.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def store_file(name, room, mime, b64data):
+    try:
+        raw = base64.b64decode(b64data, validate=True)
+    except Exception:
+        return {"ok": False, "error": "invalid_base64"}
+    if len(raw) > MAX_FILE_BYTES:
+        return {"ok": False, "error": "file_too_large", "max_bytes": MAX_FILE_BYTES}
+
+    digest = hashlib.sha256(raw).hexdigest()
+    clean = safe_name(name)
+    room_clean = safe_name(room or "ROOM PRINCIPALE").replace(" ", "_")
+    room_dir = FILES_DIR / room_clean
+    room_dir.mkdir(parents=True, exist_ok=True)
+    stored = room_dir / f"{digest[:12]}_{clean}"
+
+    duplicate = stored.exists()
+    if not duplicate:
+        stored.write_bytes(raw)
+
+    meta = {
+        "id": digest,
+        "name": clean,
+        "stored_name": stored.name,
+        "room": room or "ROOM PRINCIPALE",
+        "mime": mime or "application/octet-stream",
+        "size": len(raw),
+        "sha256": digest,
+        "duplicate": duplicate,
+        "path": str(stored)
+    }
+    journal("FILE_UPLOAD", {k: v for k, v in meta.items() if k != "path"})
+    return {"ok": True, "file": meta}
+
+
+def list_files(room=None):
+    items = []
+    roots = [FILES_DIR]
+    for path in FILES_DIR.rglob("*"):
+        if not path.is_file():
+            continue
+        if room and path.parent.name != safe_name(room).replace(" ", "_"):
+            continue
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+        items.append({
+            "stored_name": path.name,
+            "room": path.parent.name,
+            "size": size
+        })
+    items.sort(key=lambda x: x["stored_name"].lower())
+    return items
 
 
 def is_local_client(host):
@@ -143,7 +221,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "pc": hostname,
                 "time": now_iso(),
                 "ollama": {"online": online, "models": models},
-                "capabilities": ["health", "models", "ollama_chat", "routing", "eco_credits"],
+                "capabilities": ["health", "models", "ollama_chat", "routing", "eco_credits", "file_upload", "file_list"],
                 "security": {
                     "scope": "local-network",
                     "ollama_exposed": False,
@@ -154,6 +232,13 @@ class ApiHandler(BaseHTTPRequestHandler):
         if self.path == "/api/v1/route":
             self._json({"ok": True, "usage": "POST /api/v1/route with text"})
             return
+        if self.path.startswith("/api/v1/files"):
+            room = None
+            if "?room=" in self.path:
+                from urllib.parse import unquote
+                room = unquote(self.path.split("?room=", 1)[1].split("&", 1)[0])
+            self._json({"ok": True, "files": list_files(room)})
+            return
         if self.path == "/api/v1/models":
             online, models = ollama_tags()
             self._json({"ok": True, "ollama_online": online, "models": models})
@@ -163,11 +248,23 @@ class ApiHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._allowed():
             return
-        length = min(int(self.headers.get("Content-Length", "0") or "0"), 1024 * 1024)
+        length = min(int(self.headers.get("Content-Length", "0") or "0"), 12 * 1024 * 1024)
         try:
             body = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
         except Exception:
             self._json({"ok": False, "error": "invalid_json"}, 400)
+            return
+
+        if self.path == "/api/v1/files/upload":
+            name = body.get("name")
+            room = body.get("room") or "ROOM PRINCIPALE"
+            mime = body.get("mime")
+            data = body.get("data")
+            if not name or not data:
+                self._json({"ok": False, "error": "missing_file_data"}, 400)
+                return
+            result = store_file(name, room, mime, data)
+            self._json(result, 200 if result.get("ok") else 400)
             return
 
         if self.path == "/api/v1/route":
@@ -260,6 +357,7 @@ print(f"PC       : {hostname}")
 print("Etat     : EN LIGNE")
 print("Ollama   : LOCAL UNIQUEMENT - jamais exposé directement")
 print("Sécurité : réseau local uniquement, aucune commande shell")
+print(f"Fichiers : {FILES_DIR} (max {MAX_FILE_BYTES // (1024*1024)} Mo/fichier)")
 print("Fermer cette fenêtre pour arrêter BAZOR API.")
 print("=" * 62)
 
