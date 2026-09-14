@@ -1,4 +1,229 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#15171c"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="icon.svg"><title>BAZOR COMMAND CENTER</title><style>
-:root{--bg:#15171c;--panel:#20232a;--panel2:#292d36;--text:#f5f7fa;--muted:#aab1bd;--accent:#f5a623;--ok:#45d483;--warn:#f2c94c;--bad:#ff6b6b;--line:#383d48}*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}body{padding-bottom:90px}header{position:sticky;top:0;z-index:5;background:linear-gradient(135deg,#332713,#15171c 72%);border-bottom:1px solid var(--line);padding:14px 16px}.brand{font-weight:900;letter-spacing:.04em}.sub{font-size:12px;color:var(--muted);margin-top:4px}main{max-width:760px;margin:auto;padding:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}.row{display:flex;gap:10px;align-items:center;justify-content:space-between}.wrap{flex-wrap:wrap}.grow{flex:1}.muted{color:var(--muted)}.small{font-size:12px}.badge{display:inline-block;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800}.ok{background:#173d2b;color:var(--ok)}.todo{background:#403718;color:var(--warn)}.blocked{background:#472226;color:var(--bad)}button,select,textarea{font:inherit}button{border:0;border-radius:13px;padding:12px 14px;font-weight:800}.primary{background:var(--accent);color:#21190b}.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}.danger{background:#4a2328;color:#ffd3d3}.wide{width:100%}textarea,select{width:100%;background:#17191e;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px}textarea{min-height:120px}label{display:block;font-size:12px;color:var(--muted);margin:12px 0 6px}.progress{height:9px;background:#111318;border-radius:999px;overflow:hidden;margin:10px 0}.progress>div{height:100%;background:var(--accent)}nav{position:fixed;left:0;right:0;bottom:0;z-index:10;background:#121419ee;backdrop-filter:blur(12px);border-top:1px solid var(--line);display:flex;justify-content:center;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}nav .tabs{width:min(760px,100%);display:grid;grid-template-columns:repeat(5,1fr);gap:6px}nav button{background:transparent;color:var(--muted);padding:9px 4px;font-size:11px}nav button.active{background:var(--panel2);color:var(--accent)}h2,h3{margin:0 0 8px}h2{font-size:19px}.hidden{display:none!important}hr{border:0;border-top:1px solid var(--line);margin:12px 0}.toast{position:fixed;left:50%;bottom:98px;transform:translateX(-50%);background:#101216;color:#fff;padding:11px 14px;border-radius:12px;border:1px solid var(--line);z-index:20;display:none;max-width:90%}
-</style></head><body><header><div class="row"><div><div class="brand">BAZOR COMMAND CENTER</div><div class="sub">Mobile • données locales • relais PC non connecté</div></div><span class="badge blocked">PC HORS LIGNE</span></div></header><main><section id="home"></section><section id="capture" class="hidden"><div class="card"><h2>BAZOR CAPTURE</h2><div class="muted small">Transforme une idée rapide en tâche.</div><label>Note</label><textarea id="captureText" placeholder="Ex. Ajouter une fonction dans AI Room…"></textarea><div class="row wrap"><button class="secondary grow" id="micBtn">🎙️ Dicter</button><button class="secondary grow" id="clearCapture">Effacer</button></div><label>Projet</label><select id="captureProject"></select><label>Priorité</label><select id="capturePriority"><option>NORMALE</option><option>BASSE</option><option>HAUTE</option><option>URGENTE</option></select><div style="height:10px"></div><button class="primary wide" id="saveCapture">ENVOYER DANS L'INBOX</button></div></section><section id="inbox" class="hidden"></section><section id="ollama" class="hidden"></section><section id="journal" class="hidden"></section></main><div class="toast" id="toast"></div><nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>Ollama</button><button data-tab="journal">≡<br>Journal</button></div></nav><script>
-const KEY="bazor.command.center.mobile.v1",uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);const seed={projects:[{id:"ai-room",name:"BAZOR AI Room",status:"A_FAIRE",progress:62,next:"Brancher l'historique des sessions"},{id:"simple-studio",name:"AI Simple Studio",status:"OK",progress:88,next:"Relire les presets de génération"},{id:"wii-relay",name:"Projet Wii AI Relay",status:"BLOQUE",progress:34,next:"Tester le pont quand le PC est disponible"},{id:"modo-viewer",name:"MODO Viewer",status:"A_FAIRE",progress:45,next:"Corriger le zoom tactile"}],inbox:[],jobs:[{id:"j1",label:"Résumer les notes AI Room",model:"mistral:latest",status:"EN ATTENTE"},{id:"j2",label:"Analyser les logs Wii",model:"qwen2.5-coder:7b",status:"PC HORS LIGNE"}],journal:[{id:"l1",what:"Initialisation BAZOR Mobile",tag:"OK",when:Date.now(),who:"BAZOR"}]};let state;try{state=JSON.parse(localStorage.getItem(KEY))||structuredClone(seed)}catch(e){state=structuredClone(seed)}const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));function save(){localStorage.setItem(KEY,JSON.stringify(state));render()}function toast(t){let e=document.getElementById("toast");e.textContent=t;e.style.display="block";setTimeout(()=>e.style.display="none",1700)}function log(what,tag="OK"){state.journal.unshift({id:uid(),what,tag,when:Date.now(),who:"Vincent"})}function pname(id){return state.projects.find(p=>p.id===id)?.name||"Général"}function scl(s){return s==="OK"?"ok":s==="A_FAIRE"?"todo":"blocked"}function renderHome(){home.innerHTML='<div class="card"><h2>Vue d\'ensemble</h2><div class="small muted">Les actions PC restent simulées tant que le relais n\'est pas connecté.</div></div>'+state.projects.map(p=>'<div class="card"><div class="row"><h2>'+esc(p.name)+'</h2><span class="badge '+scl(p.status)+'">'+(p.status==="A_FAIRE"?"À FAIRE":p.status)+'</span></div><div class="progress"><div style="width:'+p.progress+'%"></div></div><div class="small muted">Progression '+p.progress+'%</div><hr><div class="small muted">PROCHAINE ACTION</div><div style="margin:5px 0 12px">'+esc(p.next)+'</div><div class="row"><button class="primary grow" onclick="goProject(\''+p.id+'\')">GO</button><button class="secondary grow" onclick="goAuto(\''+p.id+'\')">GO AUTO</button></div></div>').join("")}function goProject(id){let p=state.projects.find(x=>x.id===id);log("GO préparé — "+p.name);save();toast("Action préparée. Rien exécuté sur le PC.")}function goAuto(id){let p=state.projects.find(x=>x.id===id);log("GO AUTO demandé — "+p.name,"BLOQUÉ");save();toast("GO AUTO nécessite le relais PC sécurisé.")}function fillProjects(){captureProject.innerHTML='<option value="">Automatique / Général</option>'+state.projects.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join("")}function renderInbox(){inbox.innerHTML='<div class="card"><h2>INBOX</h2><div class="small muted">'+state.inbox.filter(x=>x.status==="À TRAITER").length+' à traiter</div></div>'+state.inbox.map(i=>'<div class="card"><span class="badge todo">'+esc(i.type)+'</span><h3 style="margin-top:10px">'+esc(i.title)+'</h3><div class="small muted">'+esc(pname(i.project))+' • '+esc(i.priority)+' • '+esc(i.status)+'</div><div class="row" style="margin-top:12px"><button class="secondary grow" onclick="treat(\''+i.id+'\')">Traiter</button><button class="danger" onclick="delInbox(\''+i.id+'\')">Suppr.</button></div></div>').join("")}function treat(id){let i=state.inbox.find(x=>x.id===id);i.status="TRAITÉ";log("Inbox traitée — "+i.title);save();toast("Marqué traité")}function delInbox(id){let i=state.inbox.find(x=>x.id===id);if(confirm("Supprimer cet élément ?")){state.inbox=state.inbox.filter(x=>x.id!==id);log("Inbox supprimée — "+i.title,"AMÉLIORATION");save()}}function renderOllama(){ollama.innerHTML='<div class="card"><h2>OLLAMA</h2><div class="small muted">Aucun port Ollama exposé. V1 simulée.</div></div>'+state.jobs.map(j=>'<div class="card"><div class="row"><h3>'+esc(j.label)+'</h3><span class="badge '+(j.status==="PC HORS LIGNE"?"blocked":"todo")+'">'+esc(j.status)+'</span></div><div class="small muted">'+esc(j.model)+' • SIMULATION</div></div>').join("")}function renderJournal(){journal.innerHTML='<div class="card"><h2>JOURNAL</h2><div class="small muted">Traçabilité locale</div></div>'+state.journal.map(j=>'<div class="card"><div class="row"><strong>'+esc(j.what)+'</strong><span class="badge '+(j.tag==="OK"?"ok":j.tag==="BLOQUÉ"?"blocked":"todo")+'">'+esc(j.tag)+'</span></div><div class="small muted" style="margin-top:7px">'+esc(j.who)+' • '+new Date(j.when).toLocaleString("fr-FR")+'</div></div>').join("")}function render(){renderHome();renderInbox();renderOllama();renderJournal();fillProjects()}document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll("main>section").forEach(s=>s.classList.add("hidden"));document.getElementById(b.dataset.tab).classList.remove("hidden")});saveCapture.onclick=()=>{let t=captureText.value.trim();if(!t){toast("Écris ou dicte une note.");return}state.inbox.unshift({id:uid(),project:captureProject.value||null,type:"CAPTURE",title:t.slice(0,80),priority:capturePriority.value,status:"À TRAITER",created:Date.now()});log("Capture ajoutée — "+t.slice(0,50));captureText.value="";save();toast("Ajouté à l'Inbox")};clearCapture.onclick=()=>captureText.value="";micBtn.onclick=()=>{let SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Dictée indisponible dans ce navigateur.");return}let r=new SR();r.lang="fr-FR";r.onresult=e=>{captureText.value+=(captureText.value?" ":"")+e.results[0][0].transcript;toast("Dictée ajoutée")};r.onerror=()=>toast("La dictée n'a pas démarré.");r.start()};if("serviceWorker"in navigator)navigator.serviceWorker.register("./service-worker.js");render();</script></body></html>
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1218">
+<title>BAZOR AI ROOM Mobile</title>
+<style>
+:root{
+ --bg:#0f1218;--panel:#171c24;--panel2:#202734;--line:#2d3645;
+ --text:#f3f6fb;--muted:#9eabba;--blue:#38a7ff;--green:#45d483;
+ --orange:#f5a623;--red:#ff6b6b;--violet:#8e7dff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;height:100%}
+body{display:flex;flex-direction:column;overflow:hidden}
+header{padding:12px 14px;border-bottom:1px solid var(--line);background:linear-gradient(135deg,#18202d,#0f1218)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{font-weight:900;letter-spacing:.05em}
+.brand small{display:block;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0;margin-top:2px}
+.badge{font-size:11px;font-weight:900;border-radius:999px;padding:6px 9px;white-space:nowrap}
+.ok{background:#153b2a;color:var(--green)} .off{background:#452126;color:#ffb2b2}.wait{background:#403518;color:#ffd66d}
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+.toolbar{padding:10px 12px;border-bottom:1px solid var(--line);background:#11161e}
+.route{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.route button{border:1px solid var(--line);background:var(--panel);color:var(--muted);padding:10px 6px;border-radius:12px;font-weight:800}
+.route button.active{background:#153149;color:#bfe5ff;border-color:#2d78ab}
+.roombar{display:flex;gap:8px;margin-top:8px;align-items:center}
+.roomname{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text);padding:10px;border-radius:12px}
+.iconbtn{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 12px;border-radius:12px}
+.messages{flex:1;min-height:0;overflow:auto;padding:12px;scroll-behavior:smooth}
+.msg{max-width:90%;padding:10px 12px;border-radius:15px;margin:8px 0;white-space:pre-wrap;word-wrap:break-word;border:1px solid var(--line)}
+.me{margin-left:auto;background:#18314a;border-color:#265f8d}
+.gpt{background:#16251f;border-color:#26563e}
+.ollama{background:#2a223c;border-color:#534183}
+.system{max-width:100%;background:#181b22;color:var(--muted);font-size:12px}
+.meta{font-size:10px;color:var(--muted);margin-bottom:5px;font-weight:800}
+.attachments{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.filechip{font-size:11px;background:#10151c;border:1px solid var(--line);padding:5px 7px;border-radius:9px}
+.composer{border-top:1px solid var(--line);background:#11161e;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
+.attachrow{display:flex;gap:7px;align-items:center;margin-bottom:7px}
+.attachlabel{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel2);padding:8px 10px;border-radius:10px;font-size:12px;font-weight:800}
+#fileInput{display:none}
+.queue{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.inputrow{display:flex;gap:8px;align-items:flex-end}
+textarea{flex:1;resize:none;min-height:46px;max-height:140px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:12px;font:inherit}
+.send{border:0;background:var(--blue);color:#06111b;border-radius:14px;padding:13px 16px;font-weight:900}
+.bottomnav{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.bottomnav button{border:0;background:transparent;color:var(--muted);padding:7px 4px;border-radius:10px;font-size:11px}
+.bottomnav button.active{background:var(--panel2);color:var(--blue)}
+.panel{display:none;position:absolute;inset:0 0 0 0;background:var(--bg);z-index:20;padding:14px;overflow:auto}
+.panel.show{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:12px;margin-bottom:10px}
+.close{position:sticky;top:0;float:right;border:0;background:var(--panel2);color:var(--text);border-radius:10px;padding:9px 11px}
+input[type=text],select{width:100%;background:#11161e;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px}
+.small{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+ <div class="head">
+   <div class="brand">BAZOR AI ROOM<small>Mobile • GPT ↔ Ollama ↔ Toi</small></div>
+   <span id="pcBadge" class="badge wait">RECHERCHE PC…</span>
+ </div>
+</header>
+
+<main>
+ <div class="toolbar">
+   <div class="route">
+     <button data-route="gpt" class="active">GPT</button>
+     <button data-route="ollama">OLLAMA</button>
+     <button data-route="both">LES DEUX</button>
+   </div>
+   <div class="roombar">
+     <input id="roomName" class="roomname" value="ROOM PRINCIPALE" aria-label="Nom de la room">
+     <button id="clearBtn" class="iconbtn">🗑</button>
+     <button id="settingsBtn" class="iconbtn">⚙</button>
+   </div>
+ </div>
+
+ <div id="messages" class="messages"></div>
+
+ <div class="composer">
+   <div class="attachrow">
+     <label class="attachlabel" for="fileInput">📎 Joindre</label>
+     <input id="fileInput" type="file" multiple>
+     <div id="queue" class="queue">Aucun fichier</div>
+   </div>
+   <div class="inputrow">
+     <textarea id="input" placeholder="Écris à GPT, Ollama ou aux deux…"></textarea>
+     <button id="sendBtn" class="send">ENVOYER</button>
+   </div>
+   <div class="bottomnav">
+     <button class="active" data-panel="">💬<br>Room</button>
+     <button data-panel="historyPanel">🕘<br>Historique</button>
+     <button data-panel="filesPanel">📁<br>Fichiers</button>
+     <button data-panel="statusPanel">◉<br>Statut</button>
+   </div>
+ </div>
+</main>
+
+<section id="historyPanel" class="panel">
+ <button class="close">Fermer</button>
+ <h2>Historique</h2>
+ <div id="historyList"></div>
+</section>
+
+<section id="filesPanel" class="panel">
+ <button class="close">Fermer</button>
+ <h2>Fichiers de la room</h2>
+ <div class="card small">Les fichiers sélectionnés sont mémorisés par nom dans la room mobile. Leur transfert réel au PC sera branché au relais BAZOR sécurisé.</div>
+ <div id="filesList"></div>
+</section>
+
+<section id="statusPanel" class="panel">
+ <button class="close">Fermer</button>
+ <h2>Statut</h2>
+ <div class="card"><b>PC :</b> <span id="statusPc">Recherche…</span></div>
+ <div class="card"><b>GPT :</b> interface prête, connexion distante à brancher</div>
+ <div class="card"><b>Ollama :</b> jamais exposé directement ; passage par relais BAZOR</div>
+ <div class="card"><b>GO / GO AUTO :</b> prévus dans le canal sécurisé</div>
+</section>
+
+<section id="settingsPanel" class="panel">
+ <button class="close">Fermer</button>
+ <h2>Réglages Room</h2>
+ <div class="card">
+   <label class="small">Comportement</label>
+   <select id="interactionMode">
+     <option value="separate">Réponses séparées GPT / Ollama</option>
+     <option value="talk">Les laisser interagir entre eux</option>
+   </select>
+ </div>
+ <div class="card">
+   <label class="small">Nom de la room</label>
+   <input id="settingsRoomName" type="text">
+ </div>
+</section>
+
+<script>
+const KEY="bazor.ai.room.mobile.v1";
+let route="gpt", files=[], pcOnline=false, pcName="";
+let state={messages:[],history:[],files:[],roomName:"ROOM PRINCIPALE",interactionMode:"separate"};
+try{state={...state,...JSON.parse(localStorage.getItem(KEY)||"{}")}}catch(e){}
+const el=id=>document.getElementById(id);
+const now=()=>new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+
+function persist(){localStorage.setItem(KEY,JSON.stringify(state))}
+function addMessage(role,text,attachments=[]){
+ state.messages.push({id:Date.now()+Math.random(),role,text,attachments,time:now()});
+ persist();renderMessages();renderHistory();renderFiles();
+}
+function renderMessages(){
+ const box=el("messages");
+ box.innerHTML=state.messages.map(m=>{
+   const title=m.role==="me"?"TOI":m.role==="gpt"?"GPT":m.role==="ollama"?"OLLAMA":"BAZOR";
+   const chips=(m.attachments||[]).map(f=>'<span class="filechip">📎 '+escapeHtml(f)+'</span>').join("");
+   return '<div class="msg '+m.role+'"><div class="meta">'+title+' • '+m.time+'</div>'+escapeHtml(m.text)+(chips?'<div class="attachments">'+chips+'</div>':'')+'</div>'
+ }).join("");
+ box.scrollTop=box.scrollHeight;
+}
+function renderHistory(){
+ el("historyList").innerHTML=state.messages.slice().reverse().map(m=>'<div class="card"><div class="meta">'+m.time+' • '+m.role.toUpperCase()+'</div>'+escapeHtml(m.text.slice(0,180))+'</div>').join("")||'<div class="small">Aucun historique.</div>';
+}
+function renderFiles(){
+ const unique=[...new Set(state.files)];
+ el("filesList").innerHTML=unique.map(f=>'<div class="card">📎 '+escapeHtml(f)+'</div>').join("")||'<div class="small">Aucun fichier dans cette room.</div>';
+}
+function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]))}
+
+document.querySelectorAll(".route button").forEach(b=>b.onclick=()=>{
+ document.querySelectorAll(".route button").forEach(x=>x.classList.remove("active"));
+ b.classList.add("active");route=b.dataset.route;
+});
+
+el("fileInput").onchange=e=>{
+ files=[...e.target.files].map(f=>f.name);
+ el("queue").textContent=files.length?files.join(", "):"Aucun fichier";
+};
+
+function send(){
+ const text=el("input").value.trim();
+ if(!text && !files.length)return;
+ addMessage("me",text||"(fichier joint)",files);
+ state.files.push(...files);
+ const target=route==="gpt"?"GPT":route==="ollama"?"Ollama":"GPT + Ollama";
+ addMessage("system","Message préparé pour "+target+". Le transport réel via le relais BAZOR sécurisé sera activé à l’étape réseau.");
+ el("input").value="";files=[];el("fileInput").value="";el("queue").textContent="Aucun fichier";
+ persist();
+}
+el("sendBtn").onclick=send;
+el("input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
+
+el("clearBtn").onclick=()=>{
+ if(confirm("Effacer l'historique de cette room ?")){
+   state.history.push({name:state.roomName,date:new Date().toLocaleString("fr-FR"),count:state.messages.length});
+   state.messages=[];persist();renderMessages();renderHistory();
+ }
+};
+el("settingsBtn").onclick=()=>{
+ el("settingsRoomName").value=state.roomName;
+ el("interactionMode").value=state.interactionMode;
+ el("settingsPanel").classList.add("show");
+};
+el("settingsRoomName").oninput=e=>{state.roomName=e.target.value;el("roomName").value=e.target.value;persist()};
+el("roomName").oninput=e=>{state.roomName=e.target.value;persist()};
+el("interactionMode").onchange=e=>{state.interactionMode=e.target.value;persist()};
+
+document.querySelectorAll(".bottomnav button[data-panel]").forEach(b=>b.onclick=()=>{
+ const id=b.dataset.panel;if(id)el(id).classList.add("show");
+});
+document.querySelectorAll(".close").forEach(b=>b.onclick=()=>b.closest(".panel").classList.remove("show"));
+
+window.setPcStatus=function(online,name){
+ pcOnline=!!online;pcName=name||"";
+ const b=el("pcBadge"),s=el("statusPc");
+ if(pcOnline){b.className="badge ok";b.textContent="PC EN LIGNE";s.textContent="En ligne"+(pcName?" • "+pcName:"");}
+ else{b.className="badge off";b.textContent="PC HORS LIGNE";s.textContent="Hors ligne / relais non détecté";}
+};
+
+el("roomName").value=state.roomName;
+el("interactionMode").value=state.interactionMode;
+if(!state.messages.length){
+ addMessage("system","BAZOR AI ROOM Mobile prête. Choisis GPT, Ollama ou LES DEUX, joins un fichier si besoin, puis écris ton message.");
+}
+renderMessages();renderHistory();renderFiles();
+</script>
+</body>
+</html>
