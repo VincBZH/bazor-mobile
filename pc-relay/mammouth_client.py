@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -150,21 +151,45 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
         "temperature": 0.2
     }).encode("utf-8")
 
-    req = urllib.request.Request(
-        MAMMOUTH_URL,
-        data=payload,
-        headers={
-            "Authorization": "Bearer " + key,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "BAZOR-Mammouth-Client/3.0"
-        },
-        method="POST"
-    )
-
     try:
-        with urllib.request.urlopen(req, timeout=240) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        completed = subprocess.run(
+            [
+                "curl.exe", "--silent", "--show-error", "--location",
+                "--connect-timeout", "20", "--max-time", "240",
+                "--header", "Authorization: Bearer " + key,
+                "--header", "Content-Type: application/json",
+                "--header", "Accept: application/json",
+                "--header", "User-Agent: BAZOR-Mammouth-Client/3.0",
+                "--data-binary", "@-",
+                "--write-out", "\\nBAZOR_HTTP_STATUS:%{http_code}",
+                MAMMOUTH_URL,
+            ],
+            input=payload,
+            capture_output=True,
+            text=False,
+            timeout=250,
+            check=False,
+        )
+        raw = (completed.stdout or b"").decode("utf-8", errors="replace")
+        marker = "\\nBAZOR_HTTP_STATUS:"
+        if marker in raw:
+            body, status_text = raw.rsplit(marker, 1)
+            http_status = int(status_text.strip() or "0")
+        else:
+            body, http_status = raw, 0
+        if completed.returncode != 0 or http_status >= 400:
+            detail = ((body or "") + "\\n" + (completed.stderr or b"").decode("utf-8", errors="replace")).strip()
+            return {
+                "ok": False,
+                "error": "mammouth_http" if http_status else "mammouth_curl",
+                "provider": "mammouth",
+                "profile": selected_profile,
+                "model": model,
+                "message": f"Mammouth HTTP {http_status}" if http_status else "curl Mammouth indisponible",
+                "detail": detail[:600],
+                "budget": budget_status(),
+            }
+        data = json.loads(body)
         choice = (data.get("choices") or [{}])[0]
         message = choice.get("message") or {}
         actual_model = data.get("model") or model
@@ -179,21 +204,6 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
             "answer": (message.get("content") or "").strip(),
             "usage": usage,
             "estimated_cost_usd": None if estimated_cost is None else round(estimated_cost, 6),
-            "budget": budget_status(),
-        }
-    except urllib.error.HTTPError as exc:
-        try:
-            detail = exc.read().decode("utf-8")[:600]
-        except Exception:
-            detail = ""
-        return {
-            "ok": False,
-            "error": "mammouth_http",
-            "provider": "mammouth",
-            "profile": selected_profile,
-            "model": model,
-            "message": f"Mammouth HTTP {exc.code}",
-            "detail": detail,
             "budget": budget_status(),
         }
     except Exception as exc:
