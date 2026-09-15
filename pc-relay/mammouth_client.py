@@ -155,7 +155,9 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
         data=payload,
         headers={
             "Authorization": "Bearer " + key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "BAZOR-Mammouth-Client/3.0"
         },
         method="POST"
     )
