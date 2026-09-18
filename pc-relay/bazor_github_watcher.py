@@ -1,9 +1,29 @@
-import json, subprocess, time, urllib.request
+import json, subprocess, time, urllib.request, os
 
 REPO="VincBZH/bazor-mobile"
 CORE="http://127.0.0.1:8775/api/v1/chat"
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
+ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
+LAST_HEAD=None
+
+def safe_update():
+    global LAST_HEAD
+    try:
+        remote=gh(["api",f"repos/{REPO}/commits/main","--jq",".sha"]).strip()
+        local=gh(["-C",ROOT,"rev-parse","HEAD"]).strip()
+        if remote and remote != local:
+            print("[UPDATE] Nouvelle version BAZOR detectee :",remote[:7])
+            p=subprocess.run(["git","-C",ROOT,"pull","--ff-only"],capture_output=True,text=True,encoding="utf-8",errors="replace")
+            if p.returncode:
+                print("[BLOQUE UPDATE]",p.stderr.strip() or p.stdout.strip())
+            else:
+                print("[OK UPDATE] BAZOR mis a jour :",remote[:7])
+                LAST_HEAD=remote
+        else:
+            LAST_HEAD=local
+    except Exception as e:
+        print("[BLOQUE UPDATE]",type(e).__name__,str(e))
 
 def gh(args):
     p=subprocess.run(["gh"]+args,capture_output=True,text=True,encoding="utf-8",errors="replace")
@@ -30,6 +50,7 @@ print("Aucun shell distant : seules les issues [bazor-queue] sont envoyees a /ap
 print()
 
 while True:
+    safe_update()
     try:
         issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
         for issue in issues:
