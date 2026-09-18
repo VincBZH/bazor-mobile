@@ -63,11 +63,16 @@ if(-not $coreOk -and $py) {
 }
 
 if(-not $webOk -and $py) {
-  Log "Web 8776 absent : relance de secours."
+  Log "Gateway 8776 absent : relance du vrai Gateway BAZOR."
+  $gateway = Join-Path $Root "console-hub\bazor_mobile_gateway.py"
   $out = Join-Path $logDir "web_selfheal_stdout.log"
   $err = Join-Path $logDir "web_selfheal_stderr.log"
-  Start-Process -WindowStyle Hidden -FilePath $py -ArgumentList @("-m","http.server","8776","--bind","0.0.0.0") -WorkingDirectory $Root -RedirectStandardOutput $out -RedirectStandardError $err | Out-Null
-  $webOk = Wait-Url $webUrl 8
+  if(Test-Path $gateway) {
+    Start-Process -WindowStyle Hidden -FilePath $py -ArgumentList @($gateway) -WorkingDirectory $Root -RedirectStandardOutput $out -RedirectStandardError $err | Out-Null
+    $webOk = Wait-Url $webUrl 8
+  } else {
+    Log "Gateway introuvable : aucun serveur de remplacement non-API n'est lance."
+  }
 }
 
 $usbOk = $false
