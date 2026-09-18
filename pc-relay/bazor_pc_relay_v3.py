@@ -9,6 +9,8 @@ import re
 import socket
 import sys
 import threading
+import subprocess
+import time
 import urllib.parse
 import urllib.request
 import zipfile
@@ -646,6 +648,109 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
     return payload
 
 
+TASK_JOBS = {}
+TASK_JOBS_LOCK = threading.Lock()
+TASK_JOB_TTL_SECONDS = 3600
+TASK_JOB_MAX = 120
+
+def _cleanup_task_jobs():
+    now = time.time()
+    with TASK_JOBS_LOCK:
+        stale = [k for k, v in TASK_JOBS.items() if now - float(v.get("updated_ts", now)) > TASK_JOB_TTL_SECONDS]
+        for k in stale:
+            TASK_JOBS.pop(k, None)
+        if len(TASK_JOBS) > TASK_JOB_MAX:
+            ordered = sorted(TASK_JOBS.items(), key=lambda kv: float(kv[1].get("updated_ts", 0)))
+            for k, _ in ordered[: max(0, len(TASK_JOBS) - TASK_JOB_MAX)]:
+                TASK_JOBS.pop(k, None)
+
+def _task_worker(request_id, kwargs):
+    try:
+        result = run_mobile_subtask(**kwargs)
+        state = "done"
+    except Exception as exc:
+        result = {
+            "ok": False,
+            "status": "BLOQUE",
+            "progress": kwargs.get("current_progress", 0),
+            "summary": "Erreur interne de la tâche",
+            "next": kwargs.get("task", ""),
+            "answer": "",
+            "error": type(exc).__name__,
+            "detail": str(exc)[:240],
+        }
+        state = "error"
+    with TASK_JOBS_LOCK:
+        job = TASK_JOBS.get(request_id) or {}
+        job.update({
+            "state": state,
+            "updated_ts": time.time(),
+            "updated_at": now_iso(),
+            "result": result,
+        })
+        TASK_JOBS[request_id] = job
+    journal("MOBILE_TASK_JOB_DONE", {
+        "request_id": request_id,
+        "state": state,
+        "status": result.get("status"),
+        "progress": result.get("progress"),
+    })
+
+def start_mobile_task(request_id, **kwargs):
+    _cleanup_task_jobs()
+    rid = safe_name(request_id or "").replace(" ", "_")[:120]
+    if not rid:
+        rid = hashlib.sha256((now_iso() + "|" + str(kwargs.get("project_id")) + "|" + str(time.time_ns())).encode("utf-8")).hexdigest()[:32]
+    with TASK_JOBS_LOCK:
+        existing = TASK_JOBS.get(rid)
+        if existing:
+            payload = {
+                "ok": True,
+                "request_id": rid,
+                "job_state": existing.get("state", "running"),
+                "status": "EN_COURS" if existing.get("state") == "running" else "DONE",
+            }
+            if existing.get("state") in ("done", "error"):
+                payload["result"] = existing.get("result")
+            return payload
+        TASK_JOBS[rid] = {
+            "state": "running",
+            "created_ts": time.time(),
+            "updated_ts": time.time(),
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+            "project_id": kwargs.get("project_id"),
+            "subproject_name": kwargs.get("subproject_name"),
+            "result": None,
+        }
+    threading.Thread(target=_task_worker, args=(rid, kwargs), daemon=True, name="BAZOR-TASK-" + rid[:18]).start()
+    journal("MOBILE_TASK_JOB_START", {
+        "request_id": rid,
+        "project": kwargs.get("project_id"),
+        "subproject": str(kwargs.get("subproject_name") or "")[:160],
+    })
+    return {"ok": True, "request_id": rid, "job_state": "running", "status": "EN_COURS"}
+
+def get_mobile_task(request_id):
+    _cleanup_task_jobs()
+    rid = safe_name(request_id or "").replace(" ", "_")[:120]
+    with TASK_JOBS_LOCK:
+        job = TASK_JOBS.get(rid)
+        if not job:
+            return {"ok": False, "error": "task_job_not_found", "request_id": rid}
+        payload = {
+            "ok": True,
+            "request_id": rid,
+            "job_state": job.get("state", "running"),
+            "status": "EN_COURS" if job.get("state") == "running" else "DONE",
+            "created_at": job.get("created_at"),
+            "updated_at": job.get("updated_at"),
+        }
+        if job.get("state") in ("done", "error"):
+            payload["result"] = job.get("result")
+        return payload
+
+
 class ApiHandler(BaseHTTPRequestHandler):
     server_version = "BAZOR-API/3.0"
 
@@ -756,7 +861,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             })
             return
 
-        if path in ("/api/v1/models", "/api/v1/budget", "/api/v1/files", "/api/v1/files/content", "/api/v1/projects", "/api/v1/mobile-state") and not self._security_ok():
+        if path in ("/api/v1/models", "/api/v1/budget", "/api/v1/files", "/api/v1/files/content", "/api/v1/projects", "/api/v1/mobile-state", "/api/v1/task/status") and not self._security_ok():
             return
 
         if path == "/api/v1/models":
@@ -791,6 +896,12 @@ class ApiHandler(BaseHTTPRequestHandler):
 
         if path == "/api/v1/mobile-state":
             self._json({"ok": True, "state": load_mobile_state()})
+            return
+
+        if path == "/api/v1/task/status":
+            request_id = (qs.get("id") or [""])[0]
+            result = get_mobile_task(request_id)
+            self._json(result, 200 if result.get("ok") else 404)
             return
 
         if path == "/api/v1/projects":
@@ -873,16 +984,21 @@ class ApiHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/task":
-            result = run_mobile_subtask(
-                body.get("project_id"),
-                body.get("subproject_name") or "Sous-projet",
-                str(body.get("task") or "").strip() or "Analyser la prochaine etape",
-                body.get("current_progress") or 0,
-                bool(body.get("repair")),
-                body.get("previous") or "",
-                body.get("provider") or "auto",
-            )
-            self._json(result)
+            kwargs = {
+                "project_id": body.get("project_id"),
+                "subproject_name": body.get("subproject_name") or "Sous-projet",
+                "task": str(body.get("task") or "").strip() or "Analyser la prochaine etape",
+                "current_progress": body.get("current_progress") or 0,
+                "repair": bool(body.get("repair")),
+                "previous": body.get("previous") or "",
+                "provider": body.get("provider") or "auto",
+            }
+            if body.get("async") or body.get("request_id"):
+                result = start_mobile_task(body.get("request_id"), **kwargs)
+                self._json(result, 202 if result.get("job_state") == "running" else 200)
+            else:
+                result = run_mobile_subtask(**kwargs)
+                self._json(result)
             return
 
         if path == "/api/v1/chat":
