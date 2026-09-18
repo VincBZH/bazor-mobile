@@ -121,9 +121,16 @@ class ActionEngine:
             raise ValueError("target_already_exists")
         return root, target, raw
 
-    def context_for_project(self, project_id, max_files=24, max_chars=76000):
+    def context_for_project(self, project_id, max_files=24, max_chars=76000, focus=""):
         aliases = self.available_roots(project_id)
         candidates = []
+        focus_tokens = {
+            x for x in re.findall(r"[a-z0-9_.-]{3,}", str(focus or "").lower())
+            if x not in {
+                "pour","avec","dans","sans","une","des","les","sur","que","qui",
+                "the","and","with","from","this","that","task","bazor","done"
+            }
+        }
         started = time.monotonic()
         deadline = started + MAX_CONTEXT_SCAN_SECONDS
         scanned_files = 0
@@ -170,7 +177,16 @@ class ActionEngine:
                             continue
                         if st.st_size > 512000:
                             continue
-                        candidates.append((st.st_mtime, alias, root, p))
+                        rel_text = str(rel).replace("\\","/").lower()
+                        # Priorité aux fichiers dont le chemin correspond à la tâche
+                        # exacte (H3, workflow, launcher, gallery, diag, etc.).
+                        focus_score = 0
+                        for token in focus_tokens:
+                            if token in rel_text:
+                                focus_score += 6
+                            elif token.replace("_","-") in rel_text or token.replace("-","_") in rel_text:
+                                focus_score += 3
+                        candidates.append((focus_score, st.st_mtime, alias, root, p))
 
                     if scan_limited:
                         break
@@ -179,9 +195,9 @@ class ActionEngine:
             if scan_limited:
                 break
 
-        candidates.sort(reverse=True)
+        candidates.sort(key=lambda x:(x[0],x[1]), reverse=True)
         chunks, files, used = [], [], 0
-        for _, alias, root, p in candidates:
+        for score, _, alias, root, p in candidates:
             if len(files) >= max_files or used >= max_chars:
                 break
             try:
@@ -201,7 +217,7 @@ class ActionEngine:
                     break
                 body = text[:min(14000, remain)]
                 chunks.append(f"\n--- ROOT:{alias} FILE:{rel} ---\n{body}")
-                files.append({"root":alias,"path":rel,"size":len(raw)})
+                files.append({"root":alias,"path":rel,"size":len(raw),"focus_score":score})
                 used += len(body)
             except Exception:
                 continue
