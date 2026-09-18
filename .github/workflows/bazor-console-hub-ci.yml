@@ -9,6 +9,7 @@ on:
       - "pc-relay/bazor_github_watcher.py"
       - "pc-relay/bazor_action_engine.py"
       - "bazor_registry.json"
+      - "index.html"
       - ".github/workflows/bazor-console-hub-ci.yml"
   workflow_dispatch:
 
@@ -33,6 +34,20 @@ jobs:
             pc-relay/bazor_github_watcher.py \
             pc-relay/bazor_action_engine.py \
             pc-relay/mammouth_client.py
+      - name: Validate mobile UI JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path("index.html").read_text(encoding="utf-8")
+          scripts=re.findall(r"<script>(.*?)</script>",html,re.S)
+          assert scripts, "mobile script missing"
+          Path("/tmp/bazor-mobile.js").write_text("\n".join(scripts),encoding="utf-8")
+          assert "projectGoCompatible" in html, "GO compatibility guard missing"
+          assert 'status:"INCOMPATIBLE"' in html, "incompatible GO result missing"
+          print("Mobile UI extraction OK")
+          PY
+          node --check /tmp/bazor-mobile.js
       - name: Validate central registry
         run: |
           python - <<'PY'
