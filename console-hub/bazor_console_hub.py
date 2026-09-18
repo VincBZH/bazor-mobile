@@ -29,6 +29,7 @@ MOBILE_STATUS_FILE = DATA / "mobile_network_status.json"
 
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+HUB_BUILD = "2026.09.18.16"
 
 SERVICES = [
     {
@@ -142,6 +143,29 @@ def port_open(port):
         return s.connect_ex(("127.0.0.1", int(port))) == 0
     finally:
         s.close()
+
+def listening_pids(port):
+    if not port or os.name != "nt":
+        return []
+    ps = (
+        "$p=" + str(int(port)) + ";"
+        "Get-NetTCPConnection -State Listen -LocalPort $p -ErrorAction SilentlyContinue | "
+        "Select-Object -ExpandProperty OwningProcess -Unique | ConvertTo-Json -Compress"
+    )
+    try:
+        p=subprocess.run(
+            ["powershell","-NoProfile","-ExecutionPolicy","Bypass","-Command",ps],
+            capture_output=True,text=True,encoding="utf-8",errors="replace",
+            timeout=4,creationflags=CREATE_NO_WINDOW
+        )
+        raw=(p.stdout or "").strip()
+        if not raw:
+            return []
+        data=json.loads(raw)
+        vals=data if isinstance(data,list) else [data]
+        return sorted({int(x) for x in vals if str(x).isdigit()})
+    except Exception:
+        return []
 
 def http_ok(url):
     if not url:
@@ -299,6 +323,7 @@ class Hub:
         top = tk.Frame(self.root, bg="#11151b", padx=12, pady=10)
         top.pack(fill="x")
         tk.Label(top, text="BAZOR CONSOLE HUB", fg="white", bg="#11151b", font=("Segoe UI", 18, "bold")).pack(side="left")
+        tk.Label(top, text="v"+HUB_BUILD, fg="#6dc8ff", bg="#11151b", font=("Consolas", 9, "bold")).pack(side="left", padx=(8,0))
         self.summary = tk.Label(top, text="Analyse…", fg="#aeb8c5", bg="#11151b", font=("Segoe UI", 10))
         self.summary.pack(side="left", padx=16)
         self.mobile_url_label = tk.Label(top, text=detect_mobile_url(), fg="#6dc8ff", bg="#11151b", font=("Consolas", 10, "bold"), cursor="hand2")
@@ -422,10 +447,32 @@ class Hub:
 
     def service_state(self, service, cache=None):
         procs = self.matching(service, cache)
-        port = port_open(service.get("port")) if service.get("port") else None
+        port_num = service.get("port")
+        port = port_open(port_num) if port_num else None
         healthy = http_ok(service.get("health")) if service.get("health") else None
+        listeners = listening_pids(port_num) if port_num else []
         detail = ""
-        if len(procs) > 1:
+
+        # Pour les applis externes (ComfyUI/Studio), plusieurs processus lies
+        # peuvent appartenir a UNE seule instance. Seuls plusieurs LISTENERS
+        # sur le port comptent comme vrai doublon.
+        if not service.get("managed") and port_num:
+            if len(listeners) > 1:
+                state = "DUPLICATE"
+                detail = f"{len(listeners)} écouteurs réels sur le port {port_num}"
+            elif healthy:
+                state = "OK"
+                detail = f"Actif • port OK • {len(procs)} processus lié(s)"
+            elif procs:
+                state = "ERROR"
+                detail = "Processus présent mais service ne répond pas"
+            elif port:
+                state = "EXTERNAL"
+                detail = "Port actif mais processus non identifié"
+            else:
+                state = "CLOSED"
+                detail = "Arrêté"
+        elif len(procs) > 1:
             state = "DUPLICATE"
             detail = f"{len(procs)} instances reconnues — garder une seule"
         elif len(procs) == 1:
@@ -928,13 +975,13 @@ class Hub:
                 continue
             procs = self.matching(svc)
             if len(procs) > 1:
-                # Conserve l'instance au PID le plus élevé (généralement la plus récente).
                 procs = sorted(procs, key=lambda p:int(p.get("ProcessId") or 0))
                 for p in procs[:-1]:
                     pid = int(p.get("ProcessId") or 0)
-                    subprocess.run(["taskkill","/PID",str(pid),"/T","/F"], capture_output=True, creationflags=CREATE_NO_WINDOW)
-                    n += 1
-        messagebox.showinfo("BAZOR", f"{n} doublon(s) BAZOR fermé(s).")
+                    if pid:
+                        subprocess.run(["taskkill","/PID",str(pid),"/T","/F"], capture_output=True, creationflags=CREATE_NO_WINDOW)
+                        n += 1
+        self.summary.config(text=(f"{n} vrai(s) doublon(s) BAZOR fermé(s)" if n else "Aucun vrai doublon BAZOR à fermer"))
         self.root.after(700, self.refresh)
 
     def _wait_port(self, port, wanted=True, seconds=6):
