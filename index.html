@@ -488,10 +488,11 @@ function renderHome(){
 }
 function toggleProject(id){state.expanded[id]=!state.expanded[id];localSave()}
 function toggleInfo(id,t){state.info[id]=state.info[id]===t?null:t;localSave()}
-async function taskCall(pid,c,repair=false,previous="",taskText=null,requestTag=null){
+async function taskCall(pid,c,repair=false,previous="",taskText=null,requestTag=null,opts={}){
   if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
   const x=sp(pid,c.id),tag=requestTag||c.id,requestId="mob-"+pid+"-"+tag+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
-  const payload={project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(taskText||x.next||c.next),current_progress:x.progress??0,repair,previous,provider:providerMode.value,request_id:requestId,async:true,apply_actions:true};
+  const payload={project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(taskText||x.next||c.next),current_progress:x.progress??0,repair,previous,provider:opts.provider||providerMode.value,request_id:requestId,async:true,apply_actions:opts.apply_actions!==false};
+  if(opts.mammouth_profile)payload.mammouth_profile=opts.mammouth_profile;
   let start=await signedFetch("/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),bazorRetrySafe:true},8000);
   if(start.job_state==="done"||start.job_state==="error")return start.result||start;
   const deadline=Date.now()+6*60*1000;
