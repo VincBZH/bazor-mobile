@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto21",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto22",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -193,7 +193,7 @@ async function openSecurity(){
   document.getElementById("securityModal")?.remove();
   const e=document.createElement("div");e.id="securityModal";e.className="modal";
   if(!SEC_DEVICE||securityBadge.textContent.includes("APPAIRER")){
-    e.innerHTML='<div class="row between"><h3>BAZOR Security Tool</h3><button onclick="this.closest(\'#securityModal\').remove()">Fermer</button></div><div class="infobox">Le code est affiché <b>uniquement sur le PC</b>. Appuie une seule fois sur le bouton ci-dessous, puis saisis ce même code. Il ne sera plus remplacé automatiquement.</div><button class="wide" style="margin-top:8px" onclick="requestPairCode()">AFFICHER UN NOUVEAU CODE SUR LE PC</button><label>Code du PC</label><input id="pairCode" class="security-code wide" placeholder="XXXX-XXXX-XXXX" maxlength="14" style="background:#15191f;color:white;border:1px solid var(--line);border-radius:10px;padding:10px"><button class="primary wide" style="margin-top:9px" onclick="pairPhone(pairCode.value).then(()=>{toast(\'Téléphone authentifié ✓\');document.getElementById(\'securityModal\')?.remove()}).catch(x=>toast(x.message))">APPAIRER CE TÉLÉPHONE</button><div class="mini muted" style="margin-top:8px">VPN accepté : l’adresse IP n’est pas ta preuve d’identité. C’est l’appareil appairé qui compte.</div>';
+    e.innerHTML='<div class="row between"><h3>BAZOR Security Tool</h3><button onclick="this.closest(\'#securityModal\').remove()">Fermer</button></div><div class="infobox">Le code est affiché <b>uniquement sur le PC</b>. Appuie une seule fois sur le bouton ci-dessous, puis saisis ce même code. Il ne sera plus remplacé automatiquement.</div><button class="wide" style="margin-top:8px" onclick="requestPairCode()">AFFICHER UN NOUVEAU CODE SUR LE PC</button><label>Code du PC</label><input id="pairCode" class="security-code wide" placeholder="XXXX-XXXX-XXXX" maxlength="14" style="background:#15191f;color:white;border:1px solid var(--line);border-radius:10px;padding:10px"><button class="primary wide" style="margin-top:9px" onclick="pairPhone(pairCode.value).then(async()=>{toast(\'Téléphone authentifié ✓\');if(biometricAvailable()&&!biometricConfigured()){try{await enableBiometric()}catch(_){toast(\'TEL OK • biométrie à activer ensuite\')}}document.getElementById(\'securityModal\')?.remove()}).catch(x=>toast(x.message))">APPAIRER CE TÉLÉPHONE</button><div class="mini muted" style="margin-top:8px">VPN accepté : l’adresse IP n’est pas ta preuve d’identité. C’est l’appareil appairé qui compte.</div>';
   }else{
     let alerts=[],approvals=[],dev=null;
     try{dev=(await signedFetch("/api/v1/security/device",{method:"GET"},3000)).device}catch(_){}
