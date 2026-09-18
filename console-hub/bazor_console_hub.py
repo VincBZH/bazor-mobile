@@ -305,6 +305,7 @@ class Hub:
             ("↻ MAJ + RELANCE BAZOR", self.update_restart_bazor),
             ("RÉPARER MOBILE", self.repair_mobile_access),
             ("USB TÉLÉPHONE", self.usb_mobile),
+            ("NOUVEAU CODE", self.new_pairing_code),
             ("CENTRALISER / ADOPTER", self.centralize),
             ("ACTUALISER", self.refresh),
             ("VOIR LOG", self.open_log),
@@ -471,14 +472,36 @@ class Hub:
         except Exception:
             pass
 
+    def _local_pairing_info(self, rotate=False):
+        try:
+            suffix = "?new=1" if rotate else ""
+            with urllib.request.urlopen("http://127.0.0.1:8775/api/v1/security/pairing-local"+suffix, timeout=1.2) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except Exception:
+            return None
+
+    def new_pairing_code(self):
+        info = self._local_pairing_info(rotate=True)
+        if info and info.get("code"):
+            self.security_code = str(info["code"])
+            self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
+            self.code_label.pack(side="right")
+            self.summary.config(text="Nouveau code d’appairage affiché")
+        else:
+            self.summary.config(text="Core non joignable pour l’appairage")
+
     def update_security_code(self):
-        text = tail(self.log_path("core"), 120)
-        matches = re.findall(r">>>\s*([A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})\s*<<<", text)
-        if not matches:
-            matches = re.findall(r"Code appairage mobile:\s*([A-Z0-9-]{10,20})", text)
-        code = matches[-1] if matches else ""
-        if code and code != self.security_code:
-            self.security_code = code
+        # Source fiable: mémoire du Core via endpoint loopback uniquement.
+        info = self._local_pairing_info(rotate=False)
+        code = str((info or {}).get("code") or "")
+        if not code:
+            # Compatibilité avec un ancien Core : repli sur le log.
+            text = tail(self.log_path("core"), 120)
+            matches = re.findall(r">>>\s*([A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})\s*<<<", text)
+            if not matches:
+                matches = re.findall(r"Code appairage mobile:\s*([A-Z0-9-]{10,20})", text)
+            code = matches[-1] if matches else ""
+        self.security_code = code
         if self.security_code:
             self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
             self.code_label.pack(side="right")
