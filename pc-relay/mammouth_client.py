@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import subprocess
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -10,6 +11,7 @@ MAMMOUTH_URL = "https://api.mammouth.ai/v1/chat/completions"
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "BAZOR_DATA"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+_USAGE_LOCK = threading.Lock()
 
 # Upper-bound prices from Mammouth docs, USD per 1M tokens.
 MODEL_PRICES = {
@@ -106,14 +108,17 @@ def _estimate_cost(model, usage):
 
 
 def _record_usage(model, usage, estimated_cost):
-    state = usage_state()
-    state["calls"] = int(state.get("calls", 0) or 0) + 1
-    state["last_model"] = model
-    state["last_usage"] = usage or {}
-    state["last_call"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
-    if estimated_cost is not None:
-        state["estimated_spent_usd"] = float(state.get("estimated_spent_usd", 0.0) or 0.0) + float(estimated_cost)
-    _usage_file().write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Deux secondes lectures peuvent tourner en parallèle. Sérialiser uniquement
+    # la mise à jour du compteur/budget pour ne perdre aucun appel ni coût.
+    with _USAGE_LOCK:
+        state = usage_state()
+        state["calls"] = int(state.get("calls", 0) or 0) + 1
+        state["last_model"] = model
+        state["last_usage"] = usage or {}
+        state["last_call"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+        if estimated_cost is not None:
+            state["estimated_spent_usd"] = float(state.get("estimated_spent_usd", 0.0) or 0.0) + float(estimated_cost)
+        _usage_file().write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def _parse_api_json(body):
     """Tolère les réponses Mammouth contenant plusieurs objets JSON concaténés.
