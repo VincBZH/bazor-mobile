@@ -389,6 +389,8 @@ async function recoverTransientFetchBlocks(){
   }
 }
 function rp(id){return (REGISTRY.projects||[]).find(x=>x.id===id)}
+function projectGoCompatible(id){return rp(id)?.go_compatible!==false}
+function projectGoReason(id){return rp(id)?.go_reason||"Projet non relié à une racine locale exécutable."}
 function children(id){return rp(id)?.subprojects||[]}
 function sp(pid,sid){return state.subprojects?.[pid]?.[sid]||{status:"A_EVALUER",progress:null,summary:"Pas encore évalué",next:"À définir"}}
 function nextSub(pid){return children(pid).find(c=>{const x=sp(pid,c.id);return x.status!=="OK"||x.progress===null||x.progress<100})||null}
@@ -397,6 +399,7 @@ function phrase(p){
   const r=state.runs[p.id];
   if(r?.active){const c=children(p.id).find(x=>x.id===r.subId);return "En cours : "+(c?.name||p.name)+" • "+(r.stage||"travail")}
   if(r?.blocked)return "Bloqué : "+(r.stage||"contrôle nécessaire");
+  if(!projectGoCompatible(p.id))return "GO non relié : "+projectGoReason(p.id);
   const n=nextSub(p.id);if(!n)return "Tout est contrôlé.";
   const x=sp(p.id,n.id);return "À suivre : "+n.name+" • "+(x.next||n.next);
 }
@@ -470,6 +473,7 @@ async function taskCall(pid,c,repair=false,previous=""){
   throw new Error("Analyse trop longue (>6 min)");
 }
 async function goSub(pid,sid,auto=false){
+  if(!projectGoCompatible(pid)){toast("GO indisponible : "+projectGoReason(pid));return {status:"INCOMPATIBLE",compatibility:true}}
   const c=children(pid).find(x=>x.id===sid),p=state.projects.find(x=>x.id===pid),x=sp(pid,sid),key=pid+":"+sid;if(!c||!p)return;
   if(actionBusy[key]){toast("Déjà en cours");return {status:"EN_COURS"}}actionBusy[key]=true;
   x.status="EN_COURS";state.runs[pid]={active:true,blocked:false,subId:sid,stage:"Analyse du contexte",taskProgress:25,checkpoints:[{text:"Tâche préparée",kind:"ok"}]};localSave();toast("BAZOR travaille…");
@@ -510,6 +514,7 @@ async function goSub(pid,sid,auto=false){
 }
 async function goNext(pid){const c=nextSub(pid);if(!c){toast("Projet déjà contrôlé");return}return goSub(pid,c.id,false)}
 async function goAuto(pid){
+  if(!projectGoCompatible(pid)){toast("AUTO indisponible : "+projectGoReason(pid));return {status:"INCOMPATIBLE",compatibility:true}}
   const key="auto:"+pid;if(actionBusy[key]){toast("AUTO déjà en cours");return}actionBusy[key]=true;state.expanded[pid]=true;localSave();
   const p=state.projects.find(x=>x.id===pid);let blocked=false;
   try{

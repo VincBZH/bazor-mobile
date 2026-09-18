@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.18.4",
+  "version": "2026.09.18.5",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -14,7 +14,7 @@
           "id": "mobile",
           "name": "BAZOR Mobile / Command Center",
           "order": 1,
-          "next": "Simplifier le cockpit mobile et fiabiliser le pilotage des outils BAZOR."
+          "next": "Faire en sorte que GO n’affiche un succès que pour une action réelle prouvée ; sinon afficher clairement ANALYSE SEULE ou INCOMPATIBLE."
         },
         {
           "id": "core",
@@ -44,15 +44,17 @@
           "id": "logs",
           "name": "Logs / diagnostic automatique",
           "order": 6,
-          "next": "Centraliser blocages, logs, contrôles et propositions de correction."
+          "next": "Exposer dans le diagnostic local le mode d’exécution réel, les fichiers modifiés, tests, durée et cause d’un blocage."
         },
         {
           "id": "action-engine",
           "name": "BAZOR Action Engine",
           "order": 7,
-          "next": "Appliquer des modifications réelles de fichiers avec sauvegarde, tests, preuves et rollback automatique."
+          "next": "Exécuter uniquement des tâches ayant une racine autorisée et un critère de réussite testable ; refuser proprement les tâches non reliées."
         }
-      ]
+      ],
+      "go_compatible": true,
+      "go_reason": "Racine locale reliée au BAZOR Action Engine."
     },
     {
       "id": "simple-studio",
@@ -66,39 +68,41 @@
           "id": "comfy",
           "name": "ComfyUI / bridge",
           "order": 1,
-          "next": "Fiabiliser Studio ↔ ComfyUI et la détection des dépendances."
+          "next": "Inspecter le bridge Studio ↔ ComfyUI ; corriger uniquement une incohérence réelle de port, endpoint ou dépendance trouvée dans les fichiers, puis valider la syntaxe."
         },
         {
           "id": "presets",
           "name": "Presets & modèles locaux",
           "order": 2,
-          "next": "Inventorier et exposer les vrais presets et modèles installés."
+          "next": "Comparer les presets et références de modèles réellement présents dans les fichiers du Studio ; corriger uniquement les références manifestement invalides, puis valider JSON/JS."
         },
         {
           "id": "h3",
           "name": "MiniMax H3 / workflows",
           "order": 3,
-          "next": "Valider le workflow H3 8 Go VRAM et ses dépendances réelles."
+          "next": "Contrôler le workflow MiniMax H3 8 Go VRAM ; corriger uniquement les noms de modèles ou encodeurs incompatibles réellement trouvés, puis valider le JSON."
         },
         {
           "id": "quality",
           "name": "Analyse & correction automatique",
           "order": 4,
-          "next": "Analyser les générations et retenter automatiquement avec contrôles."
+          "next": "Inspecter la logique d’analyse/correction automatique ; appliquer un correctif uniquement si un défaut déterministe est trouvé, puis lancer les tests de syntaxe disponibles."
         },
         {
           "id": "gallery",
           "name": "Galerie / sécurité",
           "order": 5,
-          "next": "Fiabiliser galerie, suppression, masquage et récupération."
+          "next": "Inspecter la galerie et les actions supprimer/masquer/récupérer ; corriger un défaut réel détecté dans les fichiers, puis valider la syntaxe."
         },
         {
           "id": "diag",
           "name": "Diagnostic vers BAZOR",
           "order": 6,
-          "next": "Envoyer erreurs et journaux structurés au Core pour correction."
+          "next": "Vérifier l’envoi structuré des erreurs/journaux vers BAZOR ; corriger uniquement une rupture réelle du chemin de diagnostic et valider."
         }
-      ]
+      ],
+      "go_compatible": true,
+      "go_reason": "Racine locale reliée au BAZOR Action Engine."
     },
     {
       "id": "wii-relay",
@@ -137,6 +141,44 @@
           "name": "Sauvegarde / progression",
           "order": 5,
           "next": "Structurer sauvegarde, niveaux, pièces et historique."
+        }
+      ],
+      "go_compatible": true,
+      "go_reason": "Racine locale reliée au BAZOR Action Engine."
+    },
+    {
+      "id": "bazor-watch",
+      "name": "BAZOR Watch",
+      "order": 3.5,
+      "default_progress": 55,
+      "summary": "Application Android séparée pour liaison montre, BLE, micro/audio et diagnostic.",
+      "local_root": "%USERPROFILE%\\bazor-mobile\\android\\watchapp",
+      "go_compatible": true,
+      "go_reason": "Code Watch présent dans le dépôt BAZOR et modifiable via bazor_repo.",
+      "subprojects": [
+        {
+          "id": "usb-install",
+          "name": "Installation USB / APK",
+          "order": 1,
+          "next": "Vérifier l’installation APK et la détection ADB ; corriger uniquement une régression du lanceur ou du manifeste."
+        },
+        {
+          "id": "ble",
+          "name": "BLE / watchdog montre",
+          "order": 2,
+          "next": "Inspecter le watchdog BLE et corriger uniquement une cause réelle de micro-coupure ou de reconnexion instable."
+        },
+        {
+          "id": "audio",
+          "name": "Micro / audio montre",
+          "order": 3,
+          "next": "Vérifier les profils audio et les capacités réellement exposées ; corriger uniquement une incohérence détectée dans l’app Android."
+        },
+        {
+          "id": "diag",
+          "name": "Diagnostic montre",
+          "order": 4,
+          "next": "Améliorer le diagnostic Watch pour distinguer téléphone, BLE, audio et réseau sans faux statut OK."
         }
       ]
     },
@@ -177,7 +219,9 @@
           "order": 5,
           "next": "Fiabiliser exports ZIP, journaux et diagnostic BAZOR."
         }
-      ]
+      ],
+      "go_compatible": false,
+      "go_reason": "Racine locale MODO Viewer non déclarée dans l’Action Engine : GO serait seulement analytique."
     },
     {
       "id": "bazor-tools",
@@ -222,7 +266,9 @@
           "order": 6,
           "next": "Fiabiliser export DOCX/PDF et suivi des validations."
         }
-      ]
+      ],
+      "go_compatible": true,
+      "go_reason": "Racine locale reliée au BAZOR Action Engine."
     },
     {
       "id": "bazor-security",
@@ -236,13 +282,13 @@
           "id": "pairing",
           "name": "Appairage téléphone ↔ PC",
           "order": 1,
-          "next": "Appairer le téléphone avec le code temporaire affiché sur le PC."
+          "next": "Maintenir l’appairage QR/code déjà opérationnel et corriger uniquement une régression détectée."
         },
         {
           "id": "auth",
           "name": "Authentification appareil",
           "order": 2,
-          "next": "Utiliser une preuve à usage unique pour chaque requête sensible."
+          "next": "Maintenir la preuve appareil à usage unique déjà en place et corriger uniquement une régression détectée."
         },
         {
           "id": "biometric",
@@ -278,9 +324,11 @@
           "id": "usb-android",
           "name": "USB Android / ADB",
           "order": 8,
-          "next": "Utiliser ADB reverse 8775/8776 pour l’accès mobile local et préparer la validation biométrique via localhost."
+          "next": "Maintenir ADB reverse 8775/8776 désormais opérationnel et corriger uniquement une régression détectée."
         }
-      ]
+      ],
+      "go_compatible": true,
+      "go_reason": "Racine locale reliée au BAZOR Action Engine."
     },
     {
       "id": "festival",
@@ -313,7 +361,9 @@
           "order": 4,
           "next": "Préparer la chaîne de publication et le suivi."
         }
-      ]
+      ],
+      "go_compatible": false,
+      "go_reason": "Aucune racine locale BAZOR Festival reliée : GO ne peut pas appliquer de modification réelle."
     }
   ]
 }

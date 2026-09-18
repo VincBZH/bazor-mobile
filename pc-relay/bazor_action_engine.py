@@ -61,6 +61,7 @@ class ActionEngine:
             "ai-room": ["bazor_repo", "ai_room"],
             "bazor-security": ["bazor_repo"],
             "bazor-tools": ["bazor_repo", "bazor_tools"],
+            "bazor-watch": ["bazor_repo"],
             "simple-studio": ["simple_studio"],
             "wii": ["wii"],
             "wii-relay": ["wii"],
