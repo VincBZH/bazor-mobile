@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto20",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto21",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -116,16 +116,23 @@ async function verifyBiometric(){
   return !!cred;
 }
 
+function autoRequestPairCodeOnce(){
+  try{
+    if(sessionStorage.getItem("bazor.pair.auto.once")==="1")return;
+    sessionStorage.setItem("bazor.pair.auto.once","1");
+  }catch(_){}
+  setTimeout(()=>requestPairCode().catch?.(()=>{}),250);
+}
 async function securityStatus(){
   if(!CORE)return null;
   try{
     const r=await fetchTimeout(CORE+"/api/v1/security/status?device_id="+encodeURIComponent(deviceId()),{cache:"no-store"},2500);
     SEC_STATUS=await r.json();
-    if(!SEC_DEVICE){securityBadge.textContent="🔒 À APPAIRER";securityBadge.className="badge todo";return SEC_STATUS}
+    if(!SEC_DEVICE){securityBadge.textContent="🔒 À APPAIRER";securityBadge.className="badge todo";autoRequestPairCodeOnce();return SEC_STATUS}
     try{
       const d=await signedFetch("/api/v1/security/device",{method:"GET"},3000);
       if(d.ok){securityBadge.textContent="🔒 TEL OK";securityBadge.className="badge ok"}else throw 0;
-    }catch(e){securityBadge.textContent="🔒 À RÉAPPAIRER";securityBadge.className="badge blocked"}
+    }catch(e){securityBadge.textContent="🔒 À RÉAPPAIRER";securityBadge.className="badge blocked";autoRequestPairCodeOnce()}
     return SEC_STATUS;
   }catch(e){securityBadge.textContent="🔒 ?";securityBadge.className="badge blocked";return null}
 }
@@ -165,7 +172,7 @@ async function requestPairCode(){
   try{
     const r=await fetchTimeout(CORE+"/api/v1/security/pairing-request?device_id="+encodeURIComponent(deviceId()),{cache:"no-store"},2500);
     const d=await r.json();
-    if(d.ok){toast(d.printed?"Nouveau code affiché sur le PC ✓":"Code déjà affiché récemment");return true}
+    if(d.ok){toast(d.printed?"Code envoyé au Hub PC ✓":"Code déjà actif sur le Hub PC");return true}
   }catch(e){}
   toast("Impossible de demander le code pour l'instant");return false
 }
