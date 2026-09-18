@@ -81,7 +81,7 @@ def powershell_processes():
         "Get-CimInstance Win32_Process | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress"
     ]
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=8)
+        p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=8, creationflags=CREATE_NO_WINDOW)
         if p.returncode != 0 or not p.stdout.strip():
             return []
         data = json.loads(p.stdout)
@@ -166,7 +166,7 @@ class Hub:
         bar = tk.Frame(self.root, padx=10, pady=8)
         bar.pack(fill="x")
         for text, cmd in [
-            ("CENTRALISER BAZOR", self.centralize),
+            ("CENTRALISER / ADOPTER", self.centralize),
             ("ACTUALISER", self.refresh),
             ("VOIR LOG", self.open_log),
             ("DÉMARRER", self.start_selected),
@@ -235,7 +235,7 @@ class Hub:
                 state = "WORK"
                 detail = "Tâche BAZOR en cours"
             else:
-                detail = "Processus actif" + (" • port OK" if port else "")
+                detail = "Actif" + (" • port OK" if port else "") + (" • géré par le Hub" if service.get("managed") else " • externe")
         else:
             if port:
                 state = "EXTERNAL"
@@ -371,14 +371,27 @@ class Hub:
         self.root.after(700, self.refresh)
 
     def centralize(self):
-        # Ne touche qu'aux trois composants BAZOR Mobile reconnus.
+        # Mode sûr : on ADOPTE les services sains déjà actifs.
+        # On ne redémarre jamais Core/Web/Watcher juste pour les centraliser.
         self.proc_cache = powershell_processes()
+        started = []
+        duplicates = []
         for svc in SERVICES[:3]:
-            self.stop_service(svc)
-        time.sleep(0.6)
-        for svc in SERVICES[:3]:
-            self.start_service(svc)
-        self.root.after(1300, self.refresh)
+            procs = self.matching(svc)
+            if len(procs) == 0:
+                if self.start_service(svc):
+                    started.append(svc["name"])
+            elif len(procs) > 1:
+                duplicates.append(svc["name"])
+        msg = "Services existants conservés."
+        if started:
+            msg += "\nDémarrés en arrière-plan : " + ", ".join(started)
+        if duplicates:
+            msg += "\nDoublons détectés (non fermés automatiquement) : " + ", ".join(duplicates)
+        self.summary.config(text="Centralisation sûre effectuée")
+        self.root.after(900, self.refresh)
+        if started or duplicates:
+            messagebox.showinfo("BAZOR Console Hub", msg)
 
     def open_log(self):
         svc = self.selected_service()
