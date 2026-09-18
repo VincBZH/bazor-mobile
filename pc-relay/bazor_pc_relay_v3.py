@@ -29,6 +29,8 @@ FILES_DIR = DATA_DIR / "ROOM_FILES"
 GENERATED_DIR = DATA_DIR / "GENERATED"
 JOURNAL_FILE = DATA_DIR / "journal.jsonl"
 PROJECTS_FILE = DATA_DIR / "projects.json"
+REGISTRY_FILE = BASE_DIR.parent / "bazor_registry.json"
+MOBILE_STATE_FILE = DATA_DIR / "mobile_state.json"
 for folder in (DATA_DIR, FILES_DIR, GENERATED_DIR):
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -65,6 +67,40 @@ PROJECT_ROOTS = {
 PROJECT_CONTEXT_EXTS = {".py",".js",".ts",".tsx",".jsx",".html",".css",".json",".md",".txt",".ps1",".cmd",".bat",".yml",".yaml"}
 PROJECT_CONTEXT_SKIP = {"node_modules",".git","models","checkpoints","output","outputs","venv",".venv","__pycache__","cache","temp","tmp","downloads"}
 
+
+
+def load_registry():
+    if REGISTRY_FILE.exists():
+        try:
+            data = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("projects"), list):
+                return data
+        except Exception:
+            pass
+    return {"version": "fallback", "title": "BAZOR Project Registry", "projects": []}
+
+
+def load_mobile_state():
+    if MOBILE_STATE_FILE.exists():
+        try:
+            data = json.loads(MOBILE_STATE_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+    return {"version": 1, "updated_at": None, "projects": {}, "runs": {}, "subprojects": {}}
+
+
+def save_mobile_state(data):
+    if not isinstance(data, dict):
+        raise ValueError("mobile_state_must_be_object")
+    # Garde-fou : l'état mobile ne doit jamais devenir un stockage arbitraire volumineux.
+    raw = json.dumps(data, ensure_ascii=False)
+    if len(raw.encode("utf-8")) > 2 * 1024 * 1024:
+        raise ValueError("mobile_state_too_large")
+    data["updated_at"] = now_iso()
+    MOBILE_STATE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return data
 
 def now_iso():
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
@@ -458,7 +494,18 @@ def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None, current_progre
         + ("\nCONTEXTE LOCAL REEL EN LECTURE SEULE:\n" + local_context if local_context else "\nCONTEXTE LOCAL REEL: indisponible.\n")
     )
 
-    route, result = run_routed(prompt, mode="auto_plus")
+    provider = str(provider or "auto").lower()
+    if provider == "mammouth":
+        kind = classify_task(prompt)
+        profile = mammouth_client.choose_profile(kind)
+        route = {"target": "mammouth", "kind": kind, "profile": profile}
+        result = mammouth_chat(prompt, kind, profile)
+    elif provider == "ollama":
+        route = route_task(prompt, mode="auto")
+        route["target"] = "ollama"
+        result = ollama_chat(prompt, route.get("model"))
+    else:
+        route, result = run_routed(prompt, mode="auto_plus")
     answer = result.get("answer", "")
     status = "OK" if result.get("ok") else "BLOQUE"
     upper = answer.upper()
@@ -504,7 +551,7 @@ def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None, current_progre
     }
 
 
-def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, repair=False, previous=""):
+def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, repair=False, previous="", provider="auto"):
     projects = load_projects()
     project = next((p for p in projects if p.get("id") == project_id), None)
     project_name = project.get("name") if project else str(project_id or "Projet BAZOR")
@@ -577,6 +624,7 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
         "model": result.get("model") or route.get("model"),
         "local_context": local_report,
         "repair": bool(repair),
+        "provider_requested": provider,
     }
     journal("MOBILE_SUBTASK", {
         "project": project_id,
@@ -639,7 +687,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "time": now_iso(),
                 "ollama": {"online": online, "models": models},
                 "mammouth": {"configured": mammouth_client.configured(), "budget": mammouth_client.budget_status()},
-                "capabilities": ["routing", "auto_plus", "eco_credits", "mammouth", "file_upload", "file_context", "pdf", "docx", "generated_files", "go_auto", "mobile_subtask"],
+                "capabilities": ["routing", "auto_plus", "eco_credits", "mammouth", "file_upload", "file_context", "pdf", "docx", "generated_files", "go_auto", "mobile_subtask", "project_registry", "mobile_state_sync", "mammouth_provider"],
                 "security": {"scope": "local-network", "ollama_exposed": False, "shell_commands": False, "mammouth_key_exposed": False}
             })
             return
@@ -667,6 +715,15 @@ class ApiHandler(BaseHTTPRequestHandler):
                 return
             raw = p.read_bytes()
             self._json({"ok": True, "name": original_name(p), "size": len(raw), "data": base64.b64encode(raw).decode("ascii")})
+            return
+
+        if path == "/api/v1/registry":
+            registry = load_registry()
+            self._json({"ok": True, "registry": registry})
+            return
+
+        if path == "/api/v1/mobile-state":
+            self._json({"ok": True, "state": load_mobile_state()})
             return
 
         if path == "/api/v1/projects":
@@ -709,6 +766,14 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._json(result, 200 if result.get("ok") else 400)
             return
 
+        if path == "/api/v1/mobile-state":
+            try:
+                state = save_mobile_state(body.get("state") or {})
+                self._json({"ok": True, "state": state})
+            except Exception as exc:
+                self._json({"ok": False, "error": str(exc)[:180]}, 400)
+            return
+
         if path == "/api/v1/task":
             result = run_mobile_subtask(
                 body.get("project_id"),
@@ -717,6 +782,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 body.get("current_progress") or 0,
                 bool(body.get("repair")),
                 body.get("previous") or "",
+                body.get("provider") or "auto",
             )
             self._json(result)
             return
