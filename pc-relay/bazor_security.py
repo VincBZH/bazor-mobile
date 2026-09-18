@@ -141,6 +141,22 @@ class BazorSecurity:
             self._event("PAIRING_CODE_DISPLAYED", {"ip": ip})
             return {"ok": True, "printed": True, "expires_in": max(0, int(self._pair_expires - now))}
 
+    def local_pairing_code(self, rotate=False):
+        """PC-local helper: return the active raw pairing code, or create one on explicit request.
+        Never expose this through a non-loopback endpoint."""
+        with self.lock:
+            now = time.time()
+            if rotate or not (self._pair_code and self._pair_hash and now < self._pair_expires):
+                self.rotate_pair_code(force=True)
+                self._last_pair_display = now
+                self._event("PAIRING_CODE_LOCAL_PC", {"rotate": bool(rotate)})
+            return {
+                "ok": True,
+                "code": self._pair_code,
+                "expires_in": max(0, int(self._pair_expires - time.time())),
+                "pairing_active": bool(self._pair_hash and time.time() < self._pair_expires),
+            }
+
     def public_status(self):
         with self.lock:
             return {
