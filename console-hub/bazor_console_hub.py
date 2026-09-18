@@ -29,7 +29,7 @@ MOBILE_STATUS_FILE = DATA / "mobile_network_status.json"
 
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-HUB_BUILD = "2026.09.18.17"
+HUB_BUILD = "2026.09.18.18"
 
 SERVICES = [
     {
@@ -777,26 +777,13 @@ class Hub:
             return None
 
     def ensure_pairing_code(self):
-        # Le Hub PC doit toujours afficher une cle utilisable.
-        # Si le Core n'en a pas en memoire, on en cree une seule fois ici.
-        info = self._local_pairing_info(rotate=False)
-        if info and info.get("code"):
-            self.security_code = str(info["code"])
-            self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
-            self.code_label.pack(side="right")
-            self.show_pairing_qr(self.security_code)
-            return
-        info = self._local_pairing_info(rotate=True)
-        if info and info.get("code"):
-            self.security_code = str(info["code"])
-            self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
-            self.code_label.pack(side="right")
-            self.show_pairing_qr(self.security_code)
-            self.summary.config(text="Clé + QR d’appairage prêts")
-            return
-        self.show_pairing_qr(None)
-        self.summary.config(text="Appairage : attente du Core…")
-        self.root.after(1800, self.ensure_pairing_code)
+        # Confidentialité: ne jamais générer ni afficher automatiquement
+        # un code/QR. L'utilisateur doit cliquer explicitement sur
+        # APPAIRER TÉLÉPHONE (ou NOUVEAU CODE).
+        self.security_code = ""
+        self.code_label.pack_forget()
+        self.pair_frame.pack_forget()
+        return
 
     def new_pairing_code(self):
         info = self._local_pairing_info(rotate=True)
