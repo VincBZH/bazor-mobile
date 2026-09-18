@@ -391,6 +391,10 @@ class ActionEngine:
                 if init.returncode == 0:
                     run_git("config", "user.email", "bazor-sandbox@local")
                     run_git("config", "user.name", "BAZOR Sandbox")
+                    # Sous Windows, les fichiers texte existants sont souvent CRLF.
+                    # git diff --check ne doit pas considérer le CR de CRLF comme
+                    # espace de fin de ligne invalide.
+                    run_git("config", "core.whitespace", "cr-at-eol")
                     run_git("add", "-A")
                     base = run_git("commit", "-q", "--allow-empty", "-m", "baseline")
                     git_info["baseline"] = base.returncode == 0
