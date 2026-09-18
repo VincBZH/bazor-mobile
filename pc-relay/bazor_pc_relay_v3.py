@@ -503,6 +503,92 @@ def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None, current_progre
     }
 
 
+def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, repair=False, previous=""):
+    projects = load_projects()
+    project = next((p for p in projects if p.get("id") == project_id), None)
+    project_name = project.get("name") if project else str(project_id or "Projet BAZOR")
+    try:
+        current_progress = max(0, min(100, int(current_progress or 0)))
+    except Exception:
+        current_progress = 0
+
+    local_context, local_report = project_local_context(project_id)
+    repair_note = ""
+    if repair:
+        repair_note = (
+            "\nMODE CORRECTION: le passage precedent a signale un blocage. "
+            "Diagnostique la cause a partir des vrais fichiers, corrige ton approche, puis recontrole. "
+            "Ne pretends pas avoir modifie un fichier si tu ne l'as pas effectivement modifie.\n"
+            "RESULTAT PRECEDENT:\n" + str(previous or "")[:10000] + "\n"
+        )
+
+    prompt = (
+        f"Projet BAZOR: {project_name}\n"
+        f"Sous-projet: {subproject_name}\n"
+        f"Tache: {task}\n"
+        f"Progression sous-projet actuelle: {current_progress}%.\n"
+        + repair_note +
+        "Travaille uniquement a partir du contexte local reel ci-dessous. "
+        "Aucun shell et aucune execution de fichier. "
+        "N'invente ni fichier, ni API, ni fonctionnalite. "
+        "Si tu detectes un bug, explique la correction precise et la verification a refaire. "
+        "N'augmente PROGRESS que si le contexte apporte un resultat verifiable; sinon conserve la valeur actuelle. "
+        "Termine obligatoirement par quatre lignes:\n"
+        "STATUS: OK|BLOQUE|AMELIORER\n"
+        "PROGRESS: <0-100>\n"
+        "SUMMARY: <une phrase courte indiquant ou on en est>\n"
+        "NEXT: <prochaine etape concrete>\n"
+        + ("\nCONTEXTE LOCAL REEL EN LECTURE SEULE:\n" + local_context if local_context else "\nCONTEXTE LOCAL REEL: indisponible.\n")
+    )
+
+    route, result = run_routed(prompt, mode="auto_plus")
+    answer = result.get("answer", "") or result.get("message", "")
+    upper = answer.upper()
+    status = "OK" if result.get("ok") else "BLOQUE"
+    if "STATUS: BLO" in upper:
+        status = "BLOQUE"
+    elif "STATUS: AMEL" in upper:
+        status = "AMELIORER"
+
+    progress = current_progress
+    m = re.search(r"(?im)^\s*PROGRESS\s*:\s*(\d{1,3})\s*%?\s*$", answer)
+    if m:
+        proposed = max(0, min(100, int(m.group(1))))
+        if proposed <= current_progress or (local_report.get("available") and status == "OK"):
+            progress = proposed
+
+    def line_value(label, fallback):
+        m2 = re.search(r"(?im)^\s*" + re.escape(label) + r"\s*:\s*(.+?)\s*$", answer)
+        return (m2.group(1).strip()[:500] if m2 else fallback)
+
+    summary = line_value("SUMMARY", "Analyse terminee." if status == "OK" else "Blocage detecte.")
+    next_step = line_value("NEXT", task)
+
+    payload = {
+        "ok": bool(result.get("ok")),
+        "status": status,
+        "progress": progress,
+        "summary": summary,
+        "next": next_step,
+        "answer": answer,
+        "route": route,
+        "engine": result.get("provider") or route.get("target"),
+        "model": result.get("model") or route.get("model"),
+        "local_context": local_report,
+        "repair": bool(repair),
+    }
+    journal("MOBILE_SUBTASK", {
+        "project": project_id,
+        "subproject": str(subproject_name)[:160],
+        "status": status,
+        "progress": progress,
+        "repair": bool(repair),
+        "engine": payload["engine"],
+        "model": payload["model"],
+    })
+    return payload
+
+
 class ApiHandler(BaseHTTPRequestHandler):
     server_version = "BAZOR-API/3.0"
 
@@ -552,7 +638,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "time": now_iso(),
                 "ollama": {"online": online, "models": models},
                 "mammouth": {"configured": mammouth_client.configured(), "budget": mammouth_client.budget_status()},
-                "capabilities": ["routing", "auto_plus", "eco_credits", "mammouth", "file_upload", "file_context", "pdf", "docx", "generated_files", "go_auto"],
+                "capabilities": ["routing", "auto_plus", "eco_credits", "mammouth", "file_upload", "file_context", "pdf", "docx", "generated_files", "go_auto", "mobile_subtask"],
                 "security": {"scope": "local-network", "ollama_exposed": False, "shell_commands": False, "mammouth_key_exposed": False}
             })
             return
@@ -620,6 +706,18 @@ class ApiHandler(BaseHTTPRequestHandler):
         if path == "/api/v1/go":
             result = go_auto(body.get("project_id"), body.get("task"), body.get("room") or "ROOM PRINCIPALE", body.get("files") or [], body.get("current_progress"))
             self._json(result, 200 if result.get("ok") else 400)
+            return
+
+        if path == "/api/v1/task":
+            result = run_mobile_subtask(
+                body.get("project_id"),
+                body.get("subproject_name") or "Sous-projet",
+                str(body.get("task") or "").strip() or "Analyser la prochaine etape",
+                body.get("current_progress") or 0,
+                bool(body.get("repair")),
+                body.get("previous") or "",
+            )
+            self._json(result)
             return
 
         if path == "/api/v1/chat":
