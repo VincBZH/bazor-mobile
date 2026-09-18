@@ -30,6 +30,9 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#101319f2;backd
 .tabs{max-width:760px;margin:auto;display:grid;grid-template-columns:repeat(5,1fr);gap:4px}.tabs button{background:transparent;border:0;color:var(--muted);padding:7px 2px}.tabs button.active{background:#202630;color:var(--accent)}
 .toast{position:fixed;left:50%;bottom:82px;transform:translateX(-50%);z-index:50;background:#0c1015;border:1px solid var(--line);padding:9px 11px;border-radius:10px;display:none;max-width:92%;font-size:12px}
 .modal{position:fixed;left:10px;right:10px;bottom:74px;z-index:60;max-height:60vh;overflow:auto;background:#171c23;border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 18px 60px #0008}
+.security-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.security-line{font-size:11px;padding:7px;border-radius:9px;background:#12161c;border:1px solid var(--line)}
+.security-code{letter-spacing:.08em;text-transform:uppercase;font-size:18px;font-weight:900;text-align:center}
+
 h2,h3{margin:0 0 7px}
 </style>
 </head>
@@ -37,7 +40,7 @@ h2,h3{margin:0 0 7px}
 <header>
   <div class="row between">
     <div><div class="brand">BAZOR COMMAND CENTER</div><div class="sub" id="syncLabel">Mobile • synchronisation…</div></div>
-    <span id="pcStatus" class="badge todo">CONNEXION…</span>
+    <div class="row"><span id="securityBadge" class="badge todo" style="cursor:pointer">🔒 À VÉRIFIER</span><span id="pcStatus" class="badge todo">CONNEXION…</span></div>
   </div>
   <div class="row" style="margin-top:7px">
     <select id="providerMode" class="provider"><option value="auto">AUTO IA</option><option value="ollama">OLLAMA</option><option value="mammouth">MAMMOUTH</option></select>
@@ -55,10 +58,93 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto12",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto13",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
+const SECURITY_KEY="bazor.security.device.v1";
+let SEC_DEVICE=null,SEC_STATUS=null;
 
-const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
+function frenchOnly(v){return String(v??"").replace(/[\u0400-\u04FF]+/g,"[texte non français masqué]")}
+const esc=s=>frenchOnly(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
+
+function sha256ascii(ascii){
+  function rr(v,a){return(v>>>a)|(v<<(32-a))}
+  const maxWord=Math.pow(2,32),words=[],len=ascii.length*8;
+  let hash=sha256ascii.h=sha256ascii.h||[],k=sha256ascii.k=sha256ascii.k||[],pc=k.length,n=2;
+  while(pc<64){let prime=true;for(let f=2;f*f<=n;f++)if(n%f===0){prime=false;break}if(prime){if(pc<8)hash[pc]=(Math.pow(n,.5)*maxWord)|0;k[pc++]=(Math.pow(n,1/3)*maxWord)|0}n++}
+  ascii+="\x80";while(ascii.length%64-56)ascii+="\x00";
+  for(let i=0;i<ascii.length;i++){let j=ascii.charCodeAt(i);words[i>>2]|=j<<((3-i)%4)*8}
+  words[words.length]=(len/maxWord)|0;words[words.length]=len;
+  for(let j=0;j<words.length;){
+    const w=words.slice(j,j+=16),oldHash=hash.slice(0);hash=hash.slice(0,8);
+    for(let i=0;i<64;i++){
+      const w15=w[i-15],w2=w[i-2],a=hash[0],e=hash[4];
+      const temp1=hash[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&hash[5])^((~e)&hash[6]))+k[i]+(w[i]=i<16?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0);
+      const temp2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
+      hash=[(temp1+temp2)|0,a,hash[1],hash[2],(hash[3]+temp1)|0,e,hash[5],hash[6]];
+    }
+    for(let i=0;i<8;i++)hash[i]=(hash[i]+oldHash[i])|0;
+  }
+  let out="";for(let i=0;i<8;i++)for(let j=3;j+1;j--){const b=(hash[i]>>(j*8))&255;out+=(b<16?"0":"")+b.toString(16)}return out;
+}
+function deviceId(){
+  let id=localStorage.getItem("bazor.device.id");
+  if(!id){id="mob-"+uid()+"-"+Math.random().toString(36).slice(2);localStorage.setItem("bazor.device.id",id)}
+  return id;
+}
+function loadSecurityDevice(){try{SEC_DEVICE=JSON.parse(localStorage.getItem(SECURITY_KEY)||"null")}catch(e){SEC_DEVICE=null}}
+async function securityStatus(){
+  if(!CORE)return null;
+  try{
+    const r=await fetchTimeout(CORE+"/api/v1/security/status?device_id="+encodeURIComponent(deviceId()),{cache:"no-store"},2500);
+    SEC_STATUS=await r.json();
+    if(!SEC_DEVICE){securityBadge.textContent="🔒 À APPAIRER";securityBadge.className="badge todo";return SEC_STATUS}
+    try{
+      const d=await signedFetch("/api/v1/security/device",{method:"GET"},3000);
+      if(d.ok){securityBadge.textContent="🔒 TEL OK";securityBadge.className="badge ok"}else throw 0;
+    }catch(e){securityBadge.textContent="🔒 À RÉAPPAIRER";securityBadge.className="badge blocked"}
+    return SEC_STATUS;
+  }catch(e){securityBadge.textContent="🔒 ?";securityBadge.className="badge blocked";return null}
+}
+async function signedFetch(path,opts={},ms=5000){
+  if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
+  if(!SEC_DEVICE?.secret)throw new Error("Téléphone non appairé");
+  const ch=await fetchTimeout(CORE+"/api/v1/security/challenge?device_id="+encodeURIComponent(SEC_DEVICE.device_id),{cache:"no-store"},2500);
+  const cj=await ch.json();if(!cj.ok)throw new Error("Appareil non reconnu");
+  const proof=sha256ascii(cj.nonce+"|"+SEC_DEVICE.device_id+"|"+SEC_DEVICE.secret);
+  const headers=Object.assign({},opts.headers||{},{"X-BAZOR-DEVICE":SEC_DEVICE.device_id,"X-BAZOR-NONCE":cj.nonce,"X-BAZOR-PROOF":proof});
+  const r=await fetchTimeout(CORE+path,Object.assign({},opts,{headers}),ms);
+  const data=await r.json().catch(()=>({ok:false,error:"invalid_json"}));
+  if(r.status===401){securityBadge.textContent="🔒 BLOQUÉ";securityBadge.className="badge blocked";throw new Error("Authentification refusée")}
+  return data;
+}
+async function pairPhone(code){
+  if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
+  const r=await fetchTimeout(CORE+"/api/v1/security/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:String(code||"").trim().toUpperCase(),device_id:deviceId(),device_name:"BAZOR Mobile Android"})},5000);
+  const d=await r.json();if(!r.ok||!d.ok)throw new Error("Code refusé ou expiré");
+  SEC_DEVICE={device_id:d.device_id,secret:d.secret,name:d.name};localStorage.setItem(SECURITY_KEY,JSON.stringify(SEC_DEVICE));
+  await securityStatus();return d;
+}
+async function openSecurity(){
+  await securityStatus();
+  document.getElementById("securityModal")?.remove();
+  const e=document.createElement("div");e.id="securityModal";e.className="modal";
+  if(!SEC_DEVICE||securityBadge.textContent.includes("APPAIRER")){
+    e.innerHTML='<div class="row between"><h3>BAZOR Security Tool</h3><button onclick="this.closest(\'#securityModal\').remove()">Fermer</button></div><div class="infobox">Regarde la fenêtre <b>BAZOR CORE</b> sur le PC. Elle affiche un code d’appairage temporaire.</div><label>Code du PC</label><input id="pairCode" class="security-code wide" placeholder="XXXX-XXXX-XXXX" maxlength="14" style="background:#15191f;color:white;border:1px solid var(--line);border-radius:10px;padding:10px"><button class="primary wide" style="margin-top:9px" onclick="pairPhone(pairCode.value).then(()=>{toast(\'Téléphone authentifié ✓\');openSecurity()}).catch(x=>toast(x.message))">APPAIRER CE TÉLÉPHONE</button><div class="mini muted" style="margin-top:8px">Le VPN n’est pas utilisé comme preuve d’identité. C’est l’appareil appairé qui compte.</div>';
+  }else{
+    let alerts=[],approvals=[],dev=null;
+    try{dev=(await signedFetch("/api/v1/security/device",{method:"GET"},3000)).device}catch(_){}
+    try{alerts=(await signedFetch("/api/v1/security/alerts?limit=8",{method:"GET"},3000)).alerts||[]}catch(_){}
+    try{approvals=(await signedFetch("/api/v1/security/approvals",{method:"GET"},3000)).approvals||[]}catch(_){}
+    const suspicious=alerts.filter(a=>a.event==="SECURITY_ALERT");
+    e.innerHTML='<div class="row between"><h3>BAZOR Security Tool</h3><button onclick="this.closest(\'#securityModal\').remove()">Fermer</button></div><div class="security-grid"><div class="security-line">📱 Appareil<br><b>'+esc(dev?.name||SEC_DEVICE.name||"Mobile")+'</b></div><div class="security-line">🔐 Authentification<br><b>VALIDÉE</b></div><div class="security-line">🌐 Réseau/VPN<br><b>IP non utilisée comme identité</b></div><div class="security-line">🚨 Alertes douteuses<br><b>'+suspicious.length+'</b></div></div>'+
+      '<div class="infobox"><b>Autorisations en attente : '+approvals.length+'</b>'+approvals.map(a=>'<div style="margin-top:7px">'+esc(a.action)+'<div class="row" style="margin-top:5px"><button class="primary grow" onclick="securityDecision(\''+a.id+'\',\'APPROVE\')">AUTORISER</button><button class="grow" onclick="securityDecision(\''+a.id+'\',\'DENY\')">REFUSER</button></div></div>').join("")+'</div>'+
+      (suspicious.length?'<div class="infobox"><b>Alertes récentes</b>'+suspicious.slice(0,5).map(a=>'<div class="mini" style="margin-top:5px">⚠ '+esc(a.reason)+' • '+esc(a.ip||"")+'</div>').join("")+'</div>':'<div class="infobox">✅ Aucun doute de sécurité récent détecté.</div>')+
+      '<div class="mini muted">La clé de l’appareil reste masquée. Elle n’est jamais envoyée dans les requêtes normales : BAZOR utilise une preuve temporaire à usage unique.</div>';
+  }
+  document.body.appendChild(e);
+}
+async function securityDecision(id,decision){try{const d=await signedFetch("/api/v1/security/approval/decide",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,decision})},4000);toast(d.ok?"Décision enregistrée":"Décision impossible");openSecurity()}catch(e){toast(e.message)}}
+
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 function toast(t){toastEl.textContent=t;toastEl.style.display="block";setTimeout(()=>toastEl.style.display="none",1800)}
 function statusClass(s){return s==="OK"?"ok":s==="BLOQUE"?"blocked":s==="EN_COURS"?"running":"todo"}
@@ -106,11 +192,11 @@ function ensureState(){
 }
 function localSave(sync=true){localStorage.setItem(KEY,JSON.stringify(state));render();if(sync)scheduleSync()}
 function scheduleSync(){clearTimeout(syncTimer);syncTimer=setTimeout(pushState,800)}
-async function pushState(){if(!CORE)return;try{await fetchTimeout(CORE+"/api/v1/mobile-state",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({state:{client_state:state,build:APP_BUILD}})},3500);syncLabel.textContent="Mobile • état synchronisé au Core"}catch(e){syncLabel.textContent="Mobile • état local"}}
+async function pushState(){if(!CORE)return;try{await signedFetch("/api/v1/mobile-state",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({state:{client_state:state,build:APP_BUILD}})},3500);syncLabel.textContent="Mobile • état synchronisé au Core"}catch(e){syncLabel.textContent="Mobile • état local"}}
 async function pullState(){
   if(!CORE)return;
   try{
-    const r=await fetchTimeout(CORE+"/api/v1/mobile-state",{cache:"no-store"},3000),d=await r.json(),remote=d.state?.client_state;
+    const d=await signedFetch("/api/v1/mobile-state",{method:"GET"},3000),remote=d.state?.client_state;
     if(remote&&Array.isArray(remote.projects)&&remote.projects.length){state=Object.assign(state,remote);ensureState();syncLabel.textContent="Mobile • état central BAZOR"}else{await pushState()}
   }catch(e){}
 }
@@ -153,8 +239,7 @@ function toggleInfo(id,t){state.info[id]=state.info[id]===t?null:t;localSave()}
 async function taskCall(pid,c,repair=false,previous=""){
   if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
   const x=sp(pid,c.id);
-  const r=await fetchTimeout(CORE+"/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({project_id:pid,subproject_name:c.name,task:x.next||c.next,current_progress:x.progress??0,repair,previous,provider:providerMode.value})},180000);
-  if(!r.ok)throw new Error("HTTP "+r.status);return r.json();
+  return signedFetch("/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(x.next||c.next),current_progress:x.progress??0,repair,previous,provider:providerMode.value})},180000);
 }
 async function goSub(pid,sid,auto=false){
   const c=children(pid).find(x=>x.id===sid),p=state.projects.find(x=>x.id===pid),x=sp(pid,sid),key=pid+":"+sid;if(!c||!p)return;
@@ -189,9 +274,11 @@ saveCapture.onclick=()=>{const t=captureText.value.trim();if(!t)return toast("É
 providerMode.value=localStorage.getItem("bazor.provider")||"auto";providerMode.onchange=()=>{localStorage.setItem("bazor.provider",providerMode.value);toast("Moteur : "+providerMode.options[providerMode.selectedIndex].text)}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll("main>section").forEach(x=>x.classList.add("hidden"));document.getElementById(b.dataset.tab).classList.remove("hidden")})
 document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;b.classList.add("tap-confirm");if(navigator.vibrate)navigator.vibrate(14);setTimeout(()=>b.classList.remove("tap-confirm"),280)},true)
-pcStatus.onclick=async()=>{await detectCore();render()}
+pcStatus.onclick=async()=>{await detectCore();await securityStatus();render()}
+securityBadge.onclick=openSecurity;
+loadSecurityDevice();
 const toastEl=document.getElementById("toast");
-(async()=>{await detectCore();await loadRegistry();await pullState();render();setInterval(async()=>{await detectCore();render()},20000);setInterval(async()=>{try{const r=await fetch("./index.html?b="+Date.now(),{cache:"no-store"}),t=await r.text(),m=t.match(/APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD)location.reload()}catch(e){}},15000)})();
+(async()=>{await detectCore();await securityStatus();await loadRegistry();if(SEC_DEVICE)await pullState();render();setInterval(async()=>{await detectCore();render()},20000);setInterval(async()=>{try{const r=await fetch("./index.html?b="+Date.now(),{cache:"no-store"}),t=await r.text(),m=t.match(/APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD)location.reload()}catch(e){}},15000)})();
 </script>
 </body>
 </html>
