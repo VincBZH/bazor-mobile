@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.18.2",
+  "version": "2026.09.18.3",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -181,33 +181,39 @@
       "summary": "Bibliothèque, maintenance, sécurité et outils transverses BAZOR.",
       "subprojects": [
         {
+          "id": "console-hub",
+          "name": "BAZOR Console Hub",
+          "order": 1,
+          "next": "Centraliser les processus BAZOR, logs, doublons, états et code d'appairage dans une seule interface."
+        },
+        {
           "id": "library",
           "name": "Bibliothèque / Encyclopédie BAZOR",
-          "order": 1,
+          "order": 2,
           "next": "Centraliser projets, fichiers, décisions, versions et état d'avancement."
         },
         {
           "id": "autopilot",
           "name": "BAZOR Autopilot",
-          "order": 2,
+          "order": 3,
           "next": "Fiabiliser orchestration et reprise automatique des tâches."
         },
         {
           "id": "cleaner",
           "name": "Disk / PC Cleaner",
-          "order": 3,
+          "order": 4,
           "next": "Conserver nettoyage réversible, quarantaines et rapports."
         },
         {
           "id": "tor",
           "name": "BAZOR TOR",
-          "order": 4,
+          "order": 5,
           "next": "Conserver recherche sécurisée, instance unique et diagnostics."
         },
         {
           "id": "extractor",
           "name": "ChatGPT Extractor",
-          "order": 5,
+          "order": 6,
           "next": "Fiabiliser export DOCX/PDF et suivi des validations."
         }
       ]
@@ -233,27 +239,33 @@
           "next": "Utiliser une preuve à usage unique pour chaque requête sensible."
         },
         {
+          "id": "biometric",
+          "name": "Biométrie / empreinte",
+          "order": 3,
+          "next": "Activer une validation biométrique locale via WebAuthn en HTTPS ou Android Keystore dans la future APK."
+        },
+        {
           "id": "approvals",
           "name": "Validations / autorisations",
-          "order": 3,
+          "order": 4,
           "next": "Afficher et accepter/refuser les actions sensibles depuis le téléphone."
         },
         {
           "id": "alerts",
           "name": "Alertes sécurité",
-          "order": 4,
+          "order": 5,
           "next": "Prévenir immédiatement en cas d'appareil inconnu, preuve invalide ou changement réseau suspect."
         },
         {
           "id": "vpn",
           "name": "Wi-Fi local / VPN",
-          "order": 5,
+          "order": 6,
           "next": "Tolérer le VPN sans utiliser l'IP comme preuve d'identité."
         },
         {
           "id": "language",
           "name": "Français uniquement",
-          "order": 6,
+          "order": 7,
           "next": "Détecter et masquer les caractères cyrilliques inattendus dans l'interface."
         }
       ]
