@@ -884,6 +884,15 @@ class ApiHandler(BaseHTTPRequestHandler):
             result = SECURITY.request_pairing_display(self.client_address[0])
             self._json(result)
             return
+        if path == "/api/v1/security/pairing-local":
+            if not self._loopback():
+                self._json({"ok": False, "error": "loopback_only"}, 403)
+                return
+            rotate = ((qs.get("new") or ["0"])[0] == "1")
+            result = SECURITY.local_pairing_code(rotate=rotate)
+            self._json(result)
+            return
+
 
         if path == "/api/v1/security/challenge":
             device_id = (qs.get("device_id") or [""])[0]
