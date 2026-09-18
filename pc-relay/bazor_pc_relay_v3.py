@@ -445,6 +445,83 @@ def ollama_chat(text, model=None):
         return {"ok": False, "error": "ollama_error", "message": str(exc)[:240]}
 
 
+def _generic_model_refusal(text):
+    """Détecte uniquement les refus génériques sans résultat exploitable.
+    Utilisé pour les tâches techniques internes BAZOR afin d'éviter qu'un
+    simple refus soit compté comme un succès.
+    """
+    s = str(text or "").strip().lower()
+    if not s:
+        return True
+    patterns = (
+        "i'm sorry, but i can't assist with that request",
+        "i’m sorry, but i can’t assist with that request",
+        "i can't assist with that request",
+        "i cannot assist with that request",
+        "i can't help with that request",
+        "i cannot help with that request",
+        "je ne peux pas vous aider avec cette demande",
+        "je ne peux pas aider avec cette demande",
+        "je suis désolé, mais je ne peux pas",
+    )
+    return any(p in s for p in patterns)
+
+
+def _retry_mobile_refusal(prompt, route, result, provider):
+    """Fallback limité aux sous-tâches techniques BAZOR.
+    1) autre modèle Ollama local ;
+    2) Mammouth seulement en mode AUTO et si configuré.
+    """
+    answer = result.get("answer", "") or result.get("message", "")
+    if not _generic_model_refusal(answer):
+        return route, result
+
+    current = str(result.get("model") or route.get("model") or "")
+    online, models = ollama_tags()
+    if online:
+        preferred = ("mistral:latest", "mistral", "gemma3:4b", "gemma3", "qwen2.5-coder:7b")
+        tried = {current}
+        for wanted in preferred:
+            selected = next((m for m in models if (m == wanted or m.startswith(wanted + ":")) and m not in tried), None)
+            if not selected:
+                continue
+            tried.add(selected)
+            retry = ollama_chat(prompt, selected)
+            retry_answer = retry.get("answer", "") or retry.get("message", "")
+            if retry.get("ok") and not _generic_model_refusal(retry_answer):
+                route = dict(route or {})
+                route["fallback_used"] = "ollama:" + selected
+                route["fallback_reason"] = "generic_refusal"
+                route["model"] = selected
+                journal("MOBILE_MODEL_FALLBACK", {
+                    "from": current, "to": selected, "reason": "generic_refusal"
+                })
+                return route, retry
+
+    if str(provider or "auto").lower() == "auto":
+        budget = mammouth_client.budget_status()
+        if mammouth_client.configured() and not budget.get("blocked"):
+            kind = classify_task(prompt)
+            profile = mammouth_client.choose_profile(kind)
+            retry = mammouth_chat(prompt, kind, profile)
+            retry_answer = retry.get("answer", "") or retry.get("message", "")
+            if retry.get("ok") and not _generic_model_refusal(retry_answer):
+                route = dict(route or {})
+                route["fallback_used"] = "mammouth"
+                route["fallback_reason"] = "generic_refusal"
+                route["target"] = "mammouth"
+                journal("MOBILE_MODEL_FALLBACK", {
+                    "from": current, "to": retry.get("model") or profile, "reason": "generic_refusal"
+                })
+                return route, retry
+
+    failed = dict(result or {})
+    failed["ok"] = False
+    failed["error"] = "generic_model_refusal"
+    failed["message"] = "Le moteur a refusé sans produire de résultat exploitable."
+    return route, failed
+
+
 def mammouth_chat(text, kind=None, profile=None):
     task_kind = kind or classify_task(text)
     result = mammouth_client.chat(text, task_kind=task_kind, profile=profile)
@@ -637,6 +714,10 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
         result = ollama_chat(prompt, route.get("model"))
     else:
         route, result = run_routed(prompt, mode="auto_plus")
+
+    # Un refus générique n'est jamais un succès. Pour les sous-tâches
+    # techniques BAZOR, essayer automatiquement un autre moteur disponible.
+    route, result = _retry_mobile_refusal(prompt, route, result, provider)
 
     answer = result.get("answer", "") or result.get("message", "")
     upper = answer.upper()
