@@ -20,7 +20,7 @@ TEXT_EXTS = {
 SKIP_PARTS = {
     ".git","node_modules","models","checkpoints","output","outputs",
     "venv",".venv","__pycache__","cache","temp","tmp","downloads",
-    "bazor_data","hub_logs","action_backups","action_reports"
+    "bazor_data","hub_logs","action_backups","action_reports","action_sandbox"
 }
 MAX_CONTEXT_SCAN_FILES = 5000
 MAX_CONTEXT_SCAN_SECONDS = 3.0
