@@ -19,12 +19,16 @@ class BazorSecurity:
         self.challenges = {}
         self._pair_code = None
         self._pair_expires = 0
+        self._pair_hash = None
         self._last_pair_display = 0
         self._last_pair_success = 0
         self.state = self._load()
-        # Après un appairage réussi, aucun nouveau code n'est créé au démarrage.
-        # Un code n'existe que pour le premier appairage ou sur demande explicite.
-        if not bool(self.state.get("devices")):
+        pairing = self.state.get("pairing") or {}
+        if float(pairing.get("expires", 0) or 0) > time.time() and pairing.get("hash"):
+            self._pair_hash = str(pairing.get("hash"))
+            self._pair_expires = float(pairing.get("expires"))
+        # Premier appairage seulement : on crée un code si aucun code encore valide n'existe.
+        if not bool(self.state.get("devices")) and not self._pair_hash:
             self.rotate_pair_code(force=True)
 
     def _load(self):
@@ -34,11 +38,12 @@ class BazorSecurity:
                 if isinstance(data, dict):
                     data.setdefault("devices", {})
                     data.setdefault("approvals", [])
+                    data.setdefault("pairing", {})
                     data.setdefault("settings", {"require_auth": True, "allow_private_vpn": True})
                     return data
             except Exception:
                 pass
-        return {"version": 1, "devices": {}, "approvals": [], "settings": {"require_auth": True, "allow_private_vpn": True}}
+        return {"version": 1, "devices": {}, "approvals": [], "pairing": {}, "settings": {"require_auth": True, "allow_private_vpn": True}}
 
     def _save(self):
         self.state_file.write_text(json.dumps(self.state, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -63,18 +68,36 @@ class BazorSecurity:
     def alert(self, reason, ip=None, device_id=None, extra=None):
         self._event("SECURITY_ALERT", {"reason": reason, "ip": ip, "device_id": device_id, "extra": extra or {}})
 
+    def _pair_digest(self, code):
+        return hashlib.sha256(str(code or "").strip().upper().encode("utf-8")).hexdigest()
+
     def rotate_pair_code(self, force=False):
         with self.lock:
             now = time.time()
-            if force or not self._pair_code or now >= self._pair_expires:
+            active = bool(self._pair_hash and now < self._pair_expires)
+            if force or not active:
                 alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
                 raw = "".join(secrets.choice(alphabet) for _ in range(12))
                 self._pair_code = "-".join(raw[i:i+4] for i in range(0, 12, 4))
+                self._pair_hash = self._pair_digest(self._pair_code)
                 self._pair_expires = now + 600
+                self.state["pairing"] = {"hash": self._pair_hash, "expires": self._pair_expires, "created": now}
+                self._save()
             return self._pair_code
 
     def pairing_console_text(self):
-        if not self._pair_code or time.time() >= self._pair_expires:
+        now = time.time()
+        if self._pair_hash and now < self._pair_expires and not self._pair_code:
+            mins = max(0, int((self._pair_expires - now) / 60))
+            return (
+                "\n" + "=" * 68 + "\n"
+                + "  BAZOR SECURITY - APPAIRAGE EN COURS\n"
+                + "  Le code precedent reste VALIDE apres redemarrage du Core.\n"
+                + f"  Encore environ {mins} minute(s).\n"
+                + "  Pour un nouveau code: demande-le depuis BAZOR Mobile/Console Hub.\n"
+                + "=" * 68
+            )
+        if not self._pair_hash or now >= self._pair_expires:
             if self.state.get("devices"):
                 return "[SECURITY] Telephone deja appaire - aucun code d'appairage actif."
             self.rotate_pair_code(force=True)
@@ -85,6 +108,7 @@ class BazorSecurity:
             + "  BAZOR SECURITY - CODE D'APPAIRAGE MOBILE\n"
             + "  >>> " + str(self._pair_code) + " <<<\n"
             + f"  Valable environ {mins} minute(s) - ne pas partager\n"
+            + "  Le code reste valide meme si le Core redemarre.\n"
             + "=" * 68
         )
 
@@ -125,9 +149,10 @@ class BazorSecurity:
                 "pairing_required": len(self.state.get("devices", {})) == 0,
                 "pairing_available": True,
                 "pairing_expires_in": max(0, int(self._pair_expires - time.time())),
-                "pairing_active": bool(self._pair_code and time.time() < self._pair_expires),
+                "pairing_active": bool(self._pair_hash and time.time() < self._pair_expires),
                 "pairing_guard_seconds": max(0, int(20 - (time.time() - self._last_pair_success))) if self._last_pair_success else 0,
                 "mode": "device-proof",
+                "biometric": {"mode": "webauthn_or_android_keystore", "server_stores_fingerprint": False},
                 "vpn_tolerant": bool(self.state.get("settings", {}).get("allow_private_vpn", True)),
                 "require_auth": bool(self.state.get("settings", {}).get("require_auth", True)),
             }
@@ -139,7 +164,8 @@ class BazorSecurity:
         with self.lock:
             if not device_id:
                 return {"ok": False, "error": "device_id_missing"}
-            if time.time() >= self._pair_expires or not secrets.compare_digest(code, self._pair_code or ""):
+            candidate_hash = self._pair_digest(code)
+            if time.time() >= self._pair_expires or not self._pair_hash or not secrets.compare_digest(candidate_hash, self._pair_hash):
                 self.alert("pairing_code_invalid", ip, device_id)
                 return {"ok": False, "error": "pairing_code_invalid"}
             secret = secrets.token_urlsafe(32)
@@ -156,8 +182,11 @@ class BazorSecurity:
             self._event("DEVICE_PAIRED", {"device_id": device_id, "name": device_name, "ip": ip})
             # Le code vient d'être consommé : on l'invalide sans en créer un nouveau.
             self._pair_code = None
+            self._pair_hash = None
             self._pair_expires = 0
+            self.state["pairing"] = {}
             self._last_pair_success = time.time()
+            self._save()
             return {"ok": True, "device_id": device_id, "secret": secret, "name": device_name}
 
     def challenge(self, device_id, ip):
