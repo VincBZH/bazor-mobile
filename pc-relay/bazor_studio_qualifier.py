@@ -36,7 +36,7 @@ TEXT_EXTS = {
 }
 PRUNE = {
     ".git","node_modules","models","checkpoints","output","outputs","temp","tmp",
-    "cache","__pycache__",".venv","venv","downloads"
+    "cache","__pycache__",".venv","venv","downloads","logs","log"
 }
 
 def now():
