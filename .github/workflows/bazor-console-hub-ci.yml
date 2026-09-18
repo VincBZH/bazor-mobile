@@ -12,6 +12,7 @@ on:
       - "bazor_registry.json"
       - "index.html"
       - "BAZOR_ENCYCLOPEDIA.md"
+      - "LANCER_BAZOR_STUDIO_CERTIFIE.cmd"
       - ".github/workflows/bazor-console-hub-ci.yml"
   workflow_dispatch:
 
@@ -31,6 +32,7 @@ jobs:
             console-hub/bazor_popup_guard.py \
             console-hub/bazor_interface_update_restart.py \
             console-hub/bazor_minimax_h3_repair.py \
+            console-hub/bazor_studio_certified_launcher.py \
             pc-relay/bazor_security.py \
             pc-relay/bazor_pc_relay_v3.py \
             pc-relay/bazor_github_watcher.py \
@@ -172,6 +174,26 @@ jobs:
           assert "_run_studio_qualification" in watcher
           assert "QUALIFY_MARK" in watcher
           print("Studio qualifier watcher integration OK")
+          PY
+      - name: Studio certified launcher selftest
+        run: |
+          python console-hub/bazor_studio_certified_launcher.py --selftest
+          python - <<'PY'
+          from pathlib import Path
+          launcher=Path("console-hub/bazor_studio_certified_launcher.py").read_text(encoding="utf-8")
+          cmd=Path("LANCER_BAZOR_STUDIO_CERTIFIE.cmd").read_text(encoding="utf-8")
+          watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
+          assert "qualification_cached_ok" in launcher
+          assert "runtime_gate" in launcher
+          assert "--test-only" in launcher
+          assert "8188" in launcher and "8191" in launcher
+          assert "LANCER_BAZOR_STUDIO.cmd" in launcher
+          assert "bazor_studio_certified_launcher.py" in cmd
+          assert "bazor_pc_relay_v3" in cmd
+          assert "pause" in cmd.lower(), "CMD must stay open on failure"
+          assert "[bazor-certify:studio]" in watcher
+          assert "_run_studio_certified_test" in watcher
+          print("Studio certified launcher integration OK")
           PY
       - name: Action Engine smoke test
         run: |
