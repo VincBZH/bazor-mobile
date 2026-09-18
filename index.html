@@ -135,7 +135,7 @@ async function securityStatus(){
     }catch(e){securityBadge.textContent="🔒 À RÉAPPAIRER";securityBadge.className="badge blocked"}
     return SEC_STATUS;
   }catch(e){
-    if(SEC_DEVICE&&lastCoreOk&&Date.now()-lastCoreOk<90000){
+    if(SEC_DEVICE&&lastCoreOk&&Date.now()-lastCoreOk<180000){
       securityBadge.textContent="🔒 TEL OK";securityBadge.className="badge ok";
       return SEC_STATUS;
     }
