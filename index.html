@@ -58,7 +58,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto13",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto14",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 let SEC_DEVICE=null,SEC_STATUS=null;
@@ -152,19 +152,44 @@ function statusLabel(s){return s==="A_FAIRE"?"À FAIRE":s==="A_EVALUER"?"À ÉVA
 function log(what,tag="OK"){state.journal.unshift({id:uid(),what,tag,when:Date.now()});state.journal=state.journal.slice(0,250)}
 
 async function fetchTimeout(url,opts={},ms=3000){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opts,signal:c.signal})}finally{clearTimeout(t)}}
+let coreMisses=0,lastCoreOk=0;
 async function detectCore(){
-  pcStatus.textContent="CONNEXION…";pcStatus.className="badge todo";
-  try{
-    const base="http://"+location.hostname+":"+CORE_PORT;
-    const r=await fetchTimeout(base+"/api/v1/health",{cache:"no-store"},3000);
-    if(!r.ok)throw 0;
-    const d=await r.json();CORE=base;
-    pcStatus.textContent=d.ollama?.online?"PC + OLLAMA OK":"PC OK / OLLAMA HS";
-    pcStatus.className="badge "+(d.ollama?.online?"ok":"todo");
-    const mam=d.mammouth||{};
-    providerStatus.textContent="Ollama "+(d.ollama?.online?"OK":"HS")+" • Mammouth "+(mam.configured?"OK":"NON CONFIGURÉ");
-    return d;
-  }catch(e){CORE=null;pcStatus.textContent="CORE NON JOIGNABLE";pcStatus.className="badge blocked";providerStatus.textContent="Moteurs indisponibles";return null}
+  const base="http://"+location.hostname+":"+CORE_PORT;
+  pcStatus.textContent=lastCoreOk?"RECONNEXION…":"CONNEXION…";pcStatus.className="badge todo";
+  // 1) Sonde légère: prouve que le Core est vivant sans attendre Ollama/Mammouth.
+  for(let attempt=1;attempt<=3;attempt++){
+    try{
+      const sr=await fetchTimeout(base+"/api/v1/security/status?device_id="+encodeURIComponent(deviceId()),{cache:"no-store"},1800);
+      if(sr.ok){
+        CORE=base;coreMisses=0;lastCoreOk=Date.now();
+        // 2) Santé IA séparée: une panne Ollama ne doit jamais faire passer le Core en "non joignable".
+        try{
+          const r=await fetchTimeout(base+"/api/v1/health",{cache:"no-store"},3500);
+          if(r.ok){
+            const d=await r.json();
+            pcStatus.textContent=d.ollama?.online?"PC + OLLAMA OK":"PC OK / OLLAMA HS";
+            pcStatus.className="badge "+(d.ollama?.online?"ok":"todo");
+            const mam=d.mammouth||{};
+            providerStatus.textContent="Ollama "+(d.ollama?.online?"OK":"HS")+" • Mammouth "+(mam.configured?"OK":"NON CONFIGURÉ");
+            return d;
+          }
+        }catch(_){}
+        pcStatus.textContent="PC + CORE OK";pcStatus.className="badge ok";
+        providerStatus.textContent="Core connecté • vérification des moteurs…";
+        return {ok:true,ollama:{online:false},mammouth:{}};
+      }
+    }catch(e){}
+    await new Promise(r=>setTimeout(r,350*attempt));
+  }
+  coreMisses++;
+  // Un redémarrage automatique du Core ne doit pas faire paniquer l'utilisateur.
+  if(lastCoreOk && Date.now()-lastCoreOk<30000){
+    pcStatus.textContent="CORE REDÉMARRE…";pcStatus.className="badge todo";
+    providerStatus.textContent="Reconnexion automatique en cours";
+  }else{
+    CORE=null;pcStatus.textContent="CORE NON JOIGNABLE";pcStatus.className="badge blocked";providerStatus.textContent="Moteurs indisponibles";
+  }
+  return null;
 }
 async function loadRegistry(){
   try{
