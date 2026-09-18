@@ -555,7 +555,7 @@ async function goTask(pid,tid,auto=false){
     const ex=d.execution||{},ar=ex.action_result||{},real=ex.mode==="file_changes"&&!!ar.applied;
     const tests=ar.tests||[],testsOk=!tests.length||tests.every(x=>x.ok);
     const blocked=(d.status||"")==="BLOQUE"||!d.ok;
-    const already=!real&&!blocked&&/DEJA_CONFORMEs*:/i.test(String(d.summary||"")+"\n"+String(d.answer||""));
+    const already=!real&&!blocked&&/DEJA_CONFORME\s*:/i.test(String(d.summary||"")+"\n"+String(d.answer||""));
     s.last_engine=d.engine||null;s.last_model=d.model||null;s.updated=Date.now();
     if(real&&testsOk){
       s.status="DONE";s.summary=(d.summary||"Correction appliquée")+" • preuve réelle";
