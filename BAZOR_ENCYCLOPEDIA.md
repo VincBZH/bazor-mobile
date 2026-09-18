@@ -123,6 +123,44 @@ Mammouth ne doit pas appliquer directement une modification critique par défaut
 9. Mettre à jour l’état dynamique de la tâche.
 10. Ne passer à la dépendance suivante que lorsque les critères de DONE sont remplis.
 
+
+## État de l’orchestration mobile
+
+Le Command Center mobile lit dynamiquement les tâches définies dans `bazor_registry.json`. Pour les projets qui possèdent un tableau `tasks` :
+
+- le bouton **SUIVANTE** affiche la prochaine tâche exacte, pas une consigne générique de sous-projet ;
+- les dépendances empêchent une tâche aval de démarrer trop tôt ;
+- le statut de chaque tâche est synchronisé dans l’état central BAZOR ;
+- **DONE** exige une modification réelle avec tests réussis ;
+- **VÉRIFIÉ** est réservé au cas où le moteur démontre que les critères sont déjà satisfaits sans modification ;
+- **ANALYSE SEULE** n’est jamais assimilé à un succès ;
+- **BLOQUÉ** conserve la cause et arrête l’AUTO ;
+- la preuve affiche fichiers, tests, moteur et modèle réellement utilisés.
+
+Pour les tâches Studio P0, BAZOR demande avant l’exécution jusqu’à deux secondes lectures Mammouth selon `preferred_models`. Les avis sont consultatifs : ils sont transmis au moteur d’exécution, mais ne peuvent pas écrire directement dans les fichiers. Le modèle réellement retourné par Mammouth est mémorisé, afin de détecter un éventuel routage différent du profil demandé.
+
+## Sécurité d’exécution / bac à sable
+
+Toute modification produite par l’Action Engine passe désormais par un **préflight obligatoire** avant la cible réelle :
+
+1. les versions actuelles des fichiers concernés sont copiées dans `BAZOR_DATA/ACTION_SANDBOX/<request_id>` ;
+2. un dépôt Git local temporaire est initialisé quand Git est disponible ;
+3. l’état de référence est enregistré ;
+4. les versions candidates sont écrites uniquement dans ce bac à sable ;
+5. `git diff --cached --check` et les tests déterministes adaptés au type de fichier sont lancés ;
+6. si un test échoue, la cible réelle n’est jamais touchée ;
+7. si le préflight passe, l’original est sauvegardé dans `ACTION_BACKUPS`, la modification réelle est appliquée puis retestée ;
+8. un rapport est conservé dans `ACTION_REPORTS`.
+
+Pour le code BAZOR lui-même, s’ajoute une seconde barrière : branche GitHub isolée + CI verte avant fusion vers `main`.
+
+## Qualité des secondes lectures Mammouth
+
+Les premières revues de test #31/#32/#33 ont produit des réponses trop générales et ont indiqué `mistral:latest` comme modèle effectif malgré des profils distincts demandés. Elles ne sont **pas** considérées comme des validations techniques du Studio et ne doivent pas faire avancer une tâche.
+
+Conséquence : le tableau dynamique conserve le profil demandé **et** le moteur/modèle réellement retourné. Une seconde lecture vague ne vaut jamais preuve. Le travail Studio reste jugé uniquement sur les fichiers réellement lus et les critères DONE du registre.
+
+
 ## Autres projets BAZOR
 
 Le registre central contient également AI Room, Wii Relay, BAZOR Watch, MODO Viewer, BAZOR Tools, Security et Festival.
