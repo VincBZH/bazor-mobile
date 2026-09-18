@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto19",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto20",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -96,6 +96,7 @@ function deviceId(){
 function loadSecurityDevice(){try{SEC_DEVICE=JSON.parse(localStorage.getItem(SECURITY_KEY)||"null")}catch(e){SEC_DEVICE=null}}
 function b64url(bytes){let s="";for(const b of new Uint8Array(bytes))s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
 function unb64url(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";const raw=atob(s),a=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)a[i]=raw.charCodeAt(i);return a}
+function usbLocalMode(){return location.hostname==="127.0.0.1"||location.hostname==="localhost"}
 function biometricAvailable(){return !!(window.isSecureContext&&window.PublicKeyCredential&&navigator.credentials)}
 function biometricConfigured(){return !!localStorage.getItem(BIOMETRIC_KEY)}
 async function enableBiometric(){
@@ -193,7 +194,7 @@ async function openSecurity(){
     try{approvals=(await signedFetch("/api/v1/security/approvals",{method:"GET"},3000)).approvals||[]}catch(_){}
     const suspicious=alerts.filter(a=>a.event==="SECURITY_ALERT");
     e.innerHTML='<div class="row between"><h3>BAZOR Security Tool</h3><button onclick="this.closest(\'#securityModal\').remove()">Fermer</button></div><div class="security-grid"><div class="security-line">📱 Appareil<br><b>'+esc(dev?.name||SEC_DEVICE.name||"Mobile")+'</b></div><div class="security-line">🔐 Authentification<br><b>VALIDÉE</b></div><div class="security-line">🌐 Réseau/VPN<br><b>IP non utilisée comme identité</b></div><div class="security-line">🚨 Alertes douteuses<br><b>'+suspicious.length+'</b></div></div>'+
-      '<div class="infobox"><b>Empreinte / biométrie</b><div class="mini" style="margin-top:5px">'+(biometricConfigured()?'✅ Activée sur cet appareil':biometricAvailable()?'Disponible — activation recommandée':'Préparée, mais Chrome sur HTTP local ne permet pas WebAuthn. Elle s’activera via HTTPS ou APK.')+'</div>'+(!biometricConfigured()&&biometricAvailable()?'<button class="primary wide" style="margin-top:7px" onclick="enableBiometric().then(openSecurity).catch(x=>toast(x.message))">ACTIVER EMPREINTE</button>':'')+'</div>'+      '<button class="primary wide" style="margin-top:8px" onclick="updateRestartBazor()">↻ MISE À JOUR + RELANCER BAZOR</button>'+'<div class="infobox"><b>Autorisations en attente : '+approvals.length+'</b>'+approvals.map(a=>'<div style="margin-top:7px">'+esc(a.action)+'<div class="row" style="margin-top:5px"><button class="primary grow" onclick="securityDecision(\''+a.id+'\',\'APPROVE\')">AUTORISER</button><button class="grow" onclick="securityDecision(\''+a.id+'\',\'DENY\')">REFUSER</button></div></div>').join("")+'</div>'+
+      '<div class="infobox"><b>Empreinte / biométrie</b><div class="mini" style="margin-top:5px">'+(biometricConfigured()?'✅ Activée sur cet appareil':biometricAvailable()?'Disponible — activation recommandée':'Utilise de préférence le mode USB BAZOR (127.0.0.1) : Chrome le traite comme contexte local sécurisé pour activer la biométrie.')+'</div>'+(!biometricConfigured()&&biometricAvailable()?'<button class="primary wide" style="margin-top:7px" onclick="enableBiometric().then(openSecurity).catch(x=>toast(x.message))">ACTIVER EMPREINTE</button>':'')+'</div>'+      '<button class="primary wide" style="margin-top:8px" onclick="updateRestartBazor()">↻ MISE À JOUR + RELANCER BAZOR</button>'+'<div class="infobox"><b>Autorisations en attente : '+approvals.length+'</b>'+approvals.map(a=>'<div style="margin-top:7px">'+esc(a.action)+'<div class="row" style="margin-top:5px"><button class="primary grow" onclick="securityDecision(\''+a.id+'\',\'APPROVE\')">AUTORISER</button><button class="grow" onclick="securityDecision(\''+a.id+'\',\'DENY\')">REFUSER</button></div></div>').join("")+'</div>'+
       (suspicious.length?'<div class="infobox"><b>Alertes récentes</b>'+suspicious.slice(0,5).map(a=>'<div class="mini" style="margin-top:5px">⚠ '+esc(a.reason)+' • '+esc(a.ip||"")+'</div>').join("")+'</div>':'<div class="infobox">✅ Aucun doute de sécurité récent détecté.</div>')+
       '<div class="mini muted">La clé de l’appareil reste masquée. Elle n’est jamais envoyée dans les requêtes normales : BAZOR utilise une preuve temporaire à usage unique.</div>';
   }
