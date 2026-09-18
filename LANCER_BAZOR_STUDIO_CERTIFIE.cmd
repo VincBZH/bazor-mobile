@@ -38,6 +38,8 @@ if "%RC%"=="0" (
   echo [BLOQUE] Le Studio n'a pas passe la certification. Code %RC%.
 )
 echo.
+if "%BAZOR_STUDIO_NO_PAUSE%"=="1" goto :END
 echo Cette fenetre reste ouverte pour le diagnostic.
 pause
+:END
 exit /b %RC%

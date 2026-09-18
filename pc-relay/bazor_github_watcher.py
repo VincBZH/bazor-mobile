@@ -697,19 +697,24 @@ def _run_studio_qualification():
     return {"ok":bool(summary.get("operational")),"returncode":cp.returncode,"summary":summary,"failures":failures,"report_file":latest,"stdout":cp.stdout[-5000:],"stderr":cp.stderr[-3000:]}
 
 def _run_studio_certified_test():
-    script=os.path.join(ROOT,"console-hub","bazor_studio_certified_launcher.py")
-    if not os.path.exists(script):
-        return {"ok":False,"returncode":98,"stdout":"","stderr":"certified_launcher_missing"}
-    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    cmd=os.path.join(ROOT,"LANCER_BAZOR_STUDIO_CERTIFIE.cmd")
+    if os.name!="nt":
+        return {"ok":False,"returncode":96,"stdout":"","stderr":"windows_required"}
+    if not os.path.exists(cmd):
+        return {"ok":False,"returncode":98,"stdout":"","stderr":"certified_cmd_missing"}
+    env=os.environ.copy()
+    env["BAZOR_STUDIO_TEST_ONLY"]="1"
+    env["BAZOR_STUDIO_NO_PAUSE"]="1"
     try:
         cp=subprocess.run(
-            [sys.executable,script,"--test-only"],
-            cwd=ROOT,capture_output=True,text=True,encoding="utf-8",errors="replace",
-            timeout=240,creationflags=flags
+            ["cmd","/c",cmd],
+            cwd=ROOT,env=env,capture_output=True,text=True,encoding="utf-8",errors="replace",
+            timeout=300,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0)
         )
-        return {"ok":cp.returncode==0,"returncode":cp.returncode,"stdout":cp.stdout[-8000:],"stderr":cp.stderr[-3000:]}
+        return {"ok":cp.returncode==0,"returncode":cp.returncode,"stdout":cp.stdout[-10000:],"stderr":cp.stderr[-4000:]}
     except Exception as exc:
         return {"ok":False,"returncode":97,"stdout":"","stderr":type(exc).__name__+": "+str(exc)}
+
 
 def answer_text(result):
     for section in ("mammouth","ollama"):

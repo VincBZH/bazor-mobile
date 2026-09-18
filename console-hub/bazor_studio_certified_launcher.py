@@ -174,6 +174,8 @@ def main():
     ap.add_argument("--force-qualify", action="store_true", help="Refait les 47 tests même si un rapport récent est vert.")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
+    if os.environ.get("BAZOR_STUDIO_TEST_ONLY","").strip() == "1":
+        args.test_only = True
     if args.selftest:
         selftest()
         return 0
