@@ -513,6 +513,50 @@ async function taskCall(pid,c,repair=false,previous="",taskText=null,requestTag=
   }
   throw new Error("Analyse trop longue (>6 min)");
 }
+async function goTask(pid,tid,auto=false){
+  if(!projectGoCompatible(pid)){toast("GO indisponible : "+projectGoReason(pid));return {status:"INCOMPATIBLE"}}
+  const t=taskDefs(pid).find(x=>x.id===tid),p=state.projects.find(x=>x.id===pid);if(!t||!p)return;
+  const c=children(pid).find(x=>x.id===t.subproject)||children(pid)[0];if(!c){toast("Sous-projet introuvable");return {status:"BLOQUE"}}
+  if(!taskDepsDone(pid,t)){const wait=(t.dependencies||[]).filter(id=>!["DONE","VERIFIE"].includes(taskState(pid,id).status));toast("Dépendance : "+wait.join(", "));return {status:"WAIT_DEP"}}
+  const key="task:"+pid+":"+tid;if(actionBusy[key]){toast("Tâche déjà en cours");return {status:"EN_COURS"}}actionBusy[key]=true;
+  const s=taskState(pid,tid);
+  const criteria=(t.acceptance||[]).map((x,i)=>(i+1)+". "+x).join("\n");
+  const prompt="TÂCHE BAZOR "+t.id+" — "+t.title+"\nACTION ATTENDUE:\n"+t.action+"\nCRITÈRES DE DONE:\n"+criteria+"\nRÈGLE DE PREUVE: "+(t.proof_required||"file_changes_and_tests")+"\nSi les critères sont déjà satisfaits dans les fichiers réellement lus et qu’aucune modification n’est nécessaire, n’invente aucun changement et commence SUMMARY par DEJA_CONFORME:. Sinon, pour corriger, fournis des BAZOR_ACTIONS minimales et sûres.";
+  s.status="RUNNING";s.summary="Analyse du contexte réel";s.updated=Date.now();state.runs[pid]={active:true,blocked:false,subId:c.id,taskId:tid,stage:t.id+" • analyse",taskProgress:25,checkpoints:[{text:"Critères chargés",kind:"ok"}]};localSave();toast(t.id+" en cours…");
+  try{
+    let d=await taskCall(pid,c,false,"",prompt,t.id);
+    state.runs[pid].stage=t.id+" • contrôle";state.runs[pid].taskProgress=75;localSave(false);
+    if(d.status==="BLOQUE"||!d.ok){
+      state.runs[pid].stage=t.id+" • correction automatique";state.runs[pid].taskProgress=88;localSave(false);
+      d=await taskCall(pid,c,true,d.answer||JSON.stringify(d),prompt,t.id+"-repair");
+    }
+    const ex=d.execution||{},ar=ex.action_result||{},real=ex.mode==="file_changes"&&!!ar.applied;
+    const tests=ar.tests||[],testsOk=!tests.length||tests.every(x=>x.ok);
+    const blocked=(d.status||"")==="BLOQUE"||!d.ok;
+    const already=!real&&!blocked&&/DEJA_CONFORMEs*:/i.test(String(d.summary||"")+"\n"+String(d.answer||""));
+    s.last_engine=d.engine||null;s.last_model=d.model||null;s.updated=Date.now();
+    if(real&&testsOk){
+      s.status="DONE";s.summary=(d.summary||"Correction appliquée")+" • preuve réelle";
+      s.evidence={real:true,when:Date.now(),request_id:ar.request_id||null,files:ar.files||[],tests,backup_dir:ar.backup_dir||null,report_file:ar.report_file||null,engine:d.engine||null,model:d.model||null};
+    }else if(already){
+      s.status="VERIFIE";s.summary=d.summary||"DEJA_CONFORME";
+      s.evidence={verified:true,when:Date.now(),engine:d.engine||null,model:d.model||null,context_files:d.local_context?.files||[],context_chars:d.local_context?.chars||0};
+    }else if(blocked){
+      s.status="BLOCKED";s.summary=d.summary||d.detail||"Blocage persistant";s.evidence=null;
+    }else{
+      s.status="ANALYSE_SEULE";s.summary="ANALYSE SEULE • aucune modification prouvée";s.evidence={verified:false,when:Date.now(),engine:d.engine||null,model:d.model||null,context_files:d.local_context?.files||[]};
+    }
+    const ok=["DONE","VERIFIE"].includes(s.status);
+    state.runs[pid]={active:false,blocked:s.status==="BLOCKED",subId:c.id,taskId:tid,stage:ok?"✅ "+t.id+" prouvé":s.status==="BLOCKED"?"Blocage "+t.id:"ℹ "+t.id+" sans preuve de correction",taskProgress:100,checkpoints:[{text:ok?(s.status==="DONE"?"Fichiers + tests validés":"Déjà conforme vérifié"):s.summary,kind:ok?"ok":s.status==="BLOCKED"?"bad":"run"}]};
+    p.progress=overall(p);p.status=s.status==="BLOCKED"?"BLOQUE":(nextTask(pid)?"A_FAIRE":"OK");p.next=nextTask(pid)?.title||"Contrôle final";
+    log(t.id+" — "+t.title,ok?"OK":s.status==="BLOCKED"?"BLOQUÉ":"INFO");localSave();
+    toast(ok?t.id+" ✓":s.status==="BLOCKED"?t.id+" bloqué":t.id+" : analyse seule");
+    if(!auto)showResult(t.id+" • "+t.title,d);return d;
+  }catch(e){
+    const msg=String(e.message||e);s.status=isTransportFailureText(msg)?"TODO":"BLOCKED";s.summary=msg;s.updated=Date.now();state.runs[pid]={active:false,blocked:s.status==="BLOCKED",subId:c.id,taskId:tid,stage:msg,taskProgress:100,checkpoints:[{text:msg,kind:s.status==="BLOCKED"?"bad":"run"}]};p.status=s.status==="BLOCKED"?"BLOQUE":"A_FAIRE";localSave();return {status:"BLOQUE",error:msg};
+  }finally{setTimeout(()=>delete actionBusy[key],900)}
+}
+
 async function goSub(pid,sid,auto=false){
   if(!projectGoCompatible(pid)){toast("GO indisponible : "+projectGoReason(pid));return {status:"INCOMPATIBLE",compatibility:true}}
   const c=children(pid).find(x=>x.id===sid),p=state.projects.find(x=>x.id===pid),x=sp(pid,sid),key=pid+":"+sid;if(!c||!p)return;
@@ -553,14 +597,26 @@ async function goSub(pid,sid,auto=false){
   }
   finally{setTimeout(()=>delete actionBusy[key],900)}
 }
-async function goNext(pid){const c=nextSub(pid);if(!c){toast("Projet déjà contrôlé");return}return goSub(pid,c.id,false)}
+async function goNext(pid){const t=nextTask(pid);if(t)return goTask(pid,t.id,false);const c=nextSub(pid);if(!c){toast("Projet déjà contrôlé");return}return goSub(pid,c.id,false)}
 async function goAuto(pid){
   if(!projectGoCompatible(pid)){toast("AUTO indisponible : "+projectGoReason(pid));return {status:"INCOMPATIBLE",compatibility:true}}
   const key="auto:"+pid;if(actionBusy[key]){toast("AUTO déjà en cours");return}actionBusy[key]=true;state.expanded[pid]=true;localSave();
   const p=state.projects.find(x=>x.id===pid);let blocked=false;
   try{
-    for(const c of children(pid)){const x=sp(pid,c.id);if(x.status==="OK"&&x.progress===100)continue;const d=await goSub(pid,c.id,true);if(!d||d.status==="BLOQUE"){blocked=true;break}}
-    p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");log("AUTO — "+p.name,blocked?"BLOQUÉ":"OK");localSave();toast(blocked?"AUTO arrêté sur blocage":"AUTO terminé ✓");
+    const defs=taskDefs(pid);
+    if(defs.length){
+      for(const t of defs){
+        const s=taskState(pid,t.id);if(["DONE","VERIFIE"].includes(s.status))continue;
+        if(!taskDepsDone(pid,t)){blocked=true;s.summary="Dépendance non terminée";break}
+        const d=await goTask(pid,t.id,true);
+        const st=taskState(pid,t.id).status;if(!d||st==="BLOCKED"||st==="ANALYSE_SEULE"){blocked=true;break}
+      }
+      p.progress=overall(p);p.status=blocked?"BLOQUE":(nextTask(pid)?"A_FAIRE":"OK");
+    }else{
+      for(const c of children(pid)){const x=sp(pid,c.id);if(x.status==="OK"&&x.progress===100)continue;const d=await goSub(pid,c.id,true);if(!d||d.status==="BLOQUE"){blocked=true;break}}
+      p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");
+    }
+    log("AUTO — "+p.name,blocked?"BLOQUÉ":"OK");localSave();toast(blocked?"AUTO arrêté sur tâche non prouvée":"AUTO terminé ✓");
   }finally{setTimeout(()=>delete actionBusy[key],900)}
 }
 function showResult(title,d){document.getElementById("resultModal")?.remove();const e=document.createElement("div");e.id="resultModal";e.className="modal";const body=d?.answer||d?.result?.answer||d?.ollama?.answer||d?.mammouth?.answer||JSON.stringify(d,null,2);const ex=d?.execution;const ar=ex?.action_result||{};const files=ar.files||[];const tests=ar.tests||[];const fileList=files.map(f=>'<div class="mini">✓ '+esc((f.root||"")+" : "+(f.path||""))+'</div>').join("");const evidence=ex?'<div class="infobox"><b>'+(ex.mode==="file_changes"?"✅ TRAVAIL RÉEL PROUVÉ":"ℹ ANALYSE SEULE — RIEN MODIFIÉ")+'</b><div class="mini muted" style="margin-top:4px">'+(files.length?files.length+" fichier(s) modifié(s) • "+tests.filter(t=>t.ok).length+"/"+tests.length+" test(s) OK":"Aucun fichier modifié")+'</div>'+fileList+'</div>':"";e.innerHTML='<div class="row between"><h3>'+esc(title)+'</h3><button onclick="this.closest(\'#resultModal\').remove()">Fermer</button></div><div class="mini muted">'+esc([d?.status,d?.engine,d?.model].filter(Boolean).join(" • "))+'</div>'+evidence+'<div style="white-space:pre-wrap;font-size:12px;margin-top:8px">'+esc(body)+'</div>';document.body.appendChild(e)}
