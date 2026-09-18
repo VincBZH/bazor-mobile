@@ -1,15 +1,16 @@
 @echo off
-title BAZOR GITHUB WATCHER
+setlocal
+chcp 65001 >nul
+set "ROOT=%USERPROFILE%\bazor-mobile"
+if exist "%ROOT%\LANCER_BAZOR_CONSOLE_HUB.cmd" (
+  start "" /b cmd /c ""%ROOT%\LANCER_BAZOR_CONSOLE_HUB.cmd""
+  exit /b 0
+)
 cd /d "%~dp0"
-echo ============================================================
-echo   BAZOR GITHUB WATCHER - GitHub ^> Core ^> Ollama ^> GitHub
-echo ============================================================
-where gh >nul 2>nul || (echo [BLOQUE] GitHub CLI gh introuvable.& pause& exit /b 1)
-gh auth status || (echo [BLOQUE] GitHub CLI non connecte.& pause& exit /b 1)
-:WATCH
-python bazor_github_watcher.py
-set "RC=%ERRORLEVEL%"
-echo.
-echo [WATCHER] Processus termine (code %RC%). Redemarrage automatique dans 3 secondes...
-timeout /t 3 /nobreak >nul
-goto WATCH
+where pythonw >nul 2>nul
+if errorlevel 1 (
+  start "" /b python bazor_github_watcher.py
+) else (
+  start "" /b pythonw bazor_github_watcher.py
+)
+exit /b 0
