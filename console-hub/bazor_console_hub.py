@@ -60,21 +60,29 @@ SERVICES = [
         "id": "ai-room", "project": "BAZOR AI Room", "name": "AI Room 8765",
         "match": "BazorAIROOM", "port": 8765, "health": "http://127.0.0.1:8765/",
         "managed": False,
+        "launch_roots": [str(Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "BazorAIROOM")],
+        "launch_candidates": ["LANCER_BAZOR_AI_ROOM.cmd","LANCER_AI_ROOM.cmd","Lancer.cmd","start.cmd","app.py","main.py","server.py"],
     },
     {
         "id": "comfy", "project": "AI Simple Studio", "name": "ComfyUI 8188",
         "match": "ComfyUI", "port": 8188, "health": "http://127.0.0.1:8188/",
         "managed": False,
+        "launch_roots": [r"C:\AI\ComfyUI\ComfyUI_windows_portable", r"C:\AI\ComfyUI"],
+        "launch_candidates": ["run_nvidia_gpu.bat","run_nvidia_gpu_fast_fp16_accumulation.bat","run_cpu.bat"],
     },
     {
         "id": "studio", "project": "AI Simple Studio", "name": "Studio 8191",
         "match": "SimpleStudio", "port": 8191, "health": "http://127.0.0.1:8191/",
         "managed": False,
+        "launch_roots": [r"C:\AI\SimpleStudioV2"],
+        "launch_candidates": ["LANCER_BAZOR_STUDIO.cmd","LANCER_STUDIO.cmd","Lancer.cmd","start.cmd","run.cmd","app.py","main.py","server.py"],
     },
     {
         "id": "wii", "project": "Projet Wii AI Relay", "name": "Wii Bridge",
         "match": "Wii_AI_Bridge", "port": None, "health": None,
         "managed": False,
+        "launch_roots": [r"C:\projetWII\Wii_AI_Bridge"],
+        "launch_candidates": ["start_bridge.ps1","LANCER_WII_BRIDGE.cmd","start.cmd"],
     },
 ]
 
@@ -529,6 +537,59 @@ class Hub:
         self.all_text.see("end")
         self.root.after(3000, self.refresh_logs)
 
+    def resolve_external_launcher(self, svc):
+        roots=[Path(x) for x in (svc.get("launch_roots") or [])]
+        for root in roots:
+            for name in (svc.get("launch_candidates") or []):
+                p=root / name
+                if p.is_file():
+                    return p
+        # Fallback discovery stays shallow and refuses installer/repair/delete tools.
+        safe_words=("lancer","launch","start","run","main","server","app")
+        denied=("install","uninstall","setup","repair","update","upgrade","clean","delete","remove","reset")
+        for root in roots:
+            if not root.is_dir():
+                continue
+            try:
+                for p in list(root.glob("*.cmd"))+list(root.glob("*.bat"))+list(root.glob("*.ps1"))+list(root.glob("*.py")):
+                    n=p.name.lower()
+                    if any(x in n for x in denied):
+                        continue
+                    if any(x in n for x in safe_words):
+                        return p
+            except Exception:
+                continue
+        return None
+
+    def start_external_service(self, svc):
+        launcher=self.resolve_external_launcher(svc)
+        if not launcher:
+            self.summary.config(text=f"{svc['name']} : aucun lanceur sûr trouvé")
+            return False
+        log=open(self.log_path(svc["id"]), "a", encoding="utf-8", buffering=1)
+        ext=launcher.suffix.lower()
+        if ext in (".cmd",".bat"):
+            cmd=["cmd.exe","/c",str(launcher)]
+        elif ext==".ps1":
+            cmd=["powershell","-NoProfile","-ExecutionPolicy","Bypass","-File",str(launcher)]
+        elif ext==".py":
+            cmd=[sys.executable,str(launcher)]
+        else:
+            self.summary.config(text=f"{svc['name']} : type de lanceur refusé")
+            return False
+        try:
+            subprocess.Popen(
+                cmd, cwd=str(launcher.parent),
+                stdout=log, stderr=subprocess.STDOUT,
+                creationflags=CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+            )
+            self.summary.config(text=f"{svc['name']} : démarrage lancé via {launcher.name}")
+            self.root.after(1800,self.refresh)
+            return True
+        except Exception as exc:
+            self.summary.config(text=f"{svc['name']} : démarrage impossible ({type(exc).__name__})")
+            return False
+
     def start_service(self, svc):
         if not svc.get("managed") or not svc.get("command"):
             return False
@@ -558,13 +619,19 @@ class Hub:
     def start_selected(self):
         svc = self.selected_service()
         if not svc:
+            self.summary.config(text="Sélectionne un service à démarrer")
             return
-        if self.matching(svc):
-            messagebox.showinfo("BAZOR", "Ce service est déjà actif.")
+        cache=powershell_processes()
+        self.proc_cache=cache
+        if self.matching(svc,cache):
+            self.summary.config(text=f"{svc['name']} est déjà actif")
             return
-        if not self.start_service(svc):
-            messagebox.showinfo("BAZOR", "Service détecté mais non géré automatiquement par le Hub.")
-        self.root.after(800, self.refresh)
+        if svc.get("managed"):
+            ok=self.start_service(svc)
+            self.summary.config(text=f"{svc['name']} : démarrage lancé" if ok else f"{svc['name']} : démarrage impossible")
+        else:
+            self.start_external_service(svc)
+        self.root.after(900, self.refresh)
 
     def stop_selected(self):
         svc = self.selected_service()
