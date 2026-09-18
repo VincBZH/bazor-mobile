@@ -35,7 +35,28 @@ function Find-Adb {
 
 $adb = Find-Adb
 if(-not $adb){
-  Log "ADB introuvable"
+  Log "ADB introuvable - installation officielle Google Platform Tools..."
+  try {
+    $toolsRoot = Join-Path $env:LOCALAPPDATA "BAZOR\Android"
+    $zip = Join-Path $toolsRoot "platform-tools-latest-windows.zip"
+    $dest = Join-Path $toolsRoot "platform-tools"
+    New-Item -ItemType Directory -Force -Path $toolsRoot | Out-Null
+    Invoke-WebRequest -UseBasicParsing -Uri "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" -OutFile $zip
+    if(Test-Path $dest){ Remove-Item -Recurse -Force $dest }
+    Expand-Archive -Path $zip -DestinationPath $toolsRoot -Force
+    Remove-Item -Force $zip
+    $candidate = Join-Path $dest "adb.exe"
+    if(Test-Path $candidate){
+      $adb = $candidate
+      Log ("ADB installé: " + $adb)
+    }
+  } catch {
+    Log ("Installation ADB échec: " + $_.Exception.Message)
+  }
+}
+
+if(-not $adb){
+  Log "ADB indisponible"
   SaveStatus @{
     ok=$false; connected=$false; reason="adb_missing"; url="http://127.0.0.1:8776/"; time=(Get-Date).ToString("o")
   }
