@@ -617,10 +617,21 @@ class Hub:
 
     def _centralize_done(self, notes):
         self.centralize_inflight = False
-        self.summary.config(text="Centralisation stable")
-        self.refresh()
+        # Les démarrages/reprises normaux sont silencieux : pas de popup bloquante au lancement.
+        # Les détails restent visibles dans le journal central du Hub.
         if notes:
-            messagebox.showinfo("BAZOR Console Hub","\n".join(notes))
+            try:
+                p = LOG_DIR / "hub.log"
+                with p.open("a", encoding="utf-8") as log:
+                    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    for note in notes:
+                        log.write(f"[{stamp}] {note}\n")
+            except Exception:
+                pass
+            self.summary.config(text="BAZOR prêt · services relancés")
+        else:
+            self.summary.config(text="Centralisation stable")
+        self.refresh()
 
     def _centralize_failed(self, error_name):
         self.centralize_inflight = False
