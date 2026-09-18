@@ -574,6 +574,7 @@ def _run_registry_task(task_id):
         _task_update_mobile(project,task,"BLOCKED",detail)
         return {"ok":False,"task_status":"BLOCKED","error":"dependencies_not_done","detail":detail}
 
+    _task_update_mobile(project,task,"RUNNING","Tâche autonome démarrée • secondes lectures Mammouth en cours")
     criteria="\n".join(f"{i+1}. {x}" for i,x in enumerate(task.get("acceptance") or []))
     base_prompt=(
         "TÂCHE BAZOR PRÉDÉFINIE "+str(task.get("id"))+" — "+str(task.get("title"))+"\n"
@@ -709,6 +710,10 @@ while True:
                         continue
                     task_id=m.group(1).strip().upper()
                     print(f"[TASK] #{issue['number']} {task_id}")
+                    try:
+                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","[BAZOR-TASK-START]\n\n"+task_id+" démarrée. État mobile passé EN COURS ; secondes lectures puis préflight Git avant toute écriture."])
+                    except Exception:
+                        pass
                     result=_run_registry_task(task_id)
                     ex=result.get("execution") or {}; ar=ex.get("action_result") or {}
                     pre=(ar.get("preflight") or {})
