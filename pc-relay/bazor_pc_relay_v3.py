@@ -839,13 +839,21 @@ class ApiHandler(BaseHTTPRequestHandler):
             return False
 
     def _security_ok(self):
+        # Mobile via ADB reverse arrives sur le PC comme 127.0.0.1.
+        # Si une preuve appareil est fournie, on la vérifie même en loopback.
+        device_id = self.headers.get("X-BAZOR-DEVICE", "")
+        nonce = self.headers.get("X-BAZOR-NONCE", "")
+        proof = self.headers.get("X-BAZOR-PROOF", "")
+        if device_id or nonce or proof:
+            ok, reason = SECURITY.verify(device_id, nonce, proof, self.client_address[0])
+            if not ok:
+                self._json({"ok": False, "error": "device_auth_required", "reason": reason}, 401)
+                return False
+            return True
         if self._loopback():
             return True
         if not SECURITY.public_status().get("require_auth", True):
             return True
-        device_id = self.headers.get("X-BAZOR-DEVICE", "")
-        nonce = self.headers.get("X-BAZOR-NONCE", "")
-        proof = self.headers.get("X-BAZOR-PROOF", "")
         ok, reason = SECURITY.verify(device_id, nonce, proof, self.client_address[0])
         if not ok:
             self._json({"ok": False, "error": "device_auth_required", "reason": reason}, 401)
