@@ -15,7 +15,7 @@ button:disabled{opacity:.65;cursor:wait}
 .tree-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
 
 </style></head><body><header><div class="row"><div><div class="brand">BAZOR COMMAND CENTER</div><div class="sub">Mobile • BAZOR Core • Ollama</div></div><span id="pcStatus" class="badge todo" onclick="detectCore()" style="cursor:pointer" title="Toucher pour retester">CONNEXION…</span></div></header><main><section id="home"></section><section id="capture" class="hidden"><div class="card"><h2>BAZOR CAPTURE</h2><div class="muted small">Transforme une idée rapide en tâche.</div><label>Note</label><textarea id="captureText" placeholder="Ex. Ajouter une fonction dans AI Room…"></textarea><div class="row wrap"><button class="secondary grow" id="micBtn">🎙️ Dicter</button><button class="secondary grow" id="clearCapture">Effacer</button></div><label>Projet</label><select id="captureProject"></select><label>Priorité</label><select id="capturePriority"><option>NORMALE</option><option>BASSE</option><option>HAUTE</option><option>URGENTE</option></select><div style="height:10px"></div><button class="primary wide" id="saveCapture">ENVOYER DANS L'INBOX</button></div></section><section id="inbox" class="hidden"></section><section id="ollama" class="hidden"></section><section id="journal" class="hidden"></section></main><div class="toast" id="toast"></div><nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>Ollama</button><button data-tab="journal">≡<br>Journal</button></div></nav><script>
-const APP_BUILD="2026.09.18-auto10";const CORE_PORT=8775;
+const APP_BUILD="2026.09.18-auto11";const CORE_PORT=8775;
 let buildCheckBusy=false;
 async function fetchTimeout(url,opts={},ms=2500){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opts,signal:c.signal})}finally{clearTimeout(t)}}
 async function checkBuild(){if(buildCheckBusy)return;buildCheckBusy=true;try{const r=await fetchTimeout("./index.html?buildcheck="+Date.now(),{cache:"no-store"},3000);const t=await r.text();const m=t.match(/const APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD){location.reload()}}catch(e){}finally{buildCheckBusy=false}}
@@ -131,6 +131,11 @@ function setRun(pid,patch){
   state.runs[pid]=Object.assign({},old,patch);
   save();
 }
+function elapsedLabel(ts){
+  if(!ts)return "";
+  const sec=Math.max(0,Math.floor((Date.now()-ts)/1000));
+  return sec<60?sec+" s":Math.floor(sec/60)+" min "+(sec%60)+" s";
+}
 function runPanel(p){
   const r=state.runs[p.id];
   if(!r)return "";
@@ -138,7 +143,7 @@ function runPanel(p){
   const checks=(r.checkpoints||[]).map(x=>'<div class="checkpoint '+(x.kind==="ok"?"okc":x.kind==="bad"?"badc":"")+'"><span class="dot">'+(x.kind==="ok"?"✓":x.kind==="bad"?"!":"•")+'</span><span>'+esc(x.text)+'</span></div>').join("");
   const projectChecks=(r.projectChecks||[]).map(x=>'<div class="checkpoint '+(x.kind==="ok"?"okc":x.kind==="bad"?"badc":"")+'"><span class="dot">'+(x.kind==="ok"?"✓":x.kind==="bad"?"!":"•")+'</span><span>'+esc(x.text)+'</span></div>').join("");
   return '<div class="mini-panel task-live"><div class="row"><strong>'+(r.auto?"GO AUTO PROJET":"TÂCHE")+'</strong><span class="badge '+(r.active?"todo":r.blocked?"blocked":"ok")+'">'+(r.active?"EN COURS":r.blocked?"BLOQUÉ":"TERMINÉ")+'</span></div>'+
-    '<div class="small muted" style="margin-top:6px">'+esc(c?.name||p.name)+' • '+esc(r.stage||"")+'</div>'+
+    '<div class="small muted" style="margin-top:6px">'+esc(c?.name||p.name)+' • '+esc(r.stage||"")+(r.active&&r.startedAt?' • '+elapsedLabel(r.startedAt):'')+'</div>'+
     '<div class="progress"><div style="width:'+(r.taskProgress||0)+'%"></div></div><div class="small">Tâche en cours : '+(r.taskProgress||0)+'%</div>'+
     checks+(projectChecks?'<hr><div class="small muted">POINTS DE CONTRÔLE PROJET</div>'+projectChecks:"")+'</div>';
 }
@@ -146,9 +151,9 @@ async function callSubTask(pid,c,repair,previous){
   if(!CORE)await detectCore();
   if(!CORE)throw new Error("core_unreachable");
   const x=spState(pid,c.id);
-  const r=await fetch(CORE+"/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+  const r=await fetchTimeout(CORE+"/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
     project_id:pid,subproject_name:c.name,task:x.next||c.next,current_progress:x.progress??0,repair:!!repair,previous:previous||""
-  })});
+  })},180000);
   if(!r.ok)throw new Error("HTTP "+r.status);
   return r.json();
 }
@@ -159,7 +164,7 @@ async function runOneSub(pid,sid,autoMode){
   if(actionBusy[key]){toast("Action déjà en cours…");return {status:"EN_COURS"}}
   actionBusy[key]=true;
   x.status="EN_COURS";x.summary="Préparation de la tâche…";
-  setRun(pid,{active:true,auto:!!autoMode,subId:sid,stage:"Préparation",taskProgress:10,blocked:false,checkpoints:[{text:"Tâche préparée",kind:"ok"}]});
+  setRun(pid,{active:true,auto:!!autoMode,subId:sid,stage:"Préparation",taskProgress:10,blocked:false,startedAt:Date.now(),checkpoints:[{text:"Tâche préparée",kind:"ok"}]});
   try{
     setRun(pid,{stage:"Analyse du contexte réel",taskProgress:35,checkpoints:[{text:"Tâche préparée",kind:"ok"},{text:"Lecture et analyse du contexte",kind:"run"}]});
     let d=await callSubTask(pid,c,false,"");
@@ -182,10 +187,11 @@ async function runOneSub(pid,sid,autoMode){
     save();
     return d;
   }catch(e){
-    x.status="BLOQUE";x.summary="Relais ou moteur indisponible : "+e.message;
-    setRun(pid,{active:false,stage:"Erreur de liaison",taskProgress:100,blocked:true,checkpoints:[{text:"Erreur : "+e.message,kind:"bad"}]});
-    log("Sous-projet bloqué — "+c.name,"BLOQUÉ");save();toast("Blocage journalisé");
-    return {status:"BLOQUE",error:e.message};
+    const timeout=(e&&e.name==="AbortError");
+    x.status="BLOQUE";x.summary=(timeout?"Temps maximum dépassé pendant l'analyse IA":"Relais ou moteur indisponible")+" : "+(e.message||e.name||"inconnu");
+    setRun(pid,{active:false,stage:timeout?"Délai dépassé — relance possible":"Erreur de liaison",taskProgress:100,blocked:true,checkpoints:[{text:timeout?"Analyse IA trop longue (> 3 min)":"Erreur : "+(e.message||e.name),kind:"bad"}]});
+    log("Sous-projet bloqué — "+c.name,"BLOQUÉ");save();toast(timeout?"Analyse trop longue — contrôle arrêté proprement":"Blocage journalisé");
+    return {status:"BLOQUE",error:e.message||e.name};
   }finally{
     setTimeout(()=>delete actionBusy[key],1200);
   }
