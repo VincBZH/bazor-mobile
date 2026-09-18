@@ -137,20 +137,25 @@ print("Aucun shell distant : seules les issues [bazor-queue] sont envoyees a /ap
 print()
 
 while True:
-    safe_update()
-    ensure_core_alive()
     try:
-        issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
-        for issue in issues:
-            if not issue["title"].lower().startswith("[bazor-queue]"): continue
-            comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
-            if MARK in comments: continue
-            print(f"[QUEUE] #{issue['number']} {issue['title']}")
-            prompt=(issue.get("body") or "").strip()
-            result=core_chat(prompt)
-            reply=MARK+"\n\n**BAZOR/Ollama — résultat**\n\n"+answer_text(result)
-            gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
-            print(f"[OK] #{issue['number']} traite et retourne dans GitHub.")
+        safe_update()
+        ensure_core_alive()
+        try:
+            issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
+            for issue in issues:
+                if not issue["title"].lower().startswith("[bazor-queue]"): continue
+                comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
+                if MARK in comments: continue
+                print(f"[QUEUE] #{issue['number']} {issue['title']}")
+                prompt=(issue.get("body") or "").strip()
+                result=core_chat(prompt)
+                reply=MARK+"\n\n**BAZOR/Ollama — résultat**\n\n"+answer_text(result)
+                gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
+                print(f"[OK] #{issue['number']} traite et retourne dans GitHub.")
+        except Exception as e:
+            print("[BLOQUE QUEUE]",type(e).__name__,str(e))
+    except KeyboardInterrupt:
+        raise
     except Exception as e:
-        print("[BLOQUE]",type(e).__name__,str(e))
+        print("[WATCHER RECOVERY]",type(e).__name__,str(e))
     time.sleep(POLL)
