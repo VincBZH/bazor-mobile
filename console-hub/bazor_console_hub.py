@@ -29,7 +29,7 @@ MOBILE_STATUS_FILE = DATA / "mobile_network_status.json"
 
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-HUB_BUILD = "2026.09.18.16"
+HUB_BUILD = "2026.09.18.17"
 
 SERVICES = [
     {
@@ -317,7 +317,6 @@ class Hub:
         self.root.after(100, self._drain_ui_queue)
         self.root.after(300, self.refresh)
         self.root.after(1400, self.refresh_logs)
-        self.root.after(1700, self.ensure_pairing_code)
 
     def build_ui(self):
         top = tk.Frame(self.root, bg="#11151b", padx=12, pady=10)
@@ -349,7 +348,6 @@ class Hub:
             ("USB TÉLÉPHONE", self.usb_mobile),
             ("RÉPARER H3", self.repair_h3),
             ("APPAIRER TÉLÉPHONE", self.open_pairing_qr),
-            ("NOUVEAU CODE", self.new_pairing_code),
             ("CENTRALISER / ADOPTER", self.centralize),
             ("ACTUALISER", self.refresh),
             ("VOIR LOG", self.open_log),
@@ -374,9 +372,9 @@ class Hub:
         )
         self.pair_text.pack(side="left", fill="x", expand=True)
         ttk.Button(self.pair_frame, text="NOUVEAU QR", command=self.new_pairing_code).pack(side="right", padx=(12,0))
-        self.pair_text.config(text="APPAIRAGE BAZOR\nPréparation du QR…")
-        self.qr_label.config(text="QR…", image="", width=20, height=10)
-        self.pair_frame.pack(fill="x", padx=10, pady=(0,8))
+        self.pair_text.config(text="")
+        self.qr_label.config(text="", image="", width=20, height=10)
+        self.pair_frame.pack_forget()
 
         cols = ("status", "project", "service", "pid", "detail")
         self.tree = ttk.Treeview(self.root, columns=cols, show="headings", height=13)
@@ -814,16 +812,16 @@ class Hub:
             self.summary.config(text="Core non joignable pour l’appairage")
 
     def update_security_code(self):
-        # Source fiable: mémoire du Core via endpoint loopback uniquement.
+        # Les rafraîchissements normaux ne doivent jamais révéler un code/QR.
+        # L'affichage n'est autorisé que tant que la fenêtre d'appairage,
+        # ouverte explicitement avec le bouton APPAIRER TÉLÉPHONE, existe.
+        if not (getattr(self, "pair_win", None) and self.pair_win.winfo_exists()):
+            self.security_code = ""
+            self.code_label.pack_forget()
+            self.pair_frame.pack_forget()
+            return
         info = self._local_pairing_info(rotate=False)
         code = str((info or {}).get("code") or "")
-        if not code:
-            # Compatibilité avec un ancien Core : repli sur le log.
-            text = tail(self.log_path("core"), 120)
-            matches = re.findall(r">>>\s*([A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})\s*<<<", text)
-            if not matches:
-                matches = re.findall(r"Code appairage mobile:\s*([A-Z0-9-]{10,20})", text)
-            code = matches[-1] if matches else ""
         self.security_code = code
         if self.security_code:
             self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
@@ -831,7 +829,7 @@ class Hub:
             self.show_pairing_qr(self.security_code)
         else:
             self.code_label.pack_forget()
-            self.show_pairing_qr(None)
+            self.pair_frame.pack_forget()
 
     def on_select(self, _evt=None):
         sel = self.tree.selection()
