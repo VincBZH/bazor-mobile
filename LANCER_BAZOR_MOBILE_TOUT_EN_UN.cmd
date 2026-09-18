@@ -10,10 +10,10 @@ title BAZOR - ONE CLICK
 set "ROOT=%USERPROFILE%\bazor-mobile"
 cd /d "%ROOT%"
 
-where python >nul 2>nul || (echo [BLOQUE] Python introuvable.& pause& exit /b 1)
-where git >nul 2>nul || (echo [BLOQUE] Git introuvable.& pause& exit /b 1)
-
-git pull >nul 2>&1
+where git >nul 2>nul
+if not errorlevel 1 (
+  git pull --ff-only >nul 2>&1
+)
 
 if exist "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" -Root "%ROOT%" >nul 2>&1
@@ -29,9 +29,13 @@ netsh advfirewall firewall delete rule name="BAZOR Mobile Web 8776" >nul 2>nul
 netsh advfirewall firewall add rule name="BAZOR Mobile Web 8776" dir=in action=allow protocol=TCP localport=8776 profile=any remoteip=localsubnet >nul 2>nul
 
 call "%ROOT%\LANCER_BAZOR_CONSOLE_HUB.cmd"
+if errorlevel 1 (
+  echo [BLOQUE] Le Hub BAZOR n'a pas pu demarrer.
+  pause
+  exit /b 2
+)
 
-rem Auto-réparation silencieuse : vérifie Core/Web, relance uniquement ce qui manque,
-rem puis recrée le pont USB 8775/8776 APRES le démarrage réel des services.
+rem Auto-reparation silencieuse : verifie Core/Web et recree le pont USB.
 if exist "%ROOT%\console-hub\bazor_mobile_selfheal.ps1" (
   start "" /b powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%ROOT%\console-hub\bazor_mobile_selfheal.ps1" -Root "%ROOT%" -OpenPhone >nul 2>&1
 ) else if exist "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" (
