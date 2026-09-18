@@ -65,6 +65,7 @@ PROJECT_ROOTS = {
     "simple-studio": r"C:\AI\SimpleStudioV2",
     "wii": r"C:\projetWII",
     "wii-relay": r"C:\projetWII",
+    "bazor-security": str(BASE_DIR),
 }
 PROJECT_CONTEXT_EXTS = {".py",".js",".ts",".tsx",".jsx",".html",".css",".json",".md",".txt",".ps1",".cmd",".bat",".yml",".yaml"}
 PROJECT_CONTEXT_SKIP = {"node_modules",".git","models","checkpoints","output","outputs","venv",".venv","__pycache__","cache","temp","tmp","downloads"}
