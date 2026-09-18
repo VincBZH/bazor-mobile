@@ -572,11 +572,21 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
     except Exception:
         current_progress = 0
 
+    context_started = time.monotonic()
     local_context, local_report = ACTION_ENGINE.context_for_project(project_id)
     if not local_context:
         local_context, fallback_report = project_local_context(project_id)
         if local_context:
             local_report = fallback_report
+    journal("MOBILE_TASK_CONTEXT", {
+        "project": project_id,
+        "subproject": str(subproject_name)[:160],
+        "context_ms": int((time.monotonic() - context_started) * 1000),
+        "scan_ms": local_report.get("scan_ms") if isinstance(local_report, dict) else None,
+        "scanned_files": local_report.get("scanned_files") if isinstance(local_report, dict) else None,
+        "scan_limited": local_report.get("scan_limited") if isinstance(local_report, dict) else None,
+        "context_files": len(local_report.get("files") or []) if isinstance(local_report, dict) else 0,
+    })
 
     roots = ACTION_ENGINE.available_roots(project_id)
     repair_note = ""
@@ -721,6 +731,7 @@ def _cleanup_task_jobs():
                 TASK_JOBS.pop(k, None)
 
 def _task_worker(request_id, kwargs):
+    worker_started = time.monotonic()
     try:
         result = run_mobile_subtask(**kwargs)
         state = "done"
@@ -750,6 +761,9 @@ def _task_worker(request_id, kwargs):
         "state": state,
         "status": result.get("status"),
         "progress": result.get("progress"),
+        "duration_ms": int((time.monotonic() - worker_started) * 1000),
+        "error": result.get("error"),
+        "detail": str(result.get("detail") or "")[:180],
     })
 
 def start_mobile_task(request_id, **kwargs):
