@@ -1,4 +1,4 @@
-import json, subprocess, time, urllib.request, os, sys, re
+import json, subprocess, time, urllib.request, os, sys, re, concurrent.futures
 
 REPO="VincBZH/bazor-mobile"
 CORE="http://127.0.0.1:8775/api/v1/chat"
@@ -588,7 +588,8 @@ def _run_registry_task(task_id):
     reviews=[]
     profiles=[str(x).lower() for x in (task.get("preferred_models") or []) if str(x).strip()]
     profiles=profiles[:2 if task.get("priority")=="P0" else 1]
-    for profile in profiles:
+
+    def one_review(profile):
         review_payload={
             "project_id":project.get("id"),
             "subproject_name":"Revue "+str(task.get("id"))+" / "+str(sub.get("name") or task.get("subproject") or "Studio"),
@@ -599,14 +600,27 @@ def _run_registry_task(task_id):
         }
         try:
             rv=_core_task(review_payload,timeout=300)
-            reviews.append({
+            return {
                 "profile":profile,"ok":bool(rv.get("ok")),
                 "engine":rv.get("engine"),"model":rv.get("model"),
                 "summary":str(rv.get("summary") or "")[:500],
                 "answer":str(rv.get("answer") or "")[:3500],
-            })
+            }
         except Exception as exc:
-            reviews.append({"profile":profile,"ok":False,"engine":"mammouth","model":None,"summary":str(exc)[:300],"answer":""})
+            return {"profile":profile,"ok":False,"engine":"mammouth","model":None,"summary":str(exc)[:300],"answer":""}
+
+    # Les avis sont indépendants et non-écrivants : les lancer en parallèle
+    # évite de doubler le temps d'attente d'une tâche P0.
+    if profiles:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(2,len(profiles))) as pool:
+            future_by_profile={pool.submit(one_review,p):p for p in profiles}
+            by_profile={}
+            for fut,p in list(future_by_profile.items()):
+                try:
+                    by_profile[p]=fut.result()
+                except Exception as exc:
+                    by_profile[p]={"profile":p,"ok":False,"engine":"mammouth","model":None,"summary":str(exc)[:300],"answer":""}
+            reviews=[by_profile[p] for p in profiles]
 
     useful=[]
     for rv in reviews:
