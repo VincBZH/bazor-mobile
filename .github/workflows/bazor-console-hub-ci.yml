@@ -76,6 +76,21 @@ jobs:
           assert 'if not svc.get("managed")' in hub, "external process close guard missing"
           print("Security invariants OK")
           PY
+      - name: Mammouth task profile regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          core=Path("pc-relay/bazor_pc_relay_v3.py").read_text(encoding="utf-8")
+          watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
+          assert "mammouth_profile=None" in core
+          assert 'body.get("mammouth_profile")' in core
+          assert "requested_profile in mammouth_client.MODEL_PROFILES" in core
+          assert "[bazor-mammouth" in watcher
+          assert "core_mammouth_task" in watcher
+          assert '"provider":"mammouth"' in watcher
+          assert '"apply_actions":bool(meta["apply_actions"])' in watcher
+          print("Mammouth profile queue regression OK")
+          PY
       - name: Mobile task async regression
         run: |
           python - <<'PY'
