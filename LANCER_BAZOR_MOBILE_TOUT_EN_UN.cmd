@@ -29,7 +29,13 @@ netsh advfirewall firewall delete rule name="BAZOR Mobile Web 8776" >nul 2>nul
 netsh advfirewall firewall add rule name="BAZOR Mobile Web 8776" dir=in action=allow protocol=TCP localport=8776 profile=any remoteip=localsubnet >nul 2>nul
 
 call "%ROOT%\LANCER_BAZOR_CONSOLE_HUB.cmd"
-if exist "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" (
-  start "" /b powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 4; & '%ROOT%\console-hub\bazor_usb_android_bridge.ps1' -Root '%ROOT%' -OpenPhone" >nul 2>&1
+
+rem Auto-réparation silencieuse : vérifie Core/Web, relance uniquement ce qui manque,
+rem puis recrée le pont USB 8775/8776 APRES le démarrage réel des services.
+if exist "%ROOT%\console-hub\bazor_mobile_selfheal.ps1" (
+  start "" /b powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%ROOT%\console-hub\bazor_mobile_selfheal.ps1" -Root "%ROOT%" -OpenPhone >nul 2>&1
+) else if exist "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" (
+  start "" /b powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 5; & '%ROOT%\console-hub\bazor_usb_android_bridge.ps1' -Root '%ROOT%' -OpenPhone" >nul 2>&1
 )
+
 exit /b 0
