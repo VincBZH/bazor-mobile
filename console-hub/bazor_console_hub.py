@@ -20,6 +20,8 @@ STATE_FILE = DATA / "console_hub_state.json"
 MOBILE_STATE = DATA / "mobile_state.json"
 LOCK_PORT = 8790
 UPDATE_HELPER = ROOT / "console-hub" / "bazor_interface_update_restart.py"
+MOBILE_REPAIR = ROOT / "console-hub" / "bazor_mobile_network_repair.ps1"
+MOBILE_URL_FILE = DATA / "mobile_url.txt"
 
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -173,6 +175,26 @@ def save_hub_state(data):
     except Exception:
         pass
 
+def detect_mobile_url():
+    try:
+        if MOBILE_URL_FILE.exists():
+            url=MOBILE_URL_FILE.read_text(encoding="utf-8-sig",errors="replace").strip()
+            if url.startswith("http://"):
+                return url
+    except Exception:
+        pass
+    try:
+        sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        sock.settimeout(0.5)
+        sock.connect(("8.8.8.8",80))
+        ip=sock.getsockname()[0]
+        sock.close()
+        if ip and not ip.startswith("127."):
+            return f"http://{ip}:8776/"
+    except Exception:
+        pass
+    return "http://<IP-PC>:8776/"
+
 def pairing_busy():
     try:
         with urllib.request.urlopen("http://127.0.0.1:8775/api/v1/security/status",timeout=0.8) as r:
@@ -219,6 +241,9 @@ class Hub:
         tk.Label(top, text="BAZOR CONSOLE HUB", fg="white", bg="#11151b", font=("Segoe UI", 18, "bold")).pack(side="left")
         self.summary = tk.Label(top, text="Analyse…", fg="#aeb8c5", bg="#11151b", font=("Segoe UI", 10))
         self.summary.pack(side="left", padx=16)
+        self.mobile_url_label = tk.Label(top, text=detect_mobile_url(), fg="#6dc8ff", bg="#11151b", font=("Consolas", 10, "bold"), cursor="hand2")
+        self.mobile_url_label.pack(side="left", padx=10)
+        self.mobile_url_label.bind("<Button-1>", lambda _e: self.copy_mobile_url())
         self.code_label = tk.Label(top, text="", fg="black", bg="#f6d04d", font=("Consolas", 13, "bold"), padx=10, pady=5)
         self.code_label.pack(side="right")
         self.code_label.pack_forget()
@@ -227,6 +252,7 @@ class Hub:
         bar.pack(fill="x")
         for text, cmd in [
             ("↻ MAJ + RELANCE BAZOR", self.update_restart_bazor),
+            ("RÉPARER MOBILE", self.repair_mobile_access),
             ("CENTRALISER / ADOPTER", self.centralize),
             ("ACTUALISER", self.refresh),
             ("VOIR LOG", self.open_log),
@@ -365,6 +391,8 @@ class Hub:
                 else:
                     self.rows[sid] = self.tree.insert("", "end", values=vals, tags=(tag,), iid=sid)
             self.summary.config(text=f"{counts['OK']} OK · {counts['WORK']} en cours · {counts['ERROR']+counts['DUPLICATE']} à voir · {counts['CLOSED']} fermés")
+            try:self.mobile_url_label.config(text=detect_mobile_url())
+            except Exception:pass
             self.update_security_code()
         finally:
             self.refresh_inflight = False
@@ -570,6 +598,37 @@ class Hub:
     def _centralize_failed(self, error_name):
         self.centralize_inflight = False
         self.summary.config(text=f"Centralisation bloquée : {error_name}")
+        self.refresh()
+
+    def copy_mobile_url(self):
+        url=detect_mobile_url()
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(url)
+            self.summary.config(text="Adresse mobile copiée : "+url)
+        except Exception:
+            pass
+
+    def repair_mobile_access(self):
+        if not MOBILE_REPAIR.exists():
+            messagebox.showerror("BAZOR","Outil réseau mobile absent.")
+            return
+        try:
+            cmd=[
+                "powershell","-NoProfile","-ExecutionPolicy","Bypass","-Command",
+                f"Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"{str(MOBILE_REPAIR)}\" -Root \"{str(ROOT)}\"'"
+            ]
+            subprocess.Popen(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=CREATE_NO_WINDOW)
+            self.summary.config(text="Réparation accès mobile lancée…")
+            self.root.after(1800,self._refresh_mobile_url)
+        except Exception as exc:
+            messagebox.showerror("BAZOR",f"Réparation impossible : {type(exc).__name__}")
+
+    def _refresh_mobile_url(self):
+        try:
+            self.mobile_url_label.config(text=detect_mobile_url())
+        except Exception:
+            pass
         self.refresh()
 
     def update_restart_bazor(self):
