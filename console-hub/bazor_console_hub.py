@@ -22,6 +22,7 @@ LOCK_PORT = 8790
 UPDATE_HELPER = ROOT / "console-hub" / "bazor_interface_update_restart.py"
 MOBILE_REPAIR = ROOT / "console-hub" / "bazor_mobile_network_repair.ps1"
 MOBILE_URL_FILE = DATA / "mobile_url.txt"
+MOBILE_STATUS_FILE = DATA / "mobile_network_status.json"
 
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -175,6 +176,23 @@ def save_hub_state(data):
     except Exception:
         pass
 
+def mobile_network_summary():
+    try:
+        if MOBILE_STATUS_FILE.exists():
+            d=json.loads(MOBILE_STATUS_FILE.read_text(encoding="utf-8-sig",errors="replace"))
+            ip=d.get("ip") or "?"
+            adapter=d.get("adapter") or "?"
+            web_ok=bool(d.get("web_self_test"))
+            core_ok=bool(d.get("core_self_test"))
+            if web_ok and core_ok:
+                return f"LAN OK · {ip} · {adapter}", "ok"
+            if d.get("web_listen_all") or d.get("core_listen_all"):
+                return f"LAN À VÉRIFIER · {ip} · {adapter}", "warn"
+            return f"LAN HS · {ip} · {adapter}", "bad"
+    except Exception:
+        pass
+    return "LAN non diagnostiqué", "warn"
+
 def detect_mobile_url():
     try:
         if MOBILE_URL_FILE.exists():
@@ -244,6 +262,10 @@ class Hub:
         self.mobile_url_label = tk.Label(top, text=detect_mobile_url(), fg="#6dc8ff", bg="#11151b", font=("Consolas", 10, "bold"), cursor="hand2")
         self.mobile_url_label.pack(side="left", padx=10)
         self.mobile_url_label.bind("<Button-1>", lambda _e: self.copy_mobile_url())
+        net_text,net_state=mobile_network_summary()
+        net_color={"ok":"#42d483","warn":"#f2c94c","bad":"#ff6b6b"}.get(net_state,"#f2c94c")
+        self.mobile_net_label = tk.Label(top, text=net_text, fg=net_color, bg="#11151b", font=("Segoe UI", 9, "bold"))
+        self.mobile_net_label.pack(side="left", padx=8)
         self.code_label = tk.Label(top, text="", fg="black", bg="#f6d04d", font=("Consolas", 13, "bold"), padx=10, pady=5)
         self.code_label.pack(side="right")
         self.code_label.pack_forget()
@@ -392,6 +414,11 @@ class Hub:
                     self.rows[sid] = self.tree.insert("", "end", values=vals, tags=(tag,), iid=sid)
             self.summary.config(text=f"{counts['OK']} OK · {counts['WORK']} en cours · {counts['ERROR']+counts['DUPLICATE']} à voir · {counts['CLOSED']} fermés")
             try:self.mobile_url_label.config(text=detect_mobile_url())
+            except Exception:pass
+            try:
+                net_text,net_state=mobile_network_summary()
+                net_color={"ok":"#42d483","warn":"#f2c94c","bad":"#ff6b6b"}.get(net_state,"#f2c94c")
+                self.mobile_net_label.config(text=net_text,fg=net_color)
             except Exception:pass
             self.update_security_code()
         finally:
