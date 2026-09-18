@@ -44,7 +44,7 @@ h2,h3{margin:0 0 7px}
   </div>
   <div class="row" style="margin-top:7px">
     <select id="providerMode" class="provider"><option value="auto">AUTO IA</option><option value="ollama">OLLAMA</option><option value="mammouth">MAMMOUTH</option></select>
-    <span id="providerStatus" class="mini muted grow">Moteurs : vérification…</span>
+    <span id="providerStatus" class="mini muted grow">Moteurs : vérification…</span><span id="actionEngineBadge" class="badge running">ACTION ENGINE</span>
     <button id="quickRestart" onclick="updateRestartBazor()" style="padding:5px 8px">↻ MAJ</button>
   </div>
 </header>
@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto20",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto19",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -377,7 +377,7 @@ function toggleInfo(id,t){state.info[id]=state.info[id]===t?null:t;localSave()}
 async function taskCall(pid,c,repair=false,previous=""){
   if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
   const x=sp(pid,c.id),requestId="mob-"+pid+"-"+c.id+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
-  const payload={project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(x.next||c.next),current_progress:x.progress??0,repair,previous,provider:providerMode.value,request_id:requestId,async:true};
+  const payload={project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(x.next||c.next),current_progress:x.progress??0,repair,previous,provider:providerMode.value,request_id:requestId,async:true,apply_actions:true};
   let start=await signedFetch("/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),bazorRetrySafe:true},8000);
   if(start.job_state==="done"||start.job_state==="error")return start.result||start;
   const deadline=Date.now()+6*60*1000;
@@ -404,10 +404,10 @@ async function goSub(pid,sid,auto=false){
   if(actionBusy[key]){toast("Déjà en cours");return {status:"EN_COURS"}}actionBusy[key]=true;
   x.status="EN_COURS";state.runs[pid]={active:true,blocked:false,subId:sid,stage:"Analyse du contexte",taskProgress:25,checkpoints:[{text:"Tâche préparée",kind:"ok"}]};localSave();toast("BAZOR travaille…");
   try{
-    let d=await taskCall(pid,c,false,"");state.runs[pid].stage="Contrôle";state.runs[pid].taskProgress=75;state.runs[pid].checkpoints.push({text:"Premier résultat reçu",kind:d.status==="BLOQUE"?"bad":"ok"});localSave();
+    let d=await taskCall(pid,c,false,"");state.runs[pid].stage="Contrôle";state.runs[pid].taskProgress=75;state.runs[pid].checkpoints.push({text:"Premier résultat reçu",kind:d.status==="BLOQUE"?"bad":"ok"});if(d.execution?.mode==="file_changes"){const n=d.execution?.action_result?.files?.length||0;state.runs[pid].checkpoints.push({text:n+" fichier(s) modifié(s) réellement",kind:"ok"});const tests=d.execution?.action_result?.tests||[];if(tests.length)state.runs[pid].checkpoints.push({text:tests.every(t=>t.ok)?"Tests automatiques OK":"Test échoué • rollback",kind:tests.every(t=>t.ok)?"ok":"bad"})}else{state.runs[pid].checkpoints.push({text:"Analyse seule • aucune modification appliquée",kind:"run"})}localSave();
     if(d.status==="BLOQUE"||!d.ok){state.runs[pid].stage="Correction + relance";state.runs[pid].taskProgress=88;state.runs[pid].checkpoints.push({text:"Correction automatique",kind:"run"});localSave();d=await taskCall(pid,c,true,d.answer||JSON.stringify(d))}
     x.status=d.status||"BLOQUE";x.progress=typeof d.progress==="number"?d.progress:x.progress;x.summary=d.summary||"Résultat reçu";x.next=d.next||x.next||c.next;x.updated=Date.now();
-    const blocked=x.status==="BLOQUE";state.runs[pid]={active:false,blocked,subId:sid,stage:blocked?"Blocage persistant":"Contrôle validé",taskProgress:100,checkpoints:[{text:blocked?"Blocage après correction":"Résultat contrôlé",kind:blocked?"bad":"ok"}]};
+    const blocked=x.status==="BLOQUE";const real=d.execution?.mode==="file_changes";state.runs[pid]={active:false,blocked,subId:sid,stage:blocked?"Blocage persistant":real?"Modification réelle validée":"Analyse terminée sans changement fichier",taskProgress:100,checkpoints:[{text:blocked?"Blocage après correction":real?"Fichiers modifiés + tests validés":"Aucune modification appliquée",kind:blocked?"bad":real?"ok":"run"}]};
     p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");p.next=nextSub(pid)?sp(pid,nextSub(pid).id).next:"Contrôle final";log((blocked?"Blocage — ":"OK — ")+c.name,blocked?"BLOQUÉ":"OK");localSave();if(!auto)showResult(c.name,d);return d;
   }catch(e){
     const msg=e.name==="AbortError"?"Analyse trop longue (>6 min)":String(e.message||e);
@@ -431,7 +431,7 @@ async function goAuto(pid){
     p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");log("AUTO — "+p.name,blocked?"BLOQUÉ":"OK");localSave();toast(blocked?"AUTO arrêté sur blocage":"AUTO terminé ✓");
   }finally{setTimeout(()=>delete actionBusy[key],900)}
 }
-function showResult(title,d){document.getElementById("resultModal")?.remove();const e=document.createElement("div");e.id="resultModal";e.className="modal";const body=d?.answer||d?.result?.answer||d?.ollama?.answer||d?.mammouth?.answer||JSON.stringify(d,null,2);e.innerHTML='<div class="row between"><h3>'+esc(title)+'</h3><button onclick="this.closest(\'#resultModal\').remove()">Fermer</button></div><div class="mini muted">'+esc([d?.status,d?.engine,d?.model].filter(Boolean).join(" • "))+'</div><div style="white-space:pre-wrap;font-size:12px;margin-top:8px">'+esc(body)+'</div>';document.body.appendChild(e)}
+function showResult(title,d){document.getElementById("resultModal")?.remove();const e=document.createElement("div");e.id="resultModal";e.className="modal";const body=d?.answer||d?.result?.answer||d?.ollama?.answer||d?.mammouth?.answer||JSON.stringify(d,null,2);const ex=d?.execution;const files=ex?.action_result?.files||[];const tests=ex?.action_result?.tests||[];const evidence=ex?'<div class="infobox"><b>'+(ex.mode==="file_changes"?"✅ MODIFICATION RÉELLE":"ℹ ANALYSE SEULE")+'</b><div class="mini muted" style="margin-top:4px">'+(files.length?files.length+" fichier(s) modifié(s) • "+tests.filter(t=>t.ok).length+"/"+tests.length+" test(s) OK":"Aucun fichier modifié")+'</div></div>':"";e.innerHTML='<div class="row between"><h3>'+esc(title)+'</h3><button onclick="this.closest(\'#resultModal\').remove()">Fermer</button></div><div class="mini muted">'+esc([d?.status,d?.engine,d?.model].filter(Boolean).join(" • "))+'</div>'+evidence+'<div style="white-space:pre-wrap;font-size:12px;margin-top:8px">'+esc(body)+'</div>';document.body.appendChild(e)}
 function fillProjects(){captureProject.innerHTML='<option value="">Général</option>'+(REGISTRY.projects||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join("")}
 function renderInbox(){inbox.innerHTML='<div class="card"><h2>Inbox</h2><div class="mini muted">'+state.inbox.length+' élément(s)</div></div>'+state.inbox.map(i=>'<div class="card"><b>'+esc(i.title)+'</b><div class="mini muted">'+esc(i.priority||"")+' • '+esc(i.status||"")+'</div></div>').join("")}
 function renderIA(){ollama.innerHTML='<div class="card"><h2>Moteurs IA</h2><div class="project-phrase">'+esc(providerStatus.textContent)+'</div><div class="mini muted">AUTO privilégie le local et peut utiliser Mammouth pour les tâches adaptées. Tu peux forcer OLLAMA ou MAMMOUTH avec le sélecteur en haut.</div></div>'}
