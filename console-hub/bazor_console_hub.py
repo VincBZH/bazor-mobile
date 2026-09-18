@@ -38,10 +38,10 @@ SERVICES = [
         "cwd": str(ROOT / "pc-relay"), "managed": True,
     },
     {
-        "id": "web", "project": "BAZOR Mobile", "name": "Web 8776",
-        "match": "http.server 8776", "port": 8776,
-        "health": "http://127.0.0.1:8776/index.html",
-        "command": [sys.executable, "-m", "http.server", "8776", "--bind", "0.0.0.0"],
+        "id": "web", "project": "BAZOR Mobile", "name": "Gateway Web/API 8776",
+        "match": "bazor_mobile_gateway.py", "port": 8776,
+        "health": "http://127.0.0.1:8776/api/v1/security/status",
+        "command": [sys.executable, str(ROOT / "console-hub" / "bazor_mobile_gateway.py")],
         "cwd": str(ROOT), "managed": True,
     },
     {
