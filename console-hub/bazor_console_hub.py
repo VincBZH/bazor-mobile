@@ -267,6 +267,7 @@ class Hub:
         self.rows = {}
         self.selected_id = None
         self.security_code = ""
+        self.qr_photo = None
         self.hub_state = load_hub_state()
         self.lock_socket = socket.socket()
         try:
@@ -324,6 +325,23 @@ class Hub:
             ("FERMER DOUBLONS", self.close_duplicates),
         ]:
             ttk.Button(bar, text=text, command=cmd).pack(side="left", padx=3)
+
+        self.pair_frame = tk.Frame(self.root, bg="#fff7cc", bd=1, relief="solid", padx=10, pady=8)
+        self.qr_label = tk.Label(self.pair_frame, bg="white", width=20, height=10)
+        self.qr_label.pack(side="left", padx=(0,12))
+        self.pair_text = tk.Label(
+            self.pair_frame,
+            text="",
+            justify="left",
+            anchor="w",
+            bg="#fff7cc",
+            fg="#111111",
+            font=("Segoe UI", 11, "bold")
+        )
+        self.pair_text.pack(side="left", fill="x", expand=True)
+        ttk.Button(self.pair_frame, text="NOUVEAU QR", command=self.new_pairing_code).pack(side="right", padx=(12,0))
+        self.pair_frame.pack(fill="x", padx=10, pady=(0,8))
+        self.pair_frame.pack_forget()
 
         cols = ("status", "project", "service", "pid", "detail")
         self.tree = ttk.Treeview(self.root, columns=cols, show="headings", height=13)
@@ -481,6 +499,61 @@ class Hub:
         except Exception:
             pass
 
+    def _pairing_qr_url(self, code):
+        base=detect_mobile_url().strip()
+        if not base.endswith("/"):
+            base += "/"
+        # Fragment volontaire: le code n'est jamais envoyé au serveur HTTP ni inscrit dans ses logs.
+        return base + "#pair=" + urllib.parse.quote(str(code))
+
+    def _ensure_qr_modules(self):
+        try:
+            import qrcode  # noqa
+            from PIL import ImageTk  # noqa
+            return True
+        except Exception:
+            try:
+                subprocess.run(
+                    [sys.executable,"-m","pip","install","qrcode[pil]","--disable-pip-version-check","-q"],
+                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=90,
+                    creationflags=CREATE_NO_WINDOW
+                )
+                import qrcode  # noqa
+                from PIL import ImageTk  # noqa
+                return True
+            except Exception:
+                return False
+
+    def show_pairing_qr(self, code):
+        if not code:
+            try:self.pair_frame.pack_forget()
+            except Exception:pass
+            return
+        url=self._pairing_qr_url(code)
+        mode="USB" if url.startswith("http://127.0.0.1:") else "Wi-Fi"
+        self.pair_text.config(
+            text=f"APPAIRAGE BAZOR • {mode}\n"
+                 f"Scanne ce QR avec le téléphone.\n"
+                 f"L'appairage se fera automatiquement.\n"
+                 f"Code secours : {code}"
+        )
+        if self._ensure_qr_modules():
+            try:
+                import qrcode
+                from PIL import ImageTk
+                qr=qrcode.QRCode(version=None,error_correction=qrcode.constants.ERROR_CORRECT_M,box_size=5,border=4)
+                qr.add_data(url)
+                qr.make(fit=True)
+                img=qr.make_image(fill_color="black",back_color="white").convert("RGB")
+                img=img.resize((156,156))
+                self.qr_photo=ImageTk.PhotoImage(img)
+                self.qr_label.config(image=self.qr_photo,text="",width=156,height=156)
+            except Exception:
+                self.qr_label.config(image="",text="QR indisponible",width=20,height=10)
+        else:
+            self.qr_label.config(image="",text="QR indisponible",width=20,height=10)
+        self.pair_frame.pack(fill="x", padx=10, pady=(0,8), before=self.tree if hasattr(self,"tree") else None)
+
     def _local_pairing_info(self, rotate=False):
         try:
             suffix = "?new=1" if rotate else ""
@@ -497,13 +570,15 @@ class Hub:
             self.security_code = str(info["code"])
             self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
             self.code_label.pack(side="right")
+            self.show_pairing_qr(self.security_code)
             return
         info = self._local_pairing_info(rotate=True)
         if info and info.get("code"):
             self.security_code = str(info["code"])
             self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
             self.code_label.pack(side="right")
-            self.summary.config(text="Clé d’appairage prête")
+            self.show_pairing_qr(self.security_code)
+            self.summary.config(text="Clé + QR d’appairage prêts")
 
     def new_pairing_code(self):
         info = self._local_pairing_info(rotate=True)
@@ -511,7 +586,8 @@ class Hub:
             self.security_code = str(info["code"])
             self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
             self.code_label.pack(side="right")
-            self.summary.config(text="Nouveau code d’appairage affiché")
+            self.show_pairing_qr(self.security_code)
+            self.summary.config(text="Nouveau QR d’appairage prêt")
         else:
             self.summary.config(text="Core non joignable pour l’appairage")
 
@@ -530,8 +606,10 @@ class Hub:
         if self.security_code:
             self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
             self.code_label.pack(side="right")
+            self.show_pairing_qr(self.security_code)
         else:
             self.code_label.pack_forget()
+            self.show_pairing_qr(None)
 
     def on_select(self, _evt=None):
         sel = self.tree.selection()
