@@ -469,14 +469,33 @@ def _generic_model_refusal(text):
 
 def _retry_mobile_refusal(prompt, route, result, provider):
     """Fallback limité aux sous-tâches techniques BAZOR.
-    1) autre modèle Ollama local ;
-    2) Mammouth seulement en mode AUTO et si configuré.
+    - provider=ollama : autre modèle Ollama local ;
+    - provider=auto : Ollama puis Mammouth si nécessaire ;
+    - provider=mammouth : aucun basculement local silencieux.
     """
     answer = result.get("answer", "") or result.get("message", "")
     if not _generic_model_refusal(answer):
         return route, result
 
     current = str(result.get("model") or route.get("model") or "")
+    explicit_provider = str(provider or "auto").lower()
+
+    # Un appel explicitement demandé à Mammouth ne doit jamais se transformer
+    # silencieusement en réponse Ollama. Sinon l'interface peut afficher
+    # "avis Mammouth" alors que le modèle réel est local (ex: mistral:latest).
+    if explicit_provider == "mammouth":
+        failed = dict(result or {})
+        failed["ok"] = False
+        failed["error"] = "generic_model_refusal"
+        failed["message"] = "Le modèle Mammouth demandé a refusé sans résultat exploitable."
+        route = dict(route or {})
+        route["fallback_blocked"] = "explicit_mammouth_provider"
+        journal("MOBILE_MODEL_REFUSAL", {
+            "provider": "mammouth", "model": current,
+            "reason": "generic_refusal_no_local_fallback"
+        })
+        return route, failed
+
     online, models = ollama_tags()
     if online:
         preferred = ("mistral:latest", "mistral", "gemma3:4b", "gemma3", "qwen2.5-coder:7b")
@@ -498,7 +517,7 @@ def _retry_mobile_refusal(prompt, route, result, provider):
                 })
                 return route, retry
 
-    if str(provider or "auto").lower() == "auto":
+    if explicit_provider == "auto":
         budget = mammouth_client.budget_status()
         if mammouth_client.configured() and not budget.get("blocked"):
             kind = classify_task(prompt)
