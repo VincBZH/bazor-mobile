@@ -1,5 +1,7 @@
 import hashlib
 import json
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -15,6 +17,8 @@ DATA.mkdir(parents=True, exist_ok=True)
 REPORT = DATA / "HUB_EXPERT_REVIEW.json"
 LOG = DATA / "HUB_LOGS" / "expert_review.log"
 LOG.parent.mkdir(parents=True, exist_ok=True)
+RESTART_STATE = DATA / "hub_verified_restart.json"
+HUB_RUNTIME_LOG = DATA / "HUB_LOGS" / "hub.log"
 
 FILES = [
     ROOT / "console-hub" / "bazor_console_hub.py",
@@ -35,6 +39,50 @@ def stamp(msg):
     print(line, flush=True)
     with LOG.open("a", encoding="utf-8") as f:
         f.write(line + "\n")
+
+def restart_hub_after_verified_update(digest):
+    """Sous Windows, recharge le Hub une seule fois par version validée."""
+    if os.name != "nt":
+        return False
+    try:
+        if RESTART_STATE.exists():
+            old = json.loads(RESTART_STATE.read_text(encoding="utf-8"))
+            if old.get("source_hash") == digest:
+                return False
+    except Exception:
+        pass
+
+    hub = ROOT / "console-hub" / "bazor_console_hub.py"
+    if not hub.exists():
+        stamp("Hub non relancé : script absent.")
+        return False
+
+    try:
+        ps = r"""Get-CimInstance Win32_Process |
+Where-Object { $_.CommandLine -match 'bazor_console_hub\.py' } |
+ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"""
+        subprocess.run(
+            ["powershell","-NoProfile","-ExecutionPolicy","Bypass","-Command",ps],
+            capture_output=True,text=True,timeout=12,
+            creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0)
+        )
+        time.sleep(0.6)
+        flags=getattr(subprocess,"CREATE_NO_WINDOW",0) | getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0)
+        log=open(HUB_RUNTIME_LOG,"a",encoding="utf-8",buffering=1)
+        subprocess.Popen(
+            [sys.executable,str(hub),"--centralize"],
+            cwd=str(ROOT),stdout=log,stderr=subprocess.STDOUT,
+            creationflags=flags
+        )
+        RESTART_STATE.write_text(
+            json.dumps({"source_hash":digest,"when":time.strftime("%Y-%m-%dT%H:%M:%S%z")},ensure_ascii=False,indent=2),
+            encoding="utf-8"
+        )
+        stamp("Hub relancé automatiquement avec la version validée.")
+        return True
+    except Exception as exc:
+        stamp("Relance Hub impossible : "+type(exc).__name__+": "+str(exc))
+        return False
 
 def source_hash():
     h = hashlib.sha256()
@@ -78,9 +126,13 @@ def main():
     if REPORT.exists():
         try:
             old = json.loads(REPORT.read_text(encoding="utf-8"))
-            if old.get("source_hash") == digest and old.get("status") in ("done","static_failed"):
+            if old.get("source_hash") == digest and old.get("status") == "done":
+                restart_hub_after_verified_update(digest)
                 stamp("Review déjà faite pour cette version - pas de nouvel appel Mammouth.")
                 return 0
+            if old.get("source_hash") == digest and old.get("status") == "static_failed":
+                stamp("Version déjà connue en échec statique - Hub non relancé.")
+                return 2
         except Exception:
             pass
 
@@ -92,6 +144,7 @@ def main():
         return 2
 
     stamp("Tests statiques OK.")
+    restart_hub_after_verified_update(digest)
     if not mammouth_client.configured():
         data = {"status": "mammouth_not_configured", "source_hash": digest, "tests": tests, "experts": []}
         REPORT.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
