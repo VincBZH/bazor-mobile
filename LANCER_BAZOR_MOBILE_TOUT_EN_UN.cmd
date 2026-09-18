@@ -26,7 +26,7 @@ if errorlevel 1 (
 powershell -NoProfile -Command "if(Get-NetTCPConnection -LocalPort 8776 -State Listen -ErrorAction SilentlyContinue){exit 0}else{exit 1}"
 if errorlevel 1 (
   echo [START] Interface Chrome 8776
-  start "BAZOR MOBILE WEB 8776" cmd /k "cd /d ""%CD%"" && python -m http.server 8776 --bind 0.0.0.0"
+  start "BAZOR MOBILE WEB 8776" cmd /k "cd /d ""%~dp0"" && python -m http.server 8776 --bind 0.0.0.0"
 ) else (
   echo [OK] Web 8776 deja actif.
 )
