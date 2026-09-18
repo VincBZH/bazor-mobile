@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.18.3",
+  "version": "2026.09.18.4",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -45,6 +45,12 @@
           "name": "Logs / diagnostic automatique",
           "order": 6,
           "next": "Centraliser blocages, logs, contrôles et propositions de correction."
+        },
+        {
+          "id": "action-engine",
+          "name": "BAZOR Action Engine",
+          "order": 7,
+          "next": "Appliquer des modifications réelles de fichiers avec sauvegarde, tests, preuves et rollback automatique."
         }
       ]
     },
@@ -267,6 +273,12 @@
           "name": "Français uniquement",
           "order": 7,
           "next": "Détecter et masquer les caractères cyrilliques inattendus dans l'interface."
+        },
+        {
+          "id": "usb-android",
+          "name": "USB Android / ADB",
+          "order": 8,
+          "next": "Utiliser ADB reverse 8775/8776 pour l’accès mobile local et préparer la validation biométrique via localhost."
         }
       ]
     },
