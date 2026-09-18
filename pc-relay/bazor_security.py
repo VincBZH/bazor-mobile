@@ -19,8 +19,12 @@ class BazorSecurity:
         self._pair_code = None
         self._pair_expires = 0
         self._last_pair_display = 0
+        self._last_pair_success = 0
         self.state = self._load()
-        self.rotate_pair_code(force=not bool(self.state.get("devices")))
+        # Après un appairage réussi, aucun nouveau code n'est créé au démarrage.
+        # Un code n'existe que pour le premier appairage ou sur demande explicite.
+        if not bool(self.state.get("devices")):
+            self.rotate_pair_code(force=True)
 
     def _load(self):
         if self.state_file.exists():
@@ -69,9 +73,12 @@ class BazorSecurity:
             return self._pair_code
 
     def pairing_console_text(self):
-        code = self.rotate_pair_code()
+        if not self._pair_code or time.time() >= self._pair_expires:
+            if self.state.get("devices"):
+                return "[SECURITY] Telephone deja appaire - aucun code d'appairage actif."
+            self.rotate_pair_code(force=True)
         mins = max(0, int((self._pair_expires - time.time()) / 60))
-        return f"[SECURITY] Code appairage mobile: {code} (expire ~{mins} min)"
+        return f"[SECURITY] Code appairage mobile: {self._pair_code} (expire ~{mins} min)"
 
     def request_pairing_display(self, ip=None):
         """Rotate/print a fresh code on the PC only. Never return the code to the requester."""
@@ -94,6 +101,8 @@ class BazorSecurity:
                 "pairing_required": len(self.state.get("devices", {})) == 0,
                 "pairing_available": True,
                 "pairing_expires_in": max(0, int(self._pair_expires - time.time())),
+                "pairing_active": bool(self._pair_code and time.time() < self._pair_expires),
+                "pairing_guard_seconds": max(0, int(20 - (time.time() - self._last_pair_success))) if self._last_pair_success else 0,
                 "mode": "device-proof",
                 "vpn_tolerant": bool(self.state.get("settings", {}).get("allow_private_vpn", True)),
                 "require_auth": bool(self.state.get("settings", {}).get("require_auth", True)),
@@ -121,7 +130,10 @@ class BazorSecurity:
             }
             self._save()
             self._event("DEVICE_PAIRED", {"device_id": device_id, "name": device_name, "ip": ip})
-            self.rotate_pair_code(force=True)
+            # Le code vient d'être consommé : on l'invalide sans en créer un nouveau.
+            self._pair_code = None
+            self._pair_expires = 0
+            self._last_pair_success = time.time()
             return {"ok": True, "device_id": device_id, "secret": secret, "name": device_name}
 
     def challenge(self, device_id, ip):
