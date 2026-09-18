@@ -107,6 +107,23 @@ jobs:
           assert d["choices"][0]["message"]["content"]=="OK"
           print("Mammouth multi-JSON parser OK")
           PY
+      - name: Predefined task queue safety regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
+          assert "[bazor-task:" in watcher
+          assert "def _registry_task(" in watcher
+          assert "unknown_registry_task" in watcher
+          assert '"provider":"auto","apply_actions":True' in watcher
+          assert "ACTION_SANDBOX" in Path("pc-relay/bazor_action_engine.py").read_text(encoding="utf-8")
+          # La file distante ne prend qu'un ID du registre; le corps de l'issue
+          # ne devient ni commande shell ni texte de modification arbitraire.
+          task_loop=watcher[watcher.index('if title.startswith("[bazor-task:")'):]
+          assert "_run_registry_task(task_id)" in task_loop
+          assert "issue.get(\"body\")" not in task_loop.split('if title.startswith("[bazor-mammouth")')[0]
+          print("Predefined task queue safety OK")
+          PY
       - name: Mammouth task profile regression
         run: |
           python - <<'PY'
