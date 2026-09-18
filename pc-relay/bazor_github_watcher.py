@@ -137,7 +137,7 @@ def safe_update():
             LAST_HEAD=remote
 
             # Actions locales PREDEFINIES uniquement : aucun ordre shell ne vient de GitHub.
-            if any(x in changed for x in ("pc-relay/bazor_pc_relay_v3.py","pc-relay/mammouth_client.py","pc-relay/bazor_security.py")):
+            if any(x in changed for x in ("pc-relay/bazor_pc_relay_v3.py","pc-relay/mammouth_client.py","pc-relay/bazor_security.py","pc-relay/bazor_action_engine.py")):
                 maybe_restart_core("mise a jour de code")
 
             if any(
