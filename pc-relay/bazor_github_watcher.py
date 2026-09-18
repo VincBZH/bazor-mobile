@@ -742,7 +742,9 @@ while True:
                     lines=[QUALIFY_MARK,"","**BAZOR Studio — qualification locale**","",f"Résultat: {'OPÉRATIONNEL' if result.get('ok') else 'NON OPÉRATIONNEL'}",f"Tests: {s.get('passed',0)}/{s.get('total',0)} • {s.get('percent',0)}%",f"Échecs: P0={s.get('p0_failed',0)} • P1={s.get('p1_failed',0)} • P2={s.get('p2_failed',0)}",""]
                     if fails:
                         lines.append("**Échecs détectés**")
-                        for x in fails[:35]: lines.append(f"- {x.get('severity')} {x.get('id')} — {x.get('name')}: {str(x.get('detail') or '')[:700]}")
+                        for x in fails[:35]:
+                            ev=json.dumps(x.get("evidence") or {},ensure_ascii=False,separators=(",",":"))
+                            lines.append(f"- {x.get('severity')} {x.get('id')} — {x.get('name')}: {str(x.get('detail') or '')[:700]} • evidence={ev[:1200]}")
                     else: lines.append("Aucun échec détecté.")
                     lines += ["","Rapport local: "+str(result.get("report_file") or "?")]
                     if result.get("stderr"): lines += ["","stderr (fin):",str(result.get("stderr"))[-2000:]]
