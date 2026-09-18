@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.18.1",
+  "version": "2026.09.18.2",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -213,9 +213,55 @@
       ]
     },
     {
+      "id": "bazor-security",
+      "name": "BAZOR Security Tool",
+      "order": 6,
+      "default_progress": 20,
+      "summary": "Appairage mobile, authentification des appareils, alertes et validations sensibles.",
+      "local_root": "%USERPROFILE%\\bazor-mobile\\pc-relay",
+      "subprojects": [
+        {
+          "id": "pairing",
+          "name": "Appairage téléphone ↔ PC",
+          "order": 1,
+          "next": "Appairer le téléphone avec le code temporaire affiché sur le PC."
+        },
+        {
+          "id": "auth",
+          "name": "Authentification appareil",
+          "order": 2,
+          "next": "Utiliser une preuve à usage unique pour chaque requête sensible."
+        },
+        {
+          "id": "approvals",
+          "name": "Validations / autorisations",
+          "order": 3,
+          "next": "Afficher et accepter/refuser les actions sensibles depuis le téléphone."
+        },
+        {
+          "id": "alerts",
+          "name": "Alertes sécurité",
+          "order": 4,
+          "next": "Prévenir immédiatement en cas d'appareil inconnu, preuve invalide ou changement réseau suspect."
+        },
+        {
+          "id": "vpn",
+          "name": "Wi-Fi local / VPN",
+          "order": 5,
+          "next": "Tolérer le VPN sans utiliser l'IP comme preuve d'identité."
+        },
+        {
+          "id": "language",
+          "name": "Français uniquement",
+          "order": 6,
+          "next": "Détecter et masquer les caractères cyrilliques inattendus dans l'interface."
+        }
+      ]
+    },
+    {
       "id": "festival",
       "name": "BAZOR Festival",
-      "order": 6,
+      "order": 7,
       "default_progress": 10,
       "summary": "Univers musical et festival numérique BAZOR.",
       "subprojects": [
