@@ -294,11 +294,57 @@ def _http_502_endpoints(text,limit=8):
             counts[path]=counts.get(path,0)+1
     return sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:limit]
 
-def diagnostic_summary(force_usb=False):
+
+def _task_start_smoke():
+    rid="diag-go-"+str(int(time.time()))
+    payload={
+        "project_id":"bazor-security",
+        "subproject_name":"Diagnostic GO local",
+        "task":"Diagnostic uniquement. Ne modifie aucun fichier. Termine par STATUS: OK, PROGRESS: 0, SUMMARY: test local, NEXT: aucun.",
+        "current_progress":0,
+        "repair":False,
+        "previous":"",
+        "provider":"ollama",
+        "request_id":rid,
+        "async":True,
+        "apply_actions":False,
+    }
+    data=json.dumps(payload,ensure_ascii=False).encode("utf-8")
+    req=urllib.request.Request(
+        "http://127.0.0.1:8775/api/v1/task",
+        data=data,
+        headers={"Content-Type":"application/json"},
+        method="POST",
+    )
+    started=time.monotonic()
+    try:
+        with urllib.request.urlopen(req,timeout=6.0) as r:
+            raw=r.read().decode("utf-8","replace")
+            status=getattr(r,"status",200)
+        body=json.loads(raw) if raw else {}
+        return {
+            "ok":status in (200,202) and bool(body.get("ok")),
+            "http":status,
+            "job_state":body.get("job_state"),
+            "request_id_match":body.get("request_id")==rid,
+            "elapsed_ms":int((time.monotonic()-started)*1000),
+        }
+    except Exception as e:
+        return {
+            "ok":False,
+            "error":type(e).__name__,
+            "detail":_sanitize_diag_text(str(e)),
+            "elapsed_ms":int((time.monotonic()-started)*1000),
+        }
+
+def diagnostic_summary(force_usb=False, task_smoke=False):
     usb_result=None
+    smoke_result=None
     if force_usb:
         usb_result=_force_usb_localhost(open_phone=True)
         time.sleep(1.5)
+    if task_smoke:
+        smoke_result=_task_start_smoke()
 
     data_dir=os.path.join(ROOT,"pc-relay","BAZOR_DATA")
     usb=_read_json(os.path.join(data_dir,"usb_android_status.json"))
@@ -323,6 +369,8 @@ def diagnostic_summary(force_usb=False):
     ]
     if usb_result is not None:
         lines.append("- Forçage USB localhost: "+json.dumps(usb_result,ensure_ascii=False,separators=(",",":")))
+    if smoke_result is not None:
+        lines.append("- Smoke /api/v1/task: "+json.dumps(smoke_result,ensure_ascii=False,separators=(",",":")))
     if task:
         lines.append("- Dernière tâche GO: "+json.dumps(task,ensure_ascii=False,separators=(",",":")))
     lines += [
@@ -386,7 +434,7 @@ while True:
                     if DIAG_MARK in comments: continue
                     print(f"[DIAG] #{issue['number']} {issue['title']}")
                     body=(issue.get("body") or "").lower()
-                    reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body))
+                    reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body),task_smoke=("task-smoke" in body or "task smoke" in body))
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
                     continue
