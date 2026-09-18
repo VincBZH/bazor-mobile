@@ -1,4 +1,4 @@
-import json, subprocess, time, urllib.request, os, sys
+import json, subprocess, time, urllib.request, os, sys, re
 
 REPO="VincBZH/bazor-mobile"
 CORE="http://127.0.0.1:8775/api/v1/chat"
