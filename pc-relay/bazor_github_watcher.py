@@ -10,13 +10,18 @@ LAST_HEAD=None
 def safe_update():
     global LAST_HEAD
     try:
-        remote=gh(["api",f"repos/{REPO}/commits/main","--jq",".sha"]).strip()
-        local=gh(["-C",ROOT,"rev-parse","HEAD"]).strip()
+        # Ne depend pas de sous-commandes gh non portables : Git fait le controle MAJ.
+        p=subprocess.run(["git","-C",ROOT,"fetch","origin","main"],capture_output=True,text=True,encoding="utf-8",errors="replace")
+        if p.returncode:
+            print("[BLOQUE UPDATE] git fetch :", (p.stderr or p.stdout).strip())
+            return
+        local=subprocess.run(["git","-C",ROOT,"rev-parse","HEAD"],capture_output=True,text=True,encoding="utf-8",errors="replace").stdout.strip()
+        remote=subprocess.run(["git","-C",ROOT,"rev-parse","origin/main"],capture_output=True,text=True,encoding="utf-8",errors="replace").stdout.strip()
         if remote and remote != local:
             print("[UPDATE] Nouvelle version BAZOR detectee :",remote[:7])
-            p=subprocess.run(["git","-C",ROOT,"pull","--ff-only"],capture_output=True,text=True,encoding="utf-8",errors="replace")
+            p=subprocess.run(["git","-C",ROOT,"merge","--ff-only","origin/main"],capture_output=True,text=True,encoding="utf-8",errors="replace")
             if p.returncode:
-                print("[BLOQUE UPDATE]",p.stderr.strip() or p.stdout.strip())
+                print("[BLOQUE UPDATE]",(p.stderr or p.stdout).strip())
             else:
                 print("[OK UPDATE] BAZOR mis a jour :",remote[:7])
                 LAST_HEAD=remote
@@ -24,7 +29,6 @@ def safe_update():
             LAST_HEAD=local
     except Exception as e:
         print("[BLOQUE UPDATE]",type(e).__name__,str(e))
-
 def gh(args):
     p=subprocess.run(["gh"]+args,capture_output=True,text=True,encoding="utf-8",errors="replace")
     if p.returncode: raise RuntimeError(p.stderr.strip() or p.stdout.strip())
