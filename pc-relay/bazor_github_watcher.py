@@ -9,6 +9,7 @@ POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 DIAG_MARK="[BAZOR-DIAG-DONE]"
 MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
+TASK_MARK="[BAZOR-TASK-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
@@ -457,6 +458,213 @@ def core_mammouth_task(title, body):
     with urllib.request.urlopen(req,timeout=260) as r:
         return json.loads(r.read().decode("utf-8"))
 
+def _core_task(payload, timeout=420):
+    data=json.dumps(payload,ensure_ascii=False).encode("utf-8")
+    req=urllib.request.Request(
+        "http://127.0.0.1:8775/api/v1/task",
+        data=data,
+        headers={"Content-Type":"application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req,timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+def _mobile_state_get():
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8775/api/v1/mobile-state",timeout=5) as r:
+            data=json.loads(r.read().decode("utf-8"))
+        return data.get("state") or {}
+    except Exception:
+        return {}
+
+def _mobile_state_put(state):
+    data=json.dumps({"state":state},ensure_ascii=False).encode("utf-8")
+    req=urllib.request.Request(
+        "http://127.0.0.1:8775/api/v1/mobile-state",
+        data=data,headers={"Content-Type":"application/json"},method="POST"
+    )
+    with urllib.request.urlopen(req,timeout=8) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+def _registry_task(task_id):
+    path=os.path.join(ROOT,"bazor_registry.json")
+    try:
+        data=json.load(open(path,"r",encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError("registry_unreadable: "+str(exc))
+    wanted=str(task_id or "").strip().upper()
+    for project in data.get("projects",[]):
+        for task in project.get("tasks",[]):
+            if str(task.get("id") or "").upper()==wanted:
+                subs={x.get("id"):x for x in project.get("subprojects",[])}
+                sub=subs.get(task.get("subproject")) or {}
+                return project,task,sub
+    raise RuntimeError("unknown_registry_task:"+wanted)
+
+def _task_state_snapshot(project_id):
+    state=_mobile_state_get()
+    client=state.get("client_state") or {}
+    return state,client,((client.get("taskStates") or {}).get(project_id) or {})
+
+def _task_update_mobile(project, task, status, summary, result=None, reviews=None):
+    state,client,_=_task_state_snapshot(project.get("id"))
+    client.setdefault("taskStates",{})
+    client["taskStates"].setdefault(project.get("id"),{})
+    slot=client["taskStates"][project.get("id")].setdefault(task.get("id"),{})
+    slot.update({
+        "status":status,
+        "summary":str(summary or "")[:1200],
+        "updated":int(time.time()*1000),
+        "last_engine":(result or {}).get("engine"),
+        "last_model":(result or {}).get("model"),
+        "reviews":reviews or [],
+    })
+    execution=(result or {}).get("execution") or {}
+    ar=execution.get("action_result") or {}
+    if execution.get("mode")=="file_changes" and ar.get("applied"):
+        slot["evidence"]={
+            "real":True,"when":int(time.time()*1000),
+            "request_id":ar.get("request_id"),
+            "files":ar.get("files") or [],
+            "tests":ar.get("tests") or [],
+            "preflight":ar.get("preflight"),
+            "backup_dir":ar.get("backup_dir"),
+            "report_file":ar.get("report_file"),
+            "engine":(result or {}).get("engine"),
+            "model":(result or {}).get("model"),
+        }
+    elif status=="VERIFIE":
+        slot["evidence"]={
+            "verified":True,"when":int(time.time()*1000),
+            "engine":(result or {}).get("engine"),
+            "model":(result or {}).get("model"),
+            "context_files":((result or {}).get("local_context") or {}).get("files") or [],
+        }
+    else:
+        slot["evidence"]=None
+
+    # Mettre aussi à jour le statut projet pour que le résumé mobile soit cohérent.
+    projects=client.setdefault("projects",[])
+    pstate=next((x for x in projects if x.get("id")==project.get("id")),None)
+    if pstate:
+        task_states=client["taskStates"][project.get("id")]
+        defs=project.get("tasks") or []
+        done=sum(1 for x in defs if (task_states.get(x.get("id")) or {}).get("status") in ("DONE","VERIFIE"))
+        pstate["progress"]=round(100*done/max(1,len(defs)))
+        pstate["status"]="BLOQUE" if status=="BLOCKED" else ("OK" if done==len(defs) else "A_FAIRE")
+        remaining=next((x for x in defs if (task_states.get(x.get("id")) or {}).get("status") not in ("DONE","VERIFIE")),None)
+        pstate["next"]=(remaining or {}).get("title") or "Contrôle final"
+
+    state["client_state"]=client
+    state["taskboard_updated_at"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        _mobile_state_put(state)
+    except Exception as exc:
+        print("[TASK STATE WARN]",type(exc).__name__,str(exc)[:180])
+
+def _run_registry_task(task_id):
+    project,task,sub=_registry_task(task_id)
+    if project.get("go_compatible") is False:
+        return {"ok":False,"task_status":"BLOCKED","error":"project_not_executable","detail":project.get("go_reason") or ""}
+
+    state,client,task_states=_task_state_snapshot(project.get("id"))
+    missing=[dep for dep in task.get("dependencies",[]) if (task_states.get(dep) or {}).get("status") not in ("DONE","VERIFIE")]
+    if missing:
+        detail="Dépendances non terminées: "+", ".join(missing)
+        _task_update_mobile(project,task,"BLOCKED",detail)
+        return {"ok":False,"task_status":"BLOCKED","error":"dependencies_not_done","detail":detail}
+
+    criteria="\n".join(f"{i+1}. {x}" for i,x in enumerate(task.get("acceptance") or []))
+    base_prompt=(
+        "TÂCHE BAZOR PRÉDÉFINIE "+str(task.get("id"))+" — "+str(task.get("title"))+"\n"
+        "ACTION ATTENDUE:\n"+str(task.get("action") or "")+"\n"
+        "CRITÈRES DE DONE:\n"+criteria+"\n"
+        "RÈGLE DE PREUVE: "+str(task.get("proof_required") or "file_changes_and_tests")+"\n"
+        "Si les critères sont déjà satisfaits dans les fichiers réellement lus et qu’aucune modification n’est nécessaire, "
+        "n’invente aucun changement et commence SUMMARY par DEJA_CONFORME:. Sinon, propose uniquement des BAZOR_ACTIONS minimales, ciblées et vérifiables."
+    )
+
+    reviews=[]
+    profiles=[str(x).lower() for x in (task.get("preferred_models") or []) if str(x).strip()]
+    profiles=profiles[:2 if task.get("priority")=="P0" else 1]
+    for profile in profiles:
+        review_payload={
+            "project_id":project.get("id"),
+            "subproject_name":"Revue "+str(task.get("id"))+" / "+str(sub.get("name") or task.get("subproject") or "Studio"),
+            "task":"SECONDE LECTURE MAMMOUTH. Ne modifie rien et n'émets pas BAZOR_ACTIONS. "
+                   "Donne seulement les constats confirmés dans les fichiers, risques, correctif minimal et tests.\n\n"+base_prompt,
+            "current_progress":0,"repair":False,"previous":"",
+            "provider":"mammouth","mammouth_profile":profile,"apply_actions":False,
+        }
+        try:
+            rv=_core_task(review_payload,timeout=300)
+            reviews.append({
+                "profile":profile,"ok":bool(rv.get("ok")),
+                "engine":rv.get("engine"),"model":rv.get("model"),
+                "summary":str(rv.get("summary") or "")[:500],
+                "answer":str(rv.get("answer") or "")[:3500],
+            })
+        except Exception as exc:
+            reviews.append({"profile":profile,"ok":False,"engine":"mammouth","model":None,"summary":str(exc)[:300],"answer":""})
+
+    useful=[]
+    for rv in reviews:
+        if rv.get("ok") and rv.get("answer"):
+            useful.append("AVIS "+str(rv.get("profile"))+" (modèle réel: "+str(rv.get("model") or rv.get("engine") or "?")+"):\n"+str(rv.get("answer"))[:2500])
+    final_prompt=base_prompt
+    if useful:
+        final_prompt+="\n\nSECOND AVIS À PRENDRE EN COMPTE SANS LE SUIVRE AVEUGLÉMENT:\n"+"\n\n".join(useful)
+
+    payload={
+        "project_id":project.get("id"),
+        "subproject_name":str(task.get("id"))+" / "+str(sub.get("name") or task.get("subproject") or "Studio"),
+        "task":final_prompt,
+        "current_progress":0,"repair":False,"previous":"",
+        "provider":"auto","apply_actions":True,
+    }
+    result=_core_task(payload,timeout=420)
+    execution=result.get("execution") or {}
+    ar=execution.get("action_result") or {}
+    real=execution.get("mode")=="file_changes" and bool(ar.get("applied"))
+    tests=ar.get("tests") or []
+    tests_ok=all(x.get("ok") for x in tests)
+    text=(str(result.get("summary") or "")+"\n"+str(result.get("answer") or ""))
+    already=bool(re.search(r"DEJA_CONFORME\s*:",text,re.I))
+    blocked=(result.get("status")=="BLOQUE") or (not result.get("ok"))
+
+    # Une première analyse seule n'est pas un succès : une seule relance explicite.
+    if not real and not already and not blocked:
+        retry=dict(payload)
+        retry["repair"]=True
+        retry["previous"]=str(result.get("answer") or "")[:5000]
+        result=_core_task(retry,timeout=420)
+        execution=result.get("execution") or {}
+        ar=execution.get("action_result") or {}
+        real=execution.get("mode")=="file_changes" and bool(ar.get("applied"))
+        tests=ar.get("tests") or []
+        tests_ok=all(x.get("ok") for x in tests)
+        text=(str(result.get("summary") or "")+"\n"+str(result.get("answer") or ""))
+        already=bool(re.search(r"DEJA_CONFORME\s*:",text,re.I))
+        blocked=(result.get("status")=="BLOQUE") or (not result.get("ok"))
+
+    if real and tests_ok:
+        task_status="DONE"; summary=str(result.get("summary") or "Correction appliquée et testée")
+    elif already and not blocked:
+        task_status="VERIFIE"; summary=str(result.get("summary") or "Déjà conforme vérifié")
+    elif blocked:
+        task_status="BLOCKED"; summary=str(result.get("summary") or result.get("detail") or "Blocage")
+    else:
+        task_status="ANALYSE_SEULE"; summary="ANALYSE SEULE — aucune modification prouvée"
+
+    _task_update_mobile(project,task,task_status,summary,result=result,reviews=reviews)
+    return {
+        "ok":task_status in ("DONE","VERIFIE"),
+        "task_id":task.get("id"),"task_status":task_status,
+        "summary":summary,"engine":result.get("engine"),"model":result.get("model"),
+        "reviews":reviews,"execution":execution,
+        "answer":str(result.get("answer") or "")[:7000],
+    }
+
 def answer_text(result):
     for section in ("mammouth","ollama"):
         o=result.get(section) or {}
@@ -474,7 +682,7 @@ print("=== BAZOR GITHUB WATCHER V1 ===")
 print("Repo :",REPO)
 print("Core :",CORE)
 print("Polling : 10 s")
-print("Aucun shell distant : [bazor-queue] -> IA locale; [bazor-mammouth:profil] -> revue Mammouth avec contexte local; [bazor-diag] -> diagnostic local filtre.")
+print("Aucun shell distant : [bazor-task:ID] -> tâche prédéfinie + sandbox; [bazor-mammouth:profil] -> revue; [bazor-queue] -> IA locale; [bazor-diag] -> diagnostic.")
 print()
 
 while True:
@@ -493,6 +701,32 @@ while True:
                     reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body),task_smoke=("task-smoke" in body or "task smoke" in body))
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
+                    continue
+                if title.startswith("[bazor-task:"):
+                    if TASK_MARK in comments: continue
+                    m=re.match(r"(?i)^\[bazor-task:([^\]]+)\]",issue.get("title") or "")
+                    if not m:
+                        continue
+                    task_id=m.group(1).strip().upper()
+                    print(f"[TASK] #{issue['number']} {task_id}")
+                    result=_run_registry_task(task_id)
+                    ex=result.get("execution") or {}; ar=ex.get("action_result") or {}
+                    pre=(ar.get("preflight") or {})
+                    proof=(
+                        f"\n\nPreflight sandbox: {'OK' if pre.get('ok') else '—'}"
+                        f"\nFichiers modifiés: {len(ar.get('files') or [])}"
+                        f"\nTests cible: {sum(1 for x in (ar.get('tests') or []) if x.get('ok'))}/{len(ar.get('tests') or [])}"
+                    )
+                    review_lines="\n".join(
+                        "- "+str(x.get("profile"))+" → "+str(x.get("model") or x.get("engine") or "?")+" : "+("OK" if x.get("ok") else "HS")
+                        for x in result.get("reviews") or []
+                    )
+                    reply=TASK_MARK+"\n\n**BAZOR Task — "+task_id+"**\n\nStatut: "+str(result.get("task_status"))+"\nRésumé: "+str(result.get("summary") or "")+proof
+                    if review_lines:
+                        reply+="\n\nSecondes lectures:\n"+review_lines
+                    reply+="\n\nMoteur final: "+str(result.get("engine") or "?")+" / "+str(result.get("model") or "?")
+                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
+                    print(f"[OK TASK] #{issue['number']} {task_id} -> {result.get('task_status')}")
                     continue
                 if title.startswith("[bazor-mammouth"):
                     if MAMMOUTH_MARK in comments: continue
