@@ -10,6 +10,7 @@ on:
       - "pc-relay/bazor_action_engine.py"
       - "bazor_registry.json"
       - "index.html"
+      - "BAZOR_ENCYCLOPEDIA.md"
       - ".github/workflows/bazor-console-hub-ci.yml"
   workflow_dispatch:
 
@@ -45,6 +46,9 @@ jobs:
           Path("/tmp/bazor-mobile.js").write_text("\n".join(scripts),encoding="utf-8")
           assert "projectGoCompatible" in html, "GO compatibility guard missing"
           assert 'status:"INCOMPATIBLE"' in html, "incompatible GO result missing"
+          assert "function goTask(" in html, "dynamic task executor missing"
+          assert "taskStates" in html and "TÂCHES DYNAMIQUES" in html, "dynamic task board missing"
+          assert "SECONDE LECTURE MAMMOUTH" in html, "Mammouth review stage missing"
           print("Mobile UI extraction OK")
           PY
           node --check /tmp/bazor-mobile.js
@@ -61,8 +65,24 @@ jobs:
           for proj in data["projects"]:
               subs=[x["id"] for x in proj.get("subprojects",[])]
               assert len(subs)==len(set(subs)), f"duplicate subproject ids in {proj['id']}"
+              tasks=proj.get("tasks",[])
+              tids=[x["id"] for x in tasks]
+              assert len(tids)==len(set(tids)), f"duplicate task ids in {proj['id']}"
+              known=set(tids)
+              for task in tasks:
+                  assert task.get("priority") in ("P0","P1","P2"), f"bad priority {task.get('id')}"
+                  assert task.get("action"), f"missing action {task.get('id')}"
+                  assert task.get("acceptance"), f"missing acceptance {task.get('id')}"
+                  assert task.get("proof_required"), f"missing proof rule {task.get('id')}"
+                  missing=[x for x in task.get("dependencies",[]) if x not in known]
+                  assert not missing, f"unknown dependencies {task.get('id')}: {missing}"
           assert any(p["id"]=="bazor-security" for p in data["projects"])
-          print("Registry OK:",len(data["projects"]),"projects")
+          studio=next(p for p in data["projects"] if p["id"]=="simple-studio")
+          assert len(studio.get("tasks",[])) >= 10, "Studio task board too small"
+          assert any(t["id"]=="STUDIO-P0-003" for t in studio["tasks"]), "H3 critical task missing"
+          assert data.get("knowledge_base")=="BAZOR_ENCYCLOPEDIA.md", "knowledge base link missing"
+          assert Path("BAZOR_ENCYCLOPEDIA.md").exists(), "encyclopedia missing"
+          print("Registry OK:",len(data["projects"]),"projects,",len(studio["tasks"]),"Studio tasks")
           PY
       - name: Security invariants
         run: |
@@ -86,6 +106,23 @@ jobs:
           d=m._parse_api_json(sample)
           assert d["choices"][0]["message"]["content"]=="OK"
           print("Mammouth multi-JSON parser OK")
+          PY
+      - name: Predefined task queue safety regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
+          assert "[bazor-task:" in watcher
+          assert "def _registry_task(" in watcher
+          assert "unknown_registry_task" in watcher
+          assert '"provider":"auto","apply_actions":True' in watcher
+          assert "ACTION_SANDBOX" in Path("pc-relay/bazor_action_engine.py").read_text(encoding="utf-8")
+          # La file distante ne prend qu'un ID du registre; le corps de l'issue
+          # ne devient ni commande shell ni texte de modification arbitraire.
+          task_loop=watcher[watcher.index('if title.startswith("[bazor-task:")'):]
+          assert "_run_registry_task(task_id)" in task_loop
+          assert "issue.get(\"body\")" not in task_loop.split('if title.startswith("[bazor-mammouth")')[0]
+          print("Predefined task queue safety OK")
           PY
       - name: Mammouth task profile regression
         run: |
@@ -145,7 +182,27 @@ jobs:
               assert len(actions)==1, actions
               result=eng.apply("demo",actions,"ci")
               assert result["ok"] and result["applied"], result
+              assert result["preflight"] and result["preflight"]["ok"], result
+              assert Path(result["preflight"]["sandbox_dir"]).exists(), result
+              assert all(t["ok"] for t in result["preflight"]["tests"]), result
+              if result["preflight"]["git"]["available"]:
+                  assert result["preflight"]["git"]["baseline"], result
+                  assert result["preflight"]["git"]["diff_check"] is True, result
               assert p.read_text(encoding="utf-8")=="x = 2\n"
               assert all(t["ok"] for t in result["tests"]), result
-              print("Action Engine OK")
+
+              # Une candidate invalide doit échouer AVANT d'écrire dans la cible.
+              bad=[{"op":"replace","root":"test","path":"demo.py","find":"x = 2","replace":"def broken(:\n","expected_count":1}]
+              failed=eng.apply("demo",bad,"ci-bad")
+              assert not failed["ok"] and failed["error"]=="preflight_failed", failed
+              assert p.read_text(encoding="utf-8")=="x = 2\n", "target changed despite preflight failure"
+
+              # Le contexte doit prioriser les fichiers dont le nom correspond
+              # à la tâche, au lieu de prendre seulement les plus récents.
+              (root/"unrelated_recent.py").write_text("print('recent')\n",encoding="utf-8")
+              time_target=root/"MiniMax_H3_workflow.json"
+              time_target.write_text('{"clip_name":"qwen3vl_4b_int8_convrot.safetensors"}\n',encoding="utf-8")
+              ctx,report=eng.context_for_project("demo",max_files=1,focus="MiniMax H3 workflow clip_name")
+              assert report["files"] and report["files"][0]["path"]=="MiniMax_H3_workflow.json", report
+              print("Action Engine sandbox + target protection + focused context OK")
           PY

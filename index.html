@@ -21,7 +21,7 @@ main{max-width:760px;margin:auto;padding:10px}.card{background:var(--panel);bord
 .actions{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px}
 button,select,textarea{font:inherit}button{border:0;border-radius:10px;padding:8px 6px;font-size:11px;font-weight:850;background:var(--panel2);color:var(--text);border:1px solid var(--line);position:relative;transition:transform .07s ease,filter .1s ease,box-shadow .1s ease}
 button.primary{background:var(--accent);color:#07131c;border-color:transparent}button:active{transform:scale(.95);filter:brightness(1.15)}button.tap-confirm{box-shadow:0 0 0 2px rgba(66,212,131,.45)}button.tap-confirm::after{content:"✓";position:absolute;right:3px;top:2px;background:var(--ok);color:#07150d;border-radius:999px;font-size:9px;width:15px;height:15px;display:grid;place-items:center}
-.detail{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}.subrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #2a3039}.subrow:last-child{border-bottom:0}.subname{font-size:13px;font-weight:750}.submeta{font-size:10px;color:var(--muted);margin-top:3px}.subgo{padding:7px 9px;min-width:44px}
+.detail{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}.taskboard{margin-bottom:10px}.taskrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;padding:9px 0;border-bottom:1px solid #2a3039}.taskrow:last-child{border-bottom:0}.tasktitle{font-size:12px;font-weight:850}.taskmeta{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.35}.taskaccept{font-size:10px;color:#cdd5df;margin-top:4px}.prio{font-size:9px;font-weight:900;border-radius:999px;padding:3px 6px;background:#2a3039}.prio.p0{background:#4a2328;color:var(--bad)}.prio.p1{background:#443914;color:var(--warn)}.prio.p2{background:#123c56;color:#6dc8ff}.subrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #2a3039}.subrow:last-child{border-bottom:0}.subname{font-size:13px;font-weight:750}.submeta{font-size:10px;color:var(--muted);margin-top:3px}.subgo{padding:7px 9px;min-width:44px}
 .infobox{background:#15191f;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:7px;font-size:12px;line-height:1.35}.activity{border-color:#245f7f;background:#121b22}.checkpoint{display:flex;gap:6px;align-items:flex-start;margin-top:5px;font-size:11px}.dot{width:16px;height:16px;border-radius:999px;display:grid;place-items:center;background:#26313c;color:var(--accent);flex:0 0 16px}.dot.good{background:#173d2b;color:var(--ok)}.dot.bad{background:#472226;color:var(--bad)}
 .provider{font-size:10px;padding:5px 7px;background:#171b22;color:var(--text);border:1px solid var(--line);border-radius:9px;max-width:110px}
 textarea,select{width:100%;background:#15191f;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px}textarea{min-height:100px}
@@ -59,8 +59,8 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto29",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
-let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
+const APP_BUILD="2026.09.18-auto30",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},taskStates:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
 let SEC_DEVICE=null,SEC_STATUS=null;
@@ -251,8 +251,8 @@ async function updateRestartBazor(){
 
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 function toast(t){toastEl.textContent=t;toastEl.style.display="block";setTimeout(()=>toastEl.style.display="none",1800)}
-function statusClass(s){return s==="OK"?"ok":s==="BLOQUE"?"blocked":s==="EN_COURS"?"running":"todo"}
-function statusLabel(s){return s==="A_FAIRE"?"À FAIRE":s==="A_EVALUER"?"À ÉVALUER":s==="EN_COURS"?"EN COURS":s||"À ÉVALUER"}
+function statusClass(s){return ["OK","DONE","VERIFIE"].includes(s)?"ok":["BLOQUE","BLOCKED"].includes(s)?"blocked":["EN_COURS","RUNNING"].includes(s)?"running":"todo"}
+function statusLabel(s){return s==="A_FAIRE"?"À FAIRE":s==="A_EVALUER"?"À ÉVALUER":s==="EN_COURS"||s==="RUNNING"?"EN COURS":s==="DONE"?"TERMINÉ":s==="VERIFIE"?"VÉRIFIÉ":s==="ANALYSE_SEULE"?"ANALYSE SEULE":s==="TODO"?"À FAIRE":s==="BLOCKED"?"BLOQUÉ":s||"À ÉVALUER"}
 function log(what,tag="OK"){state.journal.unshift({id:uid(),what,tag,when:Date.now()});state.journal=state.journal.slice(0,250)}
 
 async function fetchTimeout(url,opts={},ms=3000){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opts,signal:c.signal})}finally{clearTimeout(t)}}
@@ -319,14 +319,18 @@ function ensureState(){
   const old=JSON.parse(localStorage.getItem(KEY)||"null");
   if(old&&old.projects)state=Object.assign(state,old);
   state.projects=Array.isArray(state.projects)?state.projects:[];
-  state.subprojects=state.subprojects||{};state.runs=state.runs||{};state.info=state.info||{};state.expanded=state.expanded||{};state.inbox=state.inbox||[];state.journal=state.journal||[];
+  state.subprojects=state.subprojects||{};state.taskStates=state.taskStates||{};state.runs=state.runs||{};state.info=state.info||{};state.expanded=state.expanded||{};state.inbox=state.inbox||[];state.journal=state.journal||[];
   for(const rp of REGISTRY.projects||[]){
     let p=state.projects.find(x=>x.id===rp.id);
     if(!p){p={id:rp.id,name:rp.name,status:"A_FAIRE",progress:rp.default_progress||0,next:(rp.subprojects?.[0]?.next||"À définir"),summary:rp.summary};state.projects.push(p)}
     p.name=rp.name;p.summary=p.summary||rp.summary;
     state.subprojects[rp.id]=state.subprojects[rp.id]||{};
+    state.taskStates[rp.id]=state.taskStates[rp.id]||{};
     for(const rc of rp.subprojects||[]){
       state.subprojects[rp.id][rc.id]=Object.assign({status:"A_EVALUER",progress:null,summary:"Pas encore évalué",next:rc.next,updated:null,evidence:null},state.subprojects[rp.id][rc.id]||{});
+    }
+    for(const t of rp.tasks||[]){
+      state.taskStates[rp.id][t.id]=Object.assign({status:t.status||"TODO",summary:"",updated:null,evidence:null,last_model:null,last_engine:null},state.taskStates[rp.id][t.id]||{});
     }
   }
   localSave(false);
@@ -393,13 +397,22 @@ function projectGoCompatible(id){return rp(id)?.go_compatible!==false}
 function projectGoReason(id){return rp(id)?.go_reason||"Projet non relié à une racine locale exécutable."}
 function children(id){return rp(id)?.subprojects||[]}
 function sp(pid,sid){return state.subprojects?.[pid]?.[sid]||{status:"A_EVALUER",progress:null,summary:"Pas encore évalué",next:"À définir"}}
+function taskDefs(pid){return (rp(pid)?.tasks||[]).slice().sort((a,b)=>(a.order||99)-(b.order||99))}
+function taskState(pid,tid){state.taskStates=state.taskStates||{};state.taskStates[pid]=state.taskStates[pid]||{};return state.taskStates[pid][tid]||(state.taskStates[pid][tid]={status:"TODO",summary:"",updated:null,evidence:null,last_model:null,last_engine:null})}
+function taskDepsDone(pid,t){return (t.dependencies||[]).every(id=>["DONE","VERIFIE"].includes(taskState(pid,id).status))}
+function nextTask(pid){const all=taskDefs(pid).filter(t=>!["DONE","VERIFIE"].includes(taskState(pid,t.id).status));return all.find(t=>taskDepsDone(pid,t))||all[0]||null}
 function nextSub(pid){return children(pid).find(c=>{const x=sp(pid,c.id);return x.status!=="OK"||x.progress===null||x.progress<100})||null}
-function overall(p){const vals=children(p.id).map(c=>sp(p.id,c.id).progress).filter(v=>typeof v==="number");return vals.length===children(p.id).length&&vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):(p.progress||0)}
+function overall(p){
+  const td=taskDefs(p.id);
+  if(td.length){const done=td.filter(t=>["DONE","VERIFIE"].includes(taskState(p.id,t.id).status)).length;return Math.round(done*100/td.length)}
+  const vals=children(p.id).map(c=>sp(p.id,c.id).progress).filter(v=>typeof v==="number");return vals.length===children(p.id).length&&vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):(p.progress||0)
+}
 function phrase(p){
   const r=state.runs[p.id];
   if(r?.active){const c=children(p.id).find(x=>x.id===r.subId);return "En cours : "+(c?.name||p.name)+" • "+(r.stage||"travail")}
   if(r?.blocked)return "Bloqué : "+(r.stage||"contrôle nécessaire");
   if(!projectGoCompatible(p.id))return "GO non relié : "+projectGoReason(p.id);
+  const t=nextTask(p.id);if(t)return "Priorité "+(t.priority||"")+" : "+t.title;
   const n=nextSub(p.id);if(!n)return "Tout est contrôlé.";
   const x=sp(p.id,n.id);return "À suivre : "+n.name+" • "+(x.next||n.next);
 }
@@ -433,24 +446,56 @@ function showEvidence(pid,sid){
   document.body.appendChild(e);
 }
 
+function showTaskEvidence(pid,tid){
+  const t=taskDefs(pid).find(x=>x.id===tid),s=taskState(pid,tid),ev=s.evidence;
+  document.getElementById("taskEvidenceModal")?.remove();
+  const e=document.createElement("div");e.id="taskEvidenceModal";e.className="modal";
+  let body='<div class="infobox"><b>AUCUNE PREUVE</b><div class="mini muted">La tâche n’est pas terminée avec une preuve exploitable.</div></div>';
+  if(ev?.real){
+    const files=(ev.files||[]).map(f=>'<div class="mini">✓ '+esc((f.root||"")+" : "+(f.path||""))+'</div>').join("");
+    const tests=(ev.tests||[]).map(x=>'<div class="mini">'+(x.ok?"✓":"!")+' '+esc(x.test||"test")+' • '+esc(x.ok?"OK":(x.detail||"ÉCHEC"))+'</div>').join("");
+    const pf=ev.preflight;const pfHtml=pf?'<div class="mini" style="margin-top:5px">🧪 Préflight sandbox: '+(pf.ok?'OK':'ÉCHEC')+(pf.git?.available?' • Git '+(pf.git?.diff_check===true?'diff OK':'à vérifier'):' • Git indisponible')+'</div>':'';body='<div class="infobox"><b>✅ MODIFICATION RÉELLE</b><div class="mini muted">'+(ev.files||[]).length+' fichier(s) • '+(ev.tests||[]).filter(x=>x.ok).length+'/'+(ev.tests||[]).length+' test(s) OK</div>'+pfHtml+files+tests+'</div>';
+  }else if(ev?.verified){
+    const files=(ev.context_files||[]).slice(0,12).map(f=>'<div class="mini">• '+esc((f.root||"")+" : "+(f.path||""))+'</div>').join("");
+    body='<div class="infobox"><b>✅ DÉJÀ CONFORME VÉRIFIÉ</b><div class="mini muted">Moteur '+esc(ev.engine||"")+" • modèle "+esc(ev.model||"")+'</div>'+files+'</div>';
+  }
+  e.innerHTML='<div class="row between"><h3>'+esc(t?.id||tid)+' • PREUVE</h3><button onclick="this.closest(\'#taskEvidenceModal\').remove()">Fermer</button></div>'+body+'<div class="mini muted" style="margin-top:7px">'+esc(s.summary||"")+'</div>';
+  document.body.appendChild(e);
+}
+function taskRows(p){
+  const defs=taskDefs(p.id);if(!defs.length)return "";
+  const rows=defs.map(t=>{
+    const s=taskState(p.id,t.id),depsOk=taskDepsDone(p.id,t),deps=(t.dependencies||[]).filter(id=>!["DONE","VERIFIE"].includes(taskState(p.id,id).status));
+    const ac=(t.acceptance||[]);const acText=ac.length?(ac.length+" critère(s) DONE • "+ac[0]):"";
+    const depText=depsOk?"":" • attend "+deps.join(", ");
+    const reviewText=(s.reviews||[]).length?" • avis "+(s.reviews||[]).map(r=>r.profile+":"+(r.ok?"OK":"HS")).join(", "):"";
+    return '<div class="taskrow"><div><div class="row"><span class="prio '+String(t.priority||"").toLowerCase()+'">'+esc(t.priority||"")+'</span><span class="tasktitle">'+esc(t.id+" • "+t.title)+'</span></div><div class="taskmeta">'+esc(statusLabel(s.status))+(s.last_engine?" • "+esc(s.last_engine+"/"+(s.last_model||"")):"")+esc(reviewText)+esc(depText)+'</div><div class="taskaccept">'+esc(acText)+'</div>'+(s.summary?'<div class="taskmeta">'+esc(s.summary)+'</div>':"")+'</div><div class="row"><button onclick="event.stopPropagation();showTaskEvidence(\''+p.id+'\',\''+t.id+'\')">PREUVE</button><button class="subgo '+(depsOk?"primary":"")+'" onclick="event.stopPropagation();goTask(\''+p.id+'\',\''+t.id+'\')">'+(depsOk?"GO":"ATTEND")+'</button></div></div>';
+  }).join("");
+  const done=defs.filter(t=>["DONE","VERIFIE"].includes(taskState(p.id,t.id).status)).length;
+  return '<div class="taskboard"><div class="row between"><b>TÂCHES DYNAMIQUES</b><span class="badge '+(done===defs.length?"ok":"todo")+'">'+done+'/'+defs.length+'</span></div><div class="mini muted" style="margin-top:4px">Ordre, dépendances, preuve et état central synchronisés.</div>'+rows+'</div>';
+}
+
 function subRows(p){
   return children(p.id).map(c=>{const x=sp(p.id,c.id),real=!!x.evidence?.real;return '<div class="subrow"><div><div class="subname">'+esc(c.name)+' '+(real?'<span class="badge ok">PREUVE ✓</span>':'<span class="badge todo">PAS DE PREUVE</span>')+'</div><div class="submeta">'+(x.progress===null?"—":x.progress+"%")+' • '+esc(statusLabel(x.status))+' • '+esc(x.summary||"")+'</div></div><div class="row"><button onclick="event.stopPropagation();showEvidence(\''+p.id+'\',\''+c.id+'\')">PREUVE</button><button class="subgo" onclick="event.stopPropagation();goSub(\''+p.id+'\',\''+c.id+'\')">GO</button></div></div>'}).join("");
 }
 function projectCard(p){
-  const open=!!state.expanded[p.id],info=state.info[p.id],r=state.runs[p.id],disp=r?.active?"EN_COURS":p.status,prog=overall(p),n=nextSub(p.id);
-  const infoHtml=info==="status"?'<div class="infobox"><b>STATUS</b><div style="margin-top:4px">'+esc(phrase(p))+'</div></div>':info==="next"?'<div class="infobox"><b>ÉTAPE SUIVANTE</b><div style="margin-top:4px">'+esc(n?(sp(p.id,n.id).next||n.next):"Aucune : projet contrôlé.")+'</div>'+(n?'<button class="primary wide" style="margin-top:7px" onclick="goSub(\''+p.id+'\',\''+n.id+'\')">GO MAINTENANT</button>':'')+'</div>':"";
+  const open=!!state.expanded[p.id],info=state.info[p.id],r=state.runs[p.id],disp=r?.active?"EN_COURS":p.status,prog=overall(p),n=nextSub(p.id),nt=nextTask(p.id);
+  const nextText=nt?(nt.id+" • "+nt.title+(taskDepsDone(p.id,nt)?"":" • dépendance en attente")):(n?(sp(p.id,n.id).next||n.next):"Aucune : projet contrôlé.");
+  const nextButton=nt?(taskDepsDone(p.id,nt)?'<button class="primary wide" style="margin-top:7px" onclick="goTask(\''+p.id+'\',\''+nt.id+'\')">GO '+esc(nt.id)+'</button>':''):(n?'<button class="primary wide" style="margin-top:7px" onclick="goSub(\''+p.id+'\',\''+n.id+'\')">GO MAINTENANT</button>':'');
+  const infoHtml=info==="status"?'<div class="infobox"><b>STATUS</b><div style="margin-top:4px">'+esc(phrase(p))+'</div></div>':info==="next"?'<div class="infobox"><b>ÉTAPE SUIVANTE</b><div style="margin-top:4px">'+esc(nextText)+'</div>'+nextButton+'</div>':"";
   return '<div class="card project"><div class="project-head" onclick="toggleProject(\''+p.id+'\')"><div class="row between"><div class="title">'+esc(p.name)+'</div><div class="row"><span class="badge '+statusClass(disp)+'">'+esc(statusLabel(disp))+'</span><span>'+ (open?"▲":"▼") +'</span></div></div><div class="project-meta"><div class="progress grow"><div style="width:'+prog+'%"></div></div><span class="mini">'+prog+'%</span></div><div class="project-phrase">'+esc(phrase(p))+'</div></div>'+
-  '<div class="actions"><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'status\')">STATUS</button><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'next\')">SUIVANTE</button><button class="primary" onclick="event.stopPropagation();goNext(\''+p.id+'\')">GO</button><button onclick="event.stopPropagation();goAuto(\''+p.id+'\')">AUTO</button></div>'+infoHtml+activityHtml(p)+(open?'<div class="detail">'+subRows(p)+'</div>':"")+'</div>';
+  '<div class="actions"><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'status\')">STATUS</button><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'next\')">SUIVANTE</button><button class="primary" onclick="event.stopPropagation();goNext(\''+p.id+'\')">GO</button><button onclick="event.stopPropagation();goAuto(\''+p.id+'\')">AUTO</button></div>'+infoHtml+activityHtml(p)+(open?'<div class="detail">'+taskRows(p)+subRows(p)+'</div>':"")+'</div>';
 }
 function renderHome(){
   const c=counts();home.innerHTML='<div class="infobox"><b>GO = travail prouvé uniquement si tu vois ✅ TRAVAIL RÉEL / PREUVE ✓</b><div class="mini muted">Sinon BAZOR t’indique clairement ANALYSE SEULE : aucun fichier n’a été modifié.</div></div><div class="summarybar"><div class="summarybox"><b>'+c.running+'</b><span class="mini muted">en cours</span></div><div class="summarybox"><b>'+c.blocked+'</b><span class="mini muted">bloqué</span></div><div class="summarybox"><b>'+c.todo+'</b><span class="mini muted">à faire</span></div></div>'+state.projects.sort((a,b)=>(rp(a.id)?.order||99)-(rp(b.id)?.order||99)).map(projectCard).join("");
 }
 function toggleProject(id){state.expanded[id]=!state.expanded[id];localSave()}
 function toggleInfo(id,t){state.info[id]=state.info[id]===t?null:t;localSave()}
-async function taskCall(pid,c,repair=false,previous=""){
+async function taskCall(pid,c,repair=false,previous="",taskText=null,requestTag=null,opts={}){
   if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
-  const x=sp(pid,c.id),requestId="mob-"+pid+"-"+c.id+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
-  const payload={project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(x.next||c.next),current_progress:x.progress??0,repair,previous,provider:providerMode.value,request_id:requestId,async:true,apply_actions:true};
+  const x=sp(pid,c.id),tag=requestTag||c.id,requestId="mob-"+pid+"-"+tag+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  const payload={project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(taskText||x.next||c.next),current_progress:x.progress??0,repair,previous,provider:opts.provider||providerMode.value,request_id:requestId,async:true,apply_actions:opts.apply_actions!==false};
+  if(opts.mammouth_profile)payload.mammouth_profile=opts.mammouth_profile;
   let start=await signedFetch("/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),bazorRetrySafe:true},8000);
   if(start.job_state==="done"||start.job_state==="error")return start.result||start;
   const deadline=Date.now()+6*60*1000;
@@ -472,6 +517,68 @@ async function taskCall(pid,c,repair=false,previous=""){
   }
   throw new Error("Analyse trop longue (>6 min)");
 }
+async function goTask(pid,tid,auto=false){
+  if(!projectGoCompatible(pid)){toast("GO indisponible : "+projectGoReason(pid));return {status:"INCOMPATIBLE"}}
+  const t=taskDefs(pid).find(x=>x.id===tid),p=state.projects.find(x=>x.id===pid);if(!t||!p)return;
+  const c=children(pid).find(x=>x.id===t.subproject)||children(pid)[0];if(!c){toast("Sous-projet introuvable");return {status:"BLOQUE"}}
+  if(!taskDepsDone(pid,t)){const wait=(t.dependencies||[]).filter(id=>!["DONE","VERIFIE"].includes(taskState(pid,id).status));toast("Dépendance : "+wait.join(", "));return {status:"WAIT_DEP"}}
+  const key="task:"+pid+":"+tid;if(actionBusy[key]){toast("Tâche déjà en cours");return {status:"EN_COURS"}}actionBusy[key]=true;
+  const s=taskState(pid,tid);
+  const criteria=(t.acceptance||[]).map((x,i)=>(i+1)+". "+x).join("\n");
+  const basePrompt="TÂCHE BAZOR "+t.id+" — "+t.title+"\nACTION ATTENDUE:\n"+t.action+"\nCRITÈRES DE DONE:\n"+criteria+"\nRÈGLE DE PREUVE: "+(t.proof_required||"file_changes_and_tests")+"\nSi les critères sont déjà satisfaits dans les fichiers réellement lus et qu’aucune modification n’est nécessaire, n’invente aucun changement et commence SUMMARY par DEJA_CONFORME:. Sinon, pour corriger, fournis des BAZOR_ACTIONS minimales et sûres.";
+  s.status="RUNNING";s.summary="Analyse du contexte réel";s.updated=Date.now();s.reviews=[];state.runs[pid]={active:true,blocked:false,subId:c.id,taskId:tid,stage:t.id+" • seconde lecture IA",taskProgress:12,checkpoints:[{text:"Critères chargés",kind:"ok"}]};localSave();toast(t.id+" en cours…");
+  try{
+    const allowedProfiles=new Set(["qwen","gemini","claude","mistral","deepseek","gpt","analysis","code","complex","recommended"]);
+    const profiles=(t.preferred_models||[]).filter(x=>allowedProfiles.has(String(x).toLowerCase())).slice(0,t.priority==="P0"?2:1);
+    const reviews=[];
+    for(const profileRaw of profiles){
+      const profile=String(profileRaw).toLowerCase();
+      state.runs[pid].stage=t.id+" • avis Mammouth "+profile;state.runs[pid].taskProgress=Math.min(35,(state.runs[pid].taskProgress||12)+10);render();
+      const reviewPrompt="SECONDE LECTURE MAMMOUTH. Ne modifie rien et n’émets pas BAZOR_ACTIONS. Lis le contexte local réel fourni. Pour la tâche suivante, donne uniquement: constats confirmés dans les fichiers, risques, correctif minimal recommandé et tests d’acceptation. Si le contexte est insuffisant, dis exactement ce qui manque.\n\n"+basePrompt;
+      try{
+        const rv=await taskCall(pid,c,false,"",reviewPrompt,t.id+"-review-"+profile,{provider:"mammouth",mammouth_profile:profile,apply_actions:false});
+        reviews.push({profile,ok:!!rv.ok,engine:rv.engine||"mammouth",model:rv.model||null,summary:rv.summary||"",answer:String(rv.answer||"").slice(0,3500)});
+      }catch(err){
+        reviews.push({profile,ok:false,engine:"mammouth",model:null,summary:String(err.message||err).slice(0,240),answer:""});
+      }
+    }
+    s.reviews=reviews;
+    const usableReviews=reviews.filter(r=>r.ok&&r.answer).map(r=>"AVIS "+r.profile+" ("+(r.model||r.engine||"mammouth")+"):\n"+r.answer.slice(0,2500)).join("\n\n");
+    const prompt=basePrompt+(usableReviews?"\n\nSECOND AVIS À PRENDRE EN COMPTE SANS LE SUIVRE AVEUGLÉMENT:\n"+usableReviews:"");
+    state.runs[pid].stage=t.id+" • exécution contrôlée";state.runs[pid].taskProgress=42;render();
+    let d=await taskCall(pid,c,false,"",prompt,t.id);
+    state.runs[pid].stage=t.id+" • contrôle";state.runs[pid].taskProgress=75;localSave(false);
+    if(d.status==="BLOQUE"||!d.ok){
+      state.runs[pid].stage=t.id+" • correction automatique";state.runs[pid].taskProgress=88;localSave(false);
+      d=await taskCall(pid,c,true,d.answer||JSON.stringify(d),prompt,t.id+"-repair");
+    }
+    const ex=d.execution||{},ar=ex.action_result||{},real=ex.mode==="file_changes"&&!!ar.applied;
+    const tests=ar.tests||[],testsOk=!tests.length||tests.every(x=>x.ok);
+    const blocked=(d.status||"")==="BLOQUE"||!d.ok;
+    const already=!real&&!blocked&&/DEJA_CONFORME\s*:/i.test(String(d.summary||"")+"\n"+String(d.answer||""));
+    s.last_engine=d.engine||null;s.last_model=d.model||null;s.updated=Date.now();
+    if(real&&testsOk){
+      s.status="DONE";s.summary=(d.summary||"Correction appliquée")+" • preuve réelle";
+      s.evidence={real:true,when:Date.now(),request_id:ar.request_id||null,files:ar.files||[],tests,preflight:ar.preflight||null,backup_dir:ar.backup_dir||null,report_file:ar.report_file||null,engine:d.engine||null,model:d.model||null};
+    }else if(already){
+      s.status="VERIFIE";s.summary=d.summary||"DEJA_CONFORME";
+      s.evidence={verified:true,when:Date.now(),engine:d.engine||null,model:d.model||null,context_files:d.local_context?.files||[],context_chars:d.local_context?.chars||0};
+    }else if(blocked){
+      s.status="BLOCKED";s.summary=d.summary||d.detail||"Blocage persistant";s.evidence=null;
+    }else{
+      s.status="ANALYSE_SEULE";s.summary="ANALYSE SEULE • aucune modification prouvée";s.evidence={verified:false,when:Date.now(),engine:d.engine||null,model:d.model||null,context_files:d.local_context?.files||[]};
+    }
+    const ok=["DONE","VERIFIE"].includes(s.status);
+    state.runs[pid]={active:false,blocked:s.status==="BLOCKED",subId:c.id,taskId:tid,stage:ok?"✅ "+t.id+" prouvé":s.status==="BLOCKED"?"Blocage "+t.id:"ℹ "+t.id+" sans preuve de correction",taskProgress:100,checkpoints:[{text:ok?(s.status==="DONE"?"Fichiers + tests validés":"Déjà conforme vérifié"):s.summary,kind:ok?"ok":s.status==="BLOCKED"?"bad":"run"}]};
+    p.progress=overall(p);p.status=s.status==="BLOCKED"?"BLOQUE":(nextTask(pid)?"A_FAIRE":"OK");p.next=nextTask(pid)?.title||"Contrôle final";
+    log(t.id+" — "+t.title,ok?"OK":s.status==="BLOCKED"?"BLOQUÉ":"INFO");localSave();
+    toast(ok?t.id+" ✓":s.status==="BLOCKED"?t.id+" bloqué":t.id+" : analyse seule");
+    if(!auto)showResult(t.id+" • "+t.title,d);return d;
+  }catch(e){
+    const msg=String(e.message||e);s.status=isTransportFailureText(msg)?"TODO":"BLOCKED";s.summary=msg;s.updated=Date.now();state.runs[pid]={active:false,blocked:s.status==="BLOCKED",subId:c.id,taskId:tid,stage:msg,taskProgress:100,checkpoints:[{text:msg,kind:s.status==="BLOCKED"?"bad":"run"}]};p.status=s.status==="BLOCKED"?"BLOQUE":"A_FAIRE";localSave();return {status:"BLOQUE",error:msg};
+  }finally{setTimeout(()=>delete actionBusy[key],900)}
+}
+
 async function goSub(pid,sid,auto=false){
   if(!projectGoCompatible(pid)){toast("GO indisponible : "+projectGoReason(pid));return {status:"INCOMPATIBLE",compatibility:true}}
   const c=children(pid).find(x=>x.id===sid),p=state.projects.find(x=>x.id===pid),x=sp(pid,sid),key=pid+":"+sid;if(!c||!p)return;
@@ -512,14 +619,26 @@ async function goSub(pid,sid,auto=false){
   }
   finally{setTimeout(()=>delete actionBusy[key],900)}
 }
-async function goNext(pid){const c=nextSub(pid);if(!c){toast("Projet déjà contrôlé");return}return goSub(pid,c.id,false)}
+async function goNext(pid){const t=nextTask(pid);if(t)return goTask(pid,t.id,false);const c=nextSub(pid);if(!c){toast("Projet déjà contrôlé");return}return goSub(pid,c.id,false)}
 async function goAuto(pid){
   if(!projectGoCompatible(pid)){toast("AUTO indisponible : "+projectGoReason(pid));return {status:"INCOMPATIBLE",compatibility:true}}
   const key="auto:"+pid;if(actionBusy[key]){toast("AUTO déjà en cours");return}actionBusy[key]=true;state.expanded[pid]=true;localSave();
   const p=state.projects.find(x=>x.id===pid);let blocked=false;
   try{
-    for(const c of children(pid)){const x=sp(pid,c.id);if(x.status==="OK"&&x.progress===100)continue;const d=await goSub(pid,c.id,true);if(!d||d.status==="BLOQUE"){blocked=true;break}}
-    p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");log("AUTO — "+p.name,blocked?"BLOQUÉ":"OK");localSave();toast(blocked?"AUTO arrêté sur blocage":"AUTO terminé ✓");
+    const defs=taskDefs(pid);
+    if(defs.length){
+      for(const t of defs){
+        const s=taskState(pid,t.id);if(["DONE","VERIFIE"].includes(s.status))continue;
+        if(!taskDepsDone(pid,t)){blocked=true;s.summary="Dépendance non terminée";break}
+        const d=await goTask(pid,t.id,true);
+        const st=taskState(pid,t.id).status;if(!d||st==="BLOCKED"||st==="ANALYSE_SEULE"){blocked=true;break}
+      }
+      p.progress=overall(p);p.status=blocked?"BLOQUE":(nextTask(pid)?"A_FAIRE":"OK");
+    }else{
+      for(const c of children(pid)){const x=sp(pid,c.id);if(x.status==="OK"&&x.progress===100)continue;const d=await goSub(pid,c.id,true);if(!d||d.status==="BLOQUE"){blocked=true;break}}
+      p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");
+    }
+    log("AUTO — "+p.name,blocked?"BLOQUÉ":"OK");localSave();toast(blocked?"AUTO arrêté sur tâche non prouvée":"AUTO terminé ✓");
   }finally{setTimeout(()=>delete actionBusy[key],900)}
 }
 function showResult(title,d){document.getElementById("resultModal")?.remove();const e=document.createElement("div");e.id="resultModal";e.className="modal";const body=d?.answer||d?.result?.answer||d?.ollama?.answer||d?.mammouth?.answer||JSON.stringify(d,null,2);const ex=d?.execution;const ar=ex?.action_result||{};const files=ar.files||[];const tests=ar.tests||[];const fileList=files.map(f=>'<div class="mini">✓ '+esc((f.root||"")+" : "+(f.path||""))+'</div>').join("");const evidence=ex?'<div class="infobox"><b>'+(ex.mode==="file_changes"?"✅ TRAVAIL RÉEL PROUVÉ":"ℹ ANALYSE SEULE — RIEN MODIFIÉ")+'</b><div class="mini muted" style="margin-top:4px">'+(files.length?files.length+" fichier(s) modifié(s) • "+tests.filter(t=>t.ok).length+"/"+tests.length+" test(s) OK":"Aucun fichier modifié")+'</div>'+fileList+'</div>':"";e.innerHTML='<div class="row between"><h3>'+esc(title)+'</h3><button onclick="this.closest(\'#resultModal\').remove()">Fermer</button></div><div class="mini muted">'+esc([d?.status,d?.engine,d?.model].filter(Boolean).join(" • "))+'</div>'+evidence+'<div style="white-space:pre-wrap;font-size:12px;margin-top:8px">'+esc(body)+'</div>';document.body.appendChild(e)}

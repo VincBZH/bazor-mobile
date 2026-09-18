@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.18.5",
+  "version": "2026.09.18.6",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -61,7 +61,7 @@
       "name": "AI Simple Studio",
       "order": 2,
       "default_progress": 88,
-      "summary": "Studio local image/vidéo basé sur ComfyUI et modèles locaux.",
+      "summary": "Studio local image/vidéo basé sur ComfyUI. Priorité absolue : obtenir une version stable, lançable et capable de générer avec MiniMax H3 sur RTX 4060 8 Go avant d'ajouter de nouvelles fonctions.",
       "local_root": "C:\\AI\\SimpleStudioV2",
       "subprojects": [
         {
@@ -102,7 +102,318 @@
         }
       ],
       "go_compatible": true,
-      "go_reason": "Racine locale reliée au BAZOR Action Engine."
+      "go_reason": "Racine locale reliée au BAZOR Action Engine.",
+      "operational_target": "Le Studio est OPÉRATIONNEL uniquement si: lancement fiable, ComfyUI 8188 et Studio 8191 stables, workflow H3 8 Go valide avec modèles/encodeurs réellement installés, une génération test aboutit, galerie et diagnostic fonctionnent, et aucun faux statut OK n'est affiché.",
+      "tasks": [
+        {
+          "id": "STUDIO-P0-001",
+          "order": 1,
+          "priority": "P0",
+          "subproject": "comfy",
+          "title": "Démarrage robuste : aucune fenêtre ne disparaît sur panne",
+          "status": "TODO",
+          "action": "Inspecter les lanceurs et scripts de démarrage réellement présents dans C:\\AI\\SimpleStudioV2. Corriger le chemin d'erreur pour qu'une panne reste visible, soit journalisée, et n'entraîne pas la fermeture silencieuse de la fenêtre de diagnostic. Ne modifier que les fichiers réellement nécessaires.",
+          "acceptance": [
+            "Une exception de démarrage laisse un message lisible et la fenêtre de diagnostic ouverte.",
+            "Le chemin normal de démarrage reste fonctionnel.",
+            "Tout fichier Python/PowerShell/JS modifié passe le test syntaxique automatique de l'Action Engine."
+          ],
+          "dependencies": [],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-002",
+          "order": 2,
+          "priority": "P0",
+          "subproject": "comfy",
+          "title": "Instance unique ComfyUI/Studio et ports 8188/8191",
+          "status": "TODO",
+          "action": "Inspecter la logique qui détecte ComfyUI et le Studio déjà ouverts. Corriger les doublons, faux positifs et relances dangereuses. Conserver une instance ComfyUI existante saine sur 8188, une seule instance Studio sur 8191, et ne tuer aucun processus non identifié comme BAZOR/Studio.",
+          "acceptance": [
+            "Relancer le Studio quand ComfyUI répond déjà sur 8188 ne crée pas une deuxième instance.",
+            "Le Studio utilise 8191 sans collision silencieuse.",
+            "Les messages distinguent clairement: déjà ouvert, lancé, port occupé par autre chose, échec."
+          ],
+          "dependencies": [
+            "STUDIO-P0-001"
+          ],
+          "preferred_models": [
+            "qwen",
+            "claude"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-003",
+          "order": 3,
+          "priority": "P0",
+          "subproject": "h3",
+          "title": "Workflow MiniMax H3 8 Go : supprimer les références d'encodeur invalides",
+          "status": "TODO",
+          "action": "Inspecter le workflow MiniMax_H3_FL2V_8GB_VRAM.json et les fichiers Studio qui le chargent. Toute référence à un encodeur/modèle absent, notamment qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors si elle existe encore, doit être remplacée uniquement par une référence réellement installée et compatible. Préserver qwen3vl_4b_int8_convrot.safetensors si c'est bien la ressource disponible constatée.",
+          "acceptance": [
+            "Le JSON du workflow se parse.",
+            "Aucune référence à un fichier modèle absent n'est conservée dans les chemins réellement utilisés.",
+            "Le chargement ne doit plus produire 'clip_name ... not in list' pour l'ancienne référence qwen3vl_32b."
+          ],
+          "dependencies": [
+            "STUDIO-P0-002"
+          ],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-004",
+          "order": 4,
+          "priority": "P0",
+          "subproject": "presets",
+          "title": "Inventaire réel des modèles et presets : aucune référence fantôme",
+          "status": "TODO",
+          "action": "Comparer les presets/configurations du Studio avec les noms de modèles réellement présents dans les fichiers visibles du projet et les chemins ComfyUI configurés. Corriger uniquement les références manifestement obsolètes ou impossibles. Les presets doivent pointer vers les modèles réellement installés, notamment MiniMax H3, Qwen3VL 4B et ClipProj lorsqu'ils sont détectés.",
+          "acceptance": [
+            "Chaque référence modèle utilisée par un preset correspond à une ressource réellement détectable ou est clairement marquée indisponible.",
+            "Aucun preset sélectionnable ne déclenche immédiatement une erreur 'not in list'.",
+            "Les fichiers JSON/JS modifiés passent leurs validations."
+          ],
+          "dependencies": [
+            "STUDIO-P0-003"
+          ],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-005",
+          "order": 5,
+          "priority": "P0",
+          "subproject": "comfy",
+          "title": "Bridge Studio ↔ ComfyUI : santé, endpoints et erreurs visibles",
+          "status": "TODO",
+          "action": "Inspecter le bridge entre le Studio et ComfyUI. Corriger les URLs, ports, timeouts ou gestion d'erreur si un défaut réel est présent. Le Studio doit vérifier 8188 avant envoi, distinguer ComfyUI indisponible d'un workflow invalide, et afficher le détail utile au lieu d'un statut générique.",
+          "acceptance": [
+            "Un ComfyUI indisponible produit un diagnostic explicite et non un faux succès.",
+            "Un workflow rejeté expose le message ComfyUI utile.",
+            "Une réponse valide est reconnue sans 404/fetch générique."
+          ],
+          "dependencies": [
+            "STUDIO-P0-002"
+          ],
+          "preferred_models": [
+            "qwen",
+            "claude"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-006",
+          "order": 6,
+          "priority": "P0",
+          "subproject": "h3",
+          "title": "Soumission H3 : valider le payload avant génération",
+          "status": "TODO",
+          "action": "Inspecter la construction du prompt/workflow envoyé à ComfyUI. Ajouter ou corriger les garde-fous qui empêchent d'envoyer des noms de modèles/encodeurs non présents dans les options disponibles. Si une ressource manque, bloquer avant la génération avec le nom exact de la dépendance manquante.",
+          "acceptance": [
+            "Aucun payload H3 n'est envoyé avec un clip_name absent de la liste disponible.",
+            "Le message de blocage cite la dépendance exacte.",
+            "Le chemin valide continue jusqu'à ComfyUI."
+          ],
+          "dependencies": [
+            "STUDIO-P0-003",
+            "STUDIO-P0-005"
+          ],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-007",
+          "order": 7,
+          "priority": "P0",
+          "subproject": "diag",
+          "title": "Diagnostic BAZOR : capturer automatiquement la vraie cause",
+          "status": "TODO",
+          "action": "Inspecter le bouton/chemin de diagnostic vers BAZOR. Corriger pour qu'un échec de génération ou de démarrage remonte au minimum: étape, endpoint/port, workflow/preset, erreur ComfyUI, fichier concerné si connu, et horodatage, sans exposer de secret.",
+          "acceptance": [
+            "Un échec produit un diagnostic structuré exploitable.",
+            "Le diagnostic n'affiche pas seulement 'fetch' ou 'bloqué' sans cause disponible.",
+            "Aucune clé/API/secrète n'est incluse."
+          ],
+          "dependencies": [
+            "STUDIO-P0-005"
+          ],
+          "preferred_models": [
+            "qwen",
+            "mistral"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P1-001",
+          "order": 8,
+          "priority": "P1",
+          "subproject": "presets",
+          "title": "Presets utilisateur : réaliste, photo, N&B, corps entier",
+          "status": "TODO",
+          "action": "Inspecter le système de presets existant. Corriger/compléter uniquement ce qui manque pour exposer proprement les presets Réaliste, Photo, Noir & Blanc et Corps entier, sans injecter de modèles inexistants. Chaque preset doit décrire ses paramètres et rester modifiable.",
+          "acceptance": [
+            "Les quatre presets sont visibles et sélectionnables.",
+            "Ils n'introduisent aucune référence modèle absente.",
+            "Changer de preset ne corrompt pas les autres réglages."
+          ],
+          "dependencies": [
+            "STUDIO-P0-004"
+          ],
+          "preferred_models": [
+            "qwen",
+            "mistral"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P1-002",
+          "order": 9,
+          "priority": "P1",
+          "subproject": "quality",
+          "title": "Analyse post-génération : résultat réel et traçable",
+          "status": "TODO",
+          "action": "Inspecter la fonction d'analyse après génération. Corriger tout chemin où une analyse est affichée comme réussie sans résultat exploitable. Le score/diagnostic doit être rattaché à la génération analysée et le statut doit distinguer analyse réussie, impossible et non lancée.",
+          "acceptance": [
+            "Une génération analysée reçoit un résultat identifiable.",
+            "L'interface ne reste pas sur un faux score ou un statut figé.",
+            "Un échec d'analyse conserve la génération et affiche sa cause."
+          ],
+          "dependencies": [
+            "STUDIO-P0-005"
+          ],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P1-003",
+          "order": 10,
+          "priority": "P1",
+          "subproject": "quality",
+          "title": "Correction automatique : maximum 10 tentatives, arrêt déterministe",
+          "status": "TODO",
+          "action": "Inspecter la boucle d'auto-correction. Garantir un maximum strict de 10 tentatives, un arrêt immédiat sur succès, un arrêt sur erreur non récupérable, et un historique de chaque tentative. Éviter toute boucle infinie ou répétition identique.",
+          "acceptance": [
+            "Jamais plus de 10 tentatives.",
+            "Le compteur visible correspond au nombre réel de tentatives.",
+            "Chaque tentative a un résultat/raison et la boucle s'arrête sur succès."
+          ],
+          "dependencies": [
+            "STUDIO-P1-002"
+          ],
+          "preferred_models": [
+            "qwen",
+            "claude"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P1-004",
+          "order": 11,
+          "priority": "P1",
+          "subproject": "gallery",
+          "title": "Galerie : masquer, supprimer et récupérer sans perte accidentelle",
+          "status": "TODO",
+          "action": "Inspecter la galerie et ses actions masquer/supprimer/récupérer. Corriger les opérations ambiguës ou non réversibles non prévues. Une suppression depuis l'interface doit être clairement distincte d'un masquage; la récupération doit fonctionner quand elle est annoncée.",
+          "acceptance": [
+            "Masquer ne supprime pas le fichier.",
+            "Supprimer demande/emploie le mécanisme de sécurité prévu et ne touche que l'élément ciblé.",
+            "Récupérer restaure un élément récupérable et actualise l'interface."
+          ],
+          "dependencies": [
+            "STUDIO-P0-001"
+          ],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P1-005",
+          "order": 12,
+          "priority": "P1",
+          "subproject": "presets",
+          "title": "Durée vidéo bornée à 10 s et réglages 8 Go sûrs",
+          "status": "TODO",
+          "action": "Inspecter les contrôles de durée et réglages vidéo. La durée utilisateur doit être bornée à 10 secondes maximum. Les valeurs par défaut doivent viser la stabilité d'une RTX 4060 8 Go sans promettre un temps de calcul de 10 secondes.",
+          "acceptance": [
+            "Impossible de demander plus de 10 s depuis l'interface normale.",
+            "Les valeurs invalides sont ramenées ou refusées explicitement.",
+            "Le texte distingue durée de la vidéo et temps de calcul."
+          ],
+          "dependencies": [
+            "STUDIO-P0-004"
+          ],
+          "preferred_models": [
+            "qwen",
+            "mistral"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P1-006",
+          "order": 13,
+          "priority": "P1",
+          "subproject": "comfy",
+          "title": "Playwright et dépendances de lancement : installation idempotente",
+          "status": "TODO",
+          "action": "Inspecter l'installation Playwright et les chemins de lancement. Corriger les chemins temporaires ZIP/PS1 invalides ou les installations répétées si encore présents. Une seconde exécution doit être idempotente et ne doit pas pointer vers un fichier extrait temporaire disparu.",
+          "acceptance": [
+            "Le lanceur utilise un chemin persistant existant.",
+            "Une deuxième exécution ne réinstalle pas inutilement ce qui est déjà présent.",
+            "Une dépendance manquante produit un message précis et une correction contrôlée."
+          ],
+          "dependencies": [
+            "STUDIO-P0-001"
+          ],
+          "preferred_models": [
+            "qwen",
+            "mistral"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P2-001",
+          "order": 14,
+          "priority": "P2",
+          "subproject": "h3",
+          "title": "Fluidité/performance H3 : preset RTX 4060 8 Go conservateur",
+          "status": "TODO",
+          "action": "Inspecter les paramètres H3 réellement exposés. Proposer/corriger un preset conservateur pour RTX 4060 8 Go en limitant résolution, frames et options coûteuses selon les capacités déjà implémentées. Ne pas inventer de nœud ou paramètre absent.",
+          "acceptance": [
+            "Le preset n'augmente pas le risque d'OOM par rapport au réglage actuel.",
+            "Les paramètres modifiés existent réellement dans le workflow ou l'interface.",
+            "Le preset reste éditable et clairement nommé RTX 4060 8 Go."
+          ],
+          "dependencies": [
+            "STUDIO-P0-003",
+            "STUDIO-P0-006"
+          ],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        }
+      ]
     },
     {
       "id": "wii-relay",
@@ -365,5 +676,6 @@
       "go_compatible": false,
       "go_reason": "Aucune racine locale BAZOR Festival reliée : GO ne peut pas appliquer de modification réelle."
     }
-  ]
+  ],
+  "knowledge_base": "BAZOR_ENCYCLOPEDIA.md"
 }
