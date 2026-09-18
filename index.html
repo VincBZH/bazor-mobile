@@ -400,7 +400,7 @@ function sp(pid,sid){return state.subprojects?.[pid]?.[sid]||{status:"A_EVALUER"
 function taskDefs(pid){return (rp(pid)?.tasks||[]).slice().sort((a,b)=>(a.order||99)-(b.order||99))}
 function taskState(pid,tid){state.taskStates=state.taskStates||{};state.taskStates[pid]=state.taskStates[pid]||{};return state.taskStates[pid][tid]||(state.taskStates[pid][tid]={status:"TODO",summary:"",updated:null,evidence:null,last_model:null,last_engine:null})}
 function taskDepsDone(pid,t){return (t.dependencies||[]).every(id=>["DONE","VERIFIE"].includes(taskState(pid,id).status))}
-function nextTask(pid){return taskDefs(pid).find(t=>!["DONE","VERIFIE"].includes(taskState(pid,t.id).status))||null}
+function nextTask(pid){const all=taskDefs(pid).filter(t=>!["DONE","VERIFIE"].includes(taskState(pid,t.id).status));return all.find(t=>taskDepsDone(pid,t))||all[0]||null}
 function nextSub(pid){return children(pid).find(c=>{const x=sp(pid,c.id);return x.status!=="OK"||x.progress===null||x.progress<100})||null}
 function overall(p){
   const td=taskDefs(p.id);
@@ -446,6 +446,34 @@ function showEvidence(pid,sid){
   document.body.appendChild(e);
 }
 
+function showTaskEvidence(pid,tid){
+  const t=taskDefs(pid).find(x=>x.id===tid),s=taskState(pid,tid),ev=s.evidence;
+  document.getElementById("taskEvidenceModal")?.remove();
+  const e=document.createElement("div");e.id="taskEvidenceModal";e.className="modal";
+  let body='<div class="infobox"><b>AUCUNE PREUVE</b><div class="mini muted">La tâche n’est pas terminée avec une preuve exploitable.</div></div>';
+  if(ev?.real){
+    const files=(ev.files||[]).map(f=>'<div class="mini">✓ '+esc((f.root||"")+" : "+(f.path||""))+'</div>').join("");
+    const tests=(ev.tests||[]).map(x=>'<div class="mini">'+(x.ok?"✓":"!")+' '+esc(x.test||"test")+' • '+esc(x.ok?"OK":(x.detail||"ÉCHEC"))+'</div>').join("");
+    body='<div class="infobox"><b>✅ MODIFICATION RÉELLE</b><div class="mini muted">'+(ev.files||[]).length+' fichier(s) • '+(ev.tests||[]).filter(x=>x.ok).length+'/'+(ev.tests||[]).length+' test(s) OK</div>'+files+tests+'</div>';
+  }else if(ev?.verified){
+    const files=(ev.context_files||[]).slice(0,12).map(f=>'<div class="mini">• '+esc((f.root||"")+" : "+(f.path||""))+'</div>').join("");
+    body='<div class="infobox"><b>✅ DÉJÀ CONFORME VÉRIFIÉ</b><div class="mini muted">Moteur '+esc(ev.engine||"")+" • modèle "+esc(ev.model||"")+'</div>'+files+'</div>';
+  }
+  e.innerHTML='<div class="row between"><h3>'+esc(t?.id||tid)+' • PREUVE</h3><button onclick="this.closest(\'#taskEvidenceModal\').remove()">Fermer</button></div>'+body+'<div class="mini muted" style="margin-top:7px">'+esc(s.summary||"")+'</div>';
+  document.body.appendChild(e);
+}
+function taskRows(p){
+  const defs=taskDefs(p.id);if(!defs.length)return "";
+  const rows=defs.map(t=>{
+    const s=taskState(p.id,t.id),depsOk=taskDepsDone(p.id,t),deps=(t.dependencies||[]).filter(id=>!["DONE","VERIFIE"].includes(taskState(p.id,id).status));
+    const ac=(t.acceptance||[]);const acText=ac.length?(ac.length+" critère(s) DONE • "+ac[0]):"";
+    const depText=depsOk?"":" • attend "+deps.join(", ");
+    return '<div class="taskrow"><div><div class="row"><span class="prio '+String(t.priority||"").toLowerCase()+'">'+esc(t.priority||"")+'</span><span class="tasktitle">'+esc(t.id+" • "+t.title)+'</span></div><div class="taskmeta">'+esc(statusLabel(s.status))+(s.last_engine?" • "+esc(s.last_engine+"/"+(s.last_model||"")):"")+esc(depText)+'</div><div class="taskaccept">'+esc(acText)+'</div>'+(s.summary?'<div class="taskmeta">'+esc(s.summary)+'</div>':"")+'</div><div class="row"><button onclick="event.stopPropagation();showTaskEvidence(\''+p.id+'\',\''+t.id+'\')">PREUVE</button><button class="subgo '+(depsOk?"primary":"")+'" onclick="event.stopPropagation();goTask(\''+p.id+'\',\''+t.id+'\')">'+(depsOk?"GO":"ATTEND")+'</button></div></div>';
+  }).join("");
+  const done=defs.filter(t=>["DONE","VERIFIE"].includes(taskState(p.id,t.id).status)).length;
+  return '<div class="taskboard"><div class="row between"><b>TÂCHES DYNAMIQUES</b><span class="badge '+(done===defs.length?"ok":"todo")+'">'+done+'/'+defs.length+'</span></div><div class="mini muted" style="margin-top:4px">Ordre, dépendances, preuve et état central synchronisés.</div>'+rows+'</div>';
+}
+
 function subRows(p){
   return children(p.id).map(c=>{const x=sp(p.id,c.id),real=!!x.evidence?.real;return '<div class="subrow"><div><div class="subname">'+esc(c.name)+' '+(real?'<span class="badge ok">PREUVE ✓</span>':'<span class="badge todo">PAS DE PREUVE</span>')+'</div><div class="submeta">'+(x.progress===null?"—":x.progress+"%")+' • '+esc(statusLabel(x.status))+' • '+esc(x.summary||"")+'</div></div><div class="row"><button onclick="event.stopPropagation();showEvidence(\''+p.id+'\',\''+c.id+'\')">PREUVE</button><button class="subgo" onclick="event.stopPropagation();goSub(\''+p.id+'\',\''+c.id+'\')">GO</button></div></div>'}).join("");
 }
@@ -453,7 +481,7 @@ function projectCard(p){
   const open=!!state.expanded[p.id],info=state.info[p.id],r=state.runs[p.id],disp=r?.active?"EN_COURS":p.status,prog=overall(p),n=nextSub(p.id);
   const infoHtml=info==="status"?'<div class="infobox"><b>STATUS</b><div style="margin-top:4px">'+esc(phrase(p))+'</div></div>':info==="next"?'<div class="infobox"><b>ÉTAPE SUIVANTE</b><div style="margin-top:4px">'+esc(n?(sp(p.id,n.id).next||n.next):"Aucune : projet contrôlé.")+'</div>'+(n?'<button class="primary wide" style="margin-top:7px" onclick="goSub(\''+p.id+'\',\''+n.id+'\')">GO MAINTENANT</button>':'')+'</div>':"";
   return '<div class="card project"><div class="project-head" onclick="toggleProject(\''+p.id+'\')"><div class="row between"><div class="title">'+esc(p.name)+'</div><div class="row"><span class="badge '+statusClass(disp)+'">'+esc(statusLabel(disp))+'</span><span>'+ (open?"▲":"▼") +'</span></div></div><div class="project-meta"><div class="progress grow"><div style="width:'+prog+'%"></div></div><span class="mini">'+prog+'%</span></div><div class="project-phrase">'+esc(phrase(p))+'</div></div>'+
-  '<div class="actions"><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'status\')">STATUS</button><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'next\')">SUIVANTE</button><button class="primary" onclick="event.stopPropagation();goNext(\''+p.id+'\')">GO</button><button onclick="event.stopPropagation();goAuto(\''+p.id+'\')">AUTO</button></div>'+infoHtml+activityHtml(p)+(open?'<div class="detail">'+subRows(p)+'</div>':"")+'</div>';
+  '<div class="actions"><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'status\')">STATUS</button><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'next\')">SUIVANTE</button><button class="primary" onclick="event.stopPropagation();goNext(\''+p.id+'\')">GO</button><button onclick="event.stopPropagation();goAuto(\''+p.id+'\')">AUTO</button></div>'+infoHtml+activityHtml(p)+(open?'<div class="detail">'+taskRows(p)+subRows(p)+'</div>':"")+'</div>';
 }
 function renderHome(){
   const c=counts();home.innerHTML='<div class="infobox"><b>GO = travail prouvé uniquement si tu vois ✅ TRAVAIL RÉEL / PREUVE ✓</b><div class="mini muted">Sinon BAZOR t’indique clairement ANALYSE SEULE : aucun fichier n’a été modifié.</div></div><div class="summarybar"><div class="summarybox"><b>'+c.running+'</b><span class="mini muted">en cours</span></div><div class="summarybox"><b>'+c.blocked+'</b><span class="mini muted">bloqué</span></div><div class="summarybox"><b>'+c.todo+'</b><span class="mini muted">à faire</span></div></div>'+state.projects.sort((a,b)=>(rp(a.id)?.order||99)-(rp(b.id)?.order||99)).map(projectCard).join("");
