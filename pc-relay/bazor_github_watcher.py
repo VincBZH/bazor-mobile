@@ -8,6 +8,7 @@ PENDING_CORE_RESTART=False
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 DIAG_MARK="[BAZOR-DIAG-DONE]"
+MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
@@ -410,11 +411,60 @@ def core_chat(text):
     with urllib.request.urlopen(req,timeout=180) as r:
         return json.loads(r.read().decode("utf-8"))
 
+def _parse_mammouth_issue(title, body):
+    import re
+    m=re.match(r"(?i)^\[bazor-mammouth(?::([a-z0-9._-]+))?\]", title or "")
+    profile=(m.group(1).lower() if m and m.group(1) else "recommended")
+    meta={"project":"simple-studio","subproject":"Revue Mammouth","profile":profile,"apply_actions":False}
+    task_lines=[]
+    for line in str(body or "").splitlines():
+        s=line.strip()
+        if ":" in s:
+            k,v=s.split(":",1); lk=k.strip().lower(); val=v.strip()
+            if lk=="project" and val: meta["project"]=val
+            elif lk=="subproject" and val: meta["subproject"]=val
+            elif lk=="profile" and val: meta["profile"]=val.lower()
+            elif lk=="apply_actions": meta["apply_actions"]=val.lower() in ("1","true","yes","oui")
+            elif lk=="task":
+                if val: task_lines.append(val)
+            else:
+                task_lines.append(line)
+        else:
+            task_lines.append(line)
+    meta["task"]="\n".join(x for x in task_lines if x.strip()).strip()
+    return meta
+
+def core_mammouth_task(title, body):
+    meta=_parse_mammouth_issue(title, body)
+    payload={
+        "project_id":meta["project"],
+        "subproject_name":meta["subproject"],
+        "task":meta["task"] or "Faire une revue technique structurée du projet à partir du contexte local réel.",
+        "current_progress":0,
+        "repair":False,
+        "previous":"",
+        "provider":"mammouth",
+        "mammouth_profile":meta["profile"],
+        "apply_actions":bool(meta["apply_actions"]),
+    }
+    data=json.dumps(payload,ensure_ascii=False).encode("utf-8")
+    req=urllib.request.Request(
+        "http://127.0.0.1:8775/api/v1/task",
+        data=data,
+        headers={"Content-Type":"application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req,timeout=260) as r:
+        return json.loads(r.read().decode("utf-8"))
+
 def answer_text(result):
-    o=result.get("ollama") or {}
-    for k in ("response","answer","content","text"):
-        if o.get(k): return str(o[k])
-    return json.dumps(o,ensure_ascii=False,indent=2)[:12000]
+    for section in ("mammouth","ollama"):
+        o=result.get(section) or {}
+        for k in ("response","answer","content","text"):
+            if o.get(k): return str(o[k])
+    for k in ("answer","message","summary","detail"):
+        if result.get(k): return str(result[k])
+    return json.dumps(result,ensure_ascii=False,indent=2)[:12000]
 
 if not _single_instance():
     print("[WATCHER] Une instance existe deja. Sortie sans relance.")
@@ -424,7 +474,7 @@ print("=== BAZOR GITHUB WATCHER V1 ===")
 print("Repo :",REPO)
 print("Core :",CORE)
 print("Polling : 10 s")
-print("Aucun shell distant : [bazor-queue] -> IA locale; [bazor-diag] -> diagnostic local predefini et filtre.")
+print("Aucun shell distant : [bazor-queue] -> IA locale; [bazor-mammouth:profil] -> revue Mammouth avec contexte local; [bazor-diag] -> diagnostic local filtre.")
 print()
 
 while True:
@@ -443,6 +493,16 @@ while True:
                     reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body),task_smoke=("task-smoke" in body or "task smoke" in body))
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
+                    continue
+                if title.startswith("[bazor-mammouth"):
+                    if MAMMOUTH_MARK in comments: continue
+                    print(f"[MAMMOUTH] #{issue['number']} {issue['title']}")
+                    result=core_mammouth_task(issue.get("title") or "", issue.get("body") or "")
+                    route=result.get("route") or {}
+                    model=result.get("model") or route.get("profile") or "mammouth"
+                    reply=MAMMOUTH_MARK+"\n\n**BAZOR/Mammouth — résultat**\n\nProfil: "+str(model)+"\n\n"+answer_text(result)
+                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
+                    print(f"[OK MAMMOUTH] #{issue['number']} traite et retourne dans GitHub.")
                     continue
                 if not title.startswith("[bazor-queue]"): continue
                 if MARK in comments: continue
