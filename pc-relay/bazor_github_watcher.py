@@ -259,6 +259,41 @@ def _latest_task_diag():
             out["files_changed"]=row.get("files_changed")
     return out
 
+
+def _sanitize_diag_text(value):
+    import re as _re
+    s=str(value or "")
+    s=_re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}\b","<ip>",s)
+    s=_re.sub(r"[A-Za-z]:\\[^\\r\\n]+","<path>",s)
+    return s[:180]
+
+def _traceback_summaries(text,limit=8):
+    out=[]
+    for line in str(text or "").splitlines():
+        s=line.strip()
+        if not s or s.startswith("Traceback"):
+            continue
+        if ":" in s and (
+            s.startswith(("OSError:","RuntimeError:","TimeoutError:","ConnectionError:","BrokenPipeError:",
+                          "ConnectionResetError:","ValueError:","PermissionError:","FileNotFoundError:",
+                          "urllib.error.","socket.","json."))
+            or s.endswith("Error")
+        ):
+            clean=_sanitize_diag_text(s)
+            if clean not in out:
+                out.append(clean)
+    return out[-limit:]
+
+def _http_502_endpoints(text,limit=8):
+    import re as _re
+    counts={}
+    for line in str(text or "").splitlines():
+        m=_re.search(r'"(?:GET|POST|OPTIONS)\s+([^\s?"]+)(?:\?[^"]*)?\s+HTTP/[0-9.]+"\s+502\b',line)
+        if m:
+            path=m.group(1)
+            counts[path]=counts.get(path,0)+1
+    return sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:limit]
+
 def diagnostic_summary(force_usb=False):
     usb_result=None
     if force_usb:
@@ -276,6 +311,8 @@ def diagnostic_summary(force_usb=False):
         return text.lower().count(needle.lower())
 
     task=_latest_task_diag()
+    tracebacks=_traceback_summaries(core_tail)
+    ep502=_http_502_endpoints(web_tail)
     lines=[
         "**Diagnostic BAZOR local (résumé sans secrets)**",
         f"- Core 8775 local: {'OK' if _url_ok('http://127.0.0.1:8775/api/v1/security/status') else 'HS'}",
@@ -301,6 +338,8 @@ def diagnostic_summary(force_usb=False):
         "- selfheal.log: core_false={0} web_false={1} usb_false={2}".format(
             count(selfheal_tail,"core=false"),count(selfheal_tail,"web=false"),count(selfheal_tail,"usb=false")
         ),
+        "- 502 par endpoint: "+(json.dumps(ep502,ensure_ascii=False,separators=(",",":")) if ep502 else "aucun"),
+        "- Exceptions Core résumées: "+(json.dumps(tracebacks,ensure_ascii=False,separators=(",",":")) if tracebacks else "aucune"),
         "- Transport recommandé pour ce test: http://127.0.0.1:8776/ via ADB reverse (USB), pas l'adresse Wi-Fi."
     ]
     return "\n".join(lines)
