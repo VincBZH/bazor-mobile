@@ -4,6 +4,7 @@ REPO="VincBZH/bazor-mobile"
 CORE="http://127.0.0.1:8775/api/v1/chat"
 CORE_HEALTH="http://127.0.0.1:8775/api/v1/security/status"
 CORE_FAILS=0
+PENDING_CORE_RESTART=False
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
@@ -28,8 +29,27 @@ def _restart_core():
     except Exception as e:
         print("[BLOQUE CORE RESTART]",type(e).__name__,str(e))
 
+def _security_restart_guard():
+    try:
+        with urllib.request.urlopen(CORE_HEALTH,timeout=2.0) as r:
+            data=json.loads(r.read().decode("utf-8"))
+        return int(data.get("pairing_expires_in",0) or 0), int(data.get("pairing_guard_seconds",0) or 0)
+    except Exception:
+        return 0,0
+
+def maybe_restart_core(reason="update"):
+    global PENDING_CORE_RESTART
+    pairing,guard=_security_restart_guard()
+    if pairing>0 or guard>0:
+        PENDING_CORE_RESTART=True
+        print(f"[CORE RESTART DIFFERE] {reason} - appairage actif/protege ({max(pairing,guard)} s).")
+        return False
+    PENDING_CORE_RESTART=False
+    _restart_core()
+    return True
+
 def ensure_core_alive():
-    global CORE_FAILS
+    global CORE_FAILS,PENDING_CORE_RESTART
     try:
         with urllib.request.urlopen(CORE_HEALTH,timeout=2.0) as r:
             if 200 <= r.status < 300:
@@ -43,8 +63,10 @@ def ensure_core_alive():
     print(f"[CORE CHECK] Core 8775 ne repond pas ({CORE_FAILS}/3)")
     if CORE_FAILS >= 3:
         print("[CORE RECOVERY] Relance automatique du Core...")
-        _restart_core()
+        maybe_restart_core("health")
         CORE_FAILS=0
+    elif PENDING_CORE_RESTART:
+        maybe_restart_core("mise a jour differee")
     return False
 
 def safe_update():
@@ -68,7 +90,7 @@ def safe_update():
 
             # Actions locales PREDEFINIES uniquement : aucun ordre shell ne vient de GitHub.
             if any(x in changed for x in ("pc-relay/bazor_pc_relay_v3.py","pc-relay/mammouth_client.py","pc-relay/bazor_security.py")):
-                _restart_core()
+                maybe_restart_core("mise a jour de code")
 
             if "pc-relay/bazor_github_watcher.py" in changed:
                 print("[SELF UPDATE] Rechargement du watcher avec la nouvelle version...")
