@@ -650,7 +650,7 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
         current_progress = 0
 
     context_started = time.monotonic()
-    local_context, local_report = ACTION_ENGINE.context_for_project(project_id)
+    local_context, local_report = ACTION_ENGINE.context_for_project(project_id, focus=(str(subproject_name or "")+"\n"+str(task or "")))
     if not local_context:
         local_context, fallback_report = project_local_context(project_id)
         if local_context:
