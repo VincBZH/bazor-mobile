@@ -196,5 +196,13 @@ jobs:
               failed=eng.apply("demo",bad,"ci-bad")
               assert not failed["ok"] and failed["error"]=="preflight_failed", failed
               assert p.read_text(encoding="utf-8")=="x = 2\n", "target changed despite preflight failure"
-              print("Action Engine sandbox + target protection OK")
+
+              # Le contexte doit prioriser les fichiers dont le nom correspond
+              # à la tâche, au lieu de prendre seulement les plus récents.
+              (root/"unrelated_recent.py").write_text("print('recent')\n",encoding="utf-8")
+              time_target=root/"MiniMax_H3_workflow.json"
+              time_target.write_text('{"clip_name":"qwen3vl_4b_int8_convrot.safetensors"}\n',encoding="utf-8")
+              ctx,report=eng.context_for_project("demo",max_files=1,focus="MiniMax H3 workflow clip_name")
+              assert report["files"] and report["files"][0]["path"]=="MiniMax_H3_workflow.json", report
+              print("Action Engine sandbox + target protection + focused context OK")
           PY
