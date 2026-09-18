@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto18",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto19",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -129,16 +129,34 @@ async function securityStatus(){
   }catch(e){securityBadge.textContent="🔒 ?";securityBadge.className="badge blocked";return null}
 }
 async function signedFetch(path,opts={},ms=5000){
-  if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
   if(!SEC_DEVICE?.secret)throw new Error("Téléphone non appairé");
-  const ch=await fetchTimeout(CORE+"/api/v1/security/challenge?device_id="+encodeURIComponent(SEC_DEVICE.device_id),{cache:"no-store"},2500);
-  const cj=await ch.json();if(!cj.ok)throw new Error("Appareil non reconnu");
-  const proof=sha256ascii(cj.nonce+"|"+SEC_DEVICE.device_id+"|"+SEC_DEVICE.secret);
-  const headers=Object.assign({},opts.headers||{},{"X-BAZOR-DEVICE":SEC_DEVICE.device_id,"X-BAZOR-NONCE":cj.nonce,"X-BAZOR-PROOF":proof});
-  const r=await fetchTimeout(CORE+path,Object.assign({},opts,{headers}),ms);
-  const data=await r.json().catch(()=>({ok:false,error:"invalid_json"}));
-  if(r.status===401){securityBadge.textContent="🔒 BLOQUÉ";securityBadge.className="badge blocked";throw new Error("Authentification refusée")}
-  return data;
+  const retrySafe=!!opts.bazorRetrySafe||String(opts.method||"GET").toUpperCase()==="GET";
+  const cleanOpts=Object.assign({},opts);delete cleanOpts.bazorRetrySafe;
+  const tries=retrySafe?4:1;
+  let lastErr=null;
+  for(let attempt=1;attempt<=tries;attempt++){
+    try{
+      if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
+      const ch=await fetchTimeout(CORE+"/api/v1/security/challenge?device_id="+encodeURIComponent(SEC_DEVICE.device_id),{cache:"no-store"},3000);
+      if(!ch.ok)throw new Error("Challenge indisponible");
+      const cj=await ch.json();if(!cj.ok)throw new Error("Appareil non reconnu");
+      const proof=sha256ascii(cj.nonce+"|"+SEC_DEVICE.device_id+"|"+SEC_DEVICE.secret);
+      const headers=Object.assign({},cleanOpts.headers||{},{"X-BAZOR-DEVICE":SEC_DEVICE.device_id,"X-BAZOR-NONCE":cj.nonce,"X-BAZOR-PROOF":proof});
+      const r=await fetchTimeout(CORE+path,Object.assign({},cleanOpts,{headers}),ms);
+      const data=await r.json().catch(()=>({ok:false,error:"invalid_json"}));
+      if(r.status===401){securityBadge.textContent="🔒 BLOQUÉ";securityBadge.className="badge blocked";throw new Error("Authentification refusée")}
+      if(!r.ok&&r.status>=500)throw new Error("Core HTTP "+r.status);
+      return data;
+    }catch(e){
+      lastErr=e;
+      if(!retrySafe||/Authentification refusée|Téléphone non appairé|Appareil non reconnu/.test(String(e.message||"")))throw e;
+      CORE=null;
+      pcStatus.textContent="RECONNEXION…";pcStatus.className="badge todo";
+      providerStatus.textContent="Reconnexion automatique en cours";
+      await new Promise(r=>setTimeout(r,Math.min(2200,350*attempt*attempt)));
+    }
+  }
+  throw lastErr||new Error("Core non joignable");
 }
 async function requestPairCode(){
   if(!CORE)await detectCore();
@@ -311,8 +329,28 @@ function toggleProject(id){state.expanded[id]=!state.expanded[id];localSave()}
 function toggleInfo(id,t){state.info[id]=state.info[id]===t?null:t;localSave()}
 async function taskCall(pid,c,repair=false,previous=""){
   if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
-  const x=sp(pid,c.id);
-  return signedFetch("/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(x.next||c.next),current_progress:x.progress??0,repair,previous,provider:providerMode.value})},180000);
+  const x=sp(pid,c.id),requestId="mob-"+pid+"-"+c.id+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  const payload={project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(x.next||c.next),current_progress:x.progress??0,repair,previous,provider:providerMode.value,request_id:requestId,async:true};
+  let start=await signedFetch("/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),bazorRetrySafe:true},8000);
+  if(start.job_state==="done"||start.job_state==="error")return start.result||start;
+  const deadline=Date.now()+6*60*1000;
+  let misses=0;
+  while(Date.now()<deadline){
+    await new Promise(r=>setTimeout(r,1400));
+    try{
+      const s=await signedFetch("/api/v1/task/status?id="+encodeURIComponent(requestId),{method:"GET",cache:"no-store",bazorRetrySafe:true},5000);
+      misses=0;
+      if(s.job_state==="done"||s.job_state==="error")return s.result||s;
+      const run=state.runs[pid];
+      if(run?.active){run.stage="Calcul en arrière-plan • mobile reconnectable";run.taskProgress=Math.max(run.taskProgress||25,45);render()}
+    }catch(e){
+      misses++;
+      const run=state.runs[pid];
+      if(run?.active){run.stage="Reconnexion au Core ("+misses+")";run.taskProgress=Math.max(run.taskProgress||25,45);render()}
+      if(misses>=12)throw new Error("Core non joignable après reconnexion automatique");
+    }
+  }
+  throw new Error("Analyse trop longue (>6 min)");
 }
 async function goSub(pid,sid,auto=false){
   const c=children(pid).find(x=>x.id===sid),p=state.projects.find(x=>x.id===pid),x=sp(pid,sid),key=pid+":"+sid;if(!c||!p)return;
