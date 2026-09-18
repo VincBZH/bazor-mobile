@@ -23,6 +23,7 @@ UPDATE_HELPER = ROOT / "console-hub" / "bazor_interface_update_restart.py"
 MOBILE_REPAIR = ROOT / "console-hub" / "bazor_mobile_network_repair.ps1"
 USB_BRIDGE = ROOT / "console-hub" / "bazor_usb_android_bridge.ps1"
 USB_STATUS_FILE = DATA / "usb_android_status.json"
+H3_REPAIR = ROOT / "console-hub" / "bazor_minimax_h3_repair.py"
 MOBILE_URL_FILE = DATA / "mobile_url.txt"
 MOBILE_STATUS_FILE = DATA / "mobile_network_status.json"
 
@@ -321,6 +322,7 @@ class Hub:
             ("↻ MAJ + RELANCE BAZOR", self.update_restart_bazor),
             ("RÉPARER MOBILE", self.repair_mobile_access),
             ("USB TÉLÉPHONE", self.usb_mobile),
+            ("RÉPARER H3", self.repair_h3),
             ("APPAIRER TÉLÉPHONE", self.open_pairing_qr),
             ("NOUVEAU CODE", self.new_pairing_code),
             ("CENTRALISER / ADOPTER", self.centralize),
@@ -394,6 +396,10 @@ class Hub:
                     self._centralize_done(item[1])
                 elif kind == "central_error":
                     self._centralize_failed(item[1])
+                elif kind == "h3_ok":
+                    self._h3_done()
+                elif kind == "h3_error":
+                    self._h3_failed(item[1])
         except queue.Empty:
             pass
         try:
@@ -1035,6 +1041,52 @@ class Hub:
             self.summary.config(text="Adresse mobile copiée : "+url)
         except Exception:
             pass
+
+    def repair_h3(self):
+        if not H3_REPAIR.exists():
+            self.summary.config(text="Réparateur MiniMax H3 absent")
+            return
+        self.summary.config(text="MiniMax H3 : réparation en cours… téléchargement possible ~2,6 Go")
+        self.selected_id="comfy"
+        self.refresh_logs()
+        threading.Thread(target=self._repair_h3_worker,daemon=True).start()
+
+    def _repair_h3_worker(self):
+        log_path=self.log_path("comfy")
+        try:
+            with open(log_path,"a",encoding="utf-8",buffering=1) as log:
+                log.write("\n===== BAZOR H3 REPAIR =====\n")
+                p=subprocess.run(
+                    [sys.executable,str(H3_REPAIR)],
+                    cwd=str(ROOT),
+                    stdout=log,stderr=subprocess.STDOUT,
+                    creationflags=CREATE_NO_WINDOW
+                )
+            if p.returncode==0:
+                self.ui_queue.put(("h3_ok",None))
+            else:
+                self.ui_queue.put(("h3_error",f"code {p.returncode}"))
+        except Exception as exc:
+            self.ui_queue.put(("h3_error",type(exc).__name__))
+
+    def _h3_done(self):
+        self.summary.config(text="MiniMax H3 réparé • redémarrage ComfyUI…")
+        svc=next((x for x in SERVICES if x.get("id")=="comfy"),None)
+        if svc:
+            try:
+                self.stop_service(svc)
+            except Exception:
+                pass
+            try:
+                self.start_external_service(svc)
+            except Exception:
+                pass
+        self.root.after(1800,self.refresh)
+
+    def _h3_failed(self,detail):
+        self.summary.config(text=f"MiniMax H3 : réparation bloquée ({detail})")
+        self.selected_id="comfy"
+        self.refresh_logs()
 
     def usb_mobile(self):
         if not USB_BRIDGE.exists():
