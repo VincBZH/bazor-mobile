@@ -8,6 +8,7 @@ on:
       - "pc-relay/bazor_pc_relay_v3.py"
       - "pc-relay/bazor_github_watcher.py"
       - "pc-relay/bazor_action_engine.py"
+      - "pc-relay/bazor_studio_qualifier.py"
       - "bazor_registry.json"
       - "index.html"
       - "BAZOR_ENCYCLOPEDIA.md"
@@ -160,6 +161,17 @@ jobs:
           assert 'worker_kwargs["request_id"] = rid' in src
           assert 'result = start_mobile_task(request_id, **kwargs)' in src
           print("Mobile task async regression OK")
+          PY
+      - name: Studio qualifier selftest
+        run: |
+          python pc-relay/bazor_studio_qualifier.py --selftest
+          python - <<'PY'
+          from pathlib import Path
+          watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
+          assert "[bazor-qualify:studio]" in watcher
+          assert "_run_studio_qualification" in watcher
+          assert "QUALIFY_MARK" in watcher
+          print("Studio qualifier watcher integration OK")
           PY
       - name: Action Engine smoke test
         run: |
