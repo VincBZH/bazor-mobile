@@ -16,7 +16,7 @@ where git >nul 2>nul || (echo [BLOQUE] Git introuvable.& pause& exit /b 1)
 git pull >nul 2>&1
 
 if exist "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" -Root "%ROOT%" -OpenPhone >nul 2>&1
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" -Root "%ROOT%" >nul 2>&1
 )
 
 if exist "%ROOT%\console-hub\bazor_mobile_network_repair.ps1" (
@@ -29,4 +29,7 @@ netsh advfirewall firewall delete rule name="BAZOR Mobile Web 8776" >nul 2>nul
 netsh advfirewall firewall add rule name="BAZOR Mobile Web 8776" dir=in action=allow protocol=TCP localport=8776 profile=any remoteip=localsubnet >nul 2>nul
 
 call "%ROOT%\LANCER_BAZOR_CONSOLE_HUB.cmd"
+if exist "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" (
+  start "" /b powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 4; & '%ROOT%\console-hub\bazor_usb_android_bridge.ps1' -Root '%ROOT%' -OpenPhone" >nul 2>&1
+)
 exit /b 0
