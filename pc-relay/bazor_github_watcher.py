@@ -1,7 +1,7 @@
 import json, subprocess, time, urllib.request
 
 REPO="VincBZH/bazor-mobile"
-CORE="http://127.0.0.1:8765/api/v1/chat"
+CORE="http://127.0.0.1:8775/api/v1/chat"
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 
