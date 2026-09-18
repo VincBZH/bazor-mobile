@@ -287,7 +287,7 @@ class ActionEngine:
                     return {"file":str(path),"ok":False,"test":"node_check","detail":str(exc)[:240]}
         if ext == ".ps1" and os.name == "nt":
             try:
-                script = "$e=$null;$t=$null;[System.Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$t,[ref]$e)|Out-Null;if($e.Count){$e|%%{$_.Message};exit 1}"
+                script = "$e=$null;$t=$null;[System.Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$t,[ref]$e)|Out-Null;if($e.Count){$e|%{$_.Message};exit 1}"
                 p=subprocess.run(["powershell","-NoProfile","-Command",script,str(path)],capture_output=True,text=True,timeout=12,creationflags=CREATE_NO_WINDOW)
                 return {"file":str(path),"ok":p.returncode==0,"test":"powershell_parse","detail":(p.stderr or p.stdout).strip()[:240]}
             except Exception as exc:
@@ -305,8 +305,14 @@ class ActionEngine:
             return result
         prepared=[]
         try:
+            seen_targets=set()
             for a in actions[:MAX_ACTIONS]:
-                prepared.append(self._validate_action(project_id, a))
+                item=self._validate_action(project_id, a)
+                key=str(item["target"]).lower()
+                if key in seen_targets:
+                    raise ValueError("duplicate_target_in_action_set")
+                seen_targets.add(key)
+                prepared.append(item)
         except Exception as exc:
             result["error"]="validation_failed"
             result["detail"]=str(exc)[:240]
