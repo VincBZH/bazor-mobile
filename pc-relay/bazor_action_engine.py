@@ -45,8 +45,10 @@ class ActionEngine:
         self.data_dir = Path(data_dir)
         self.backup_root = self.data_dir / "ACTION_BACKUPS"
         self.report_root = self.data_dir / "ACTION_REPORTS"
+        self.sandbox_root = self.data_dir / "ACTION_SANDBOX"
         self.backup_root.mkdir(parents=True, exist_ok=True)
         self.report_root.mkdir(parents=True, exist_ok=True)
+        self.sandbox_root.mkdir(parents=True, exist_ok=True)
         self.journal_cb = journal_cb
         home = Path.home()
         localapp = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
@@ -334,11 +336,107 @@ class ActionEngine:
                 return {"file":str(path),"ok":False,"test":"powershell_parse","detail":str(exc)[:240]}
         return {"file":str(path),"ok":True,"test":"text_write_verified"}
 
+    def _preflight_sandbox(self, prepared, request_id):
+        """Teste toutes les écritures dans un bac à sable AVANT la cible réelle.
+
+        Le bac à sable est un dépôt Git local éphémère quand git est disponible:
+        1) état de référence (copies AVANT) ;
+        2) commit baseline ;
+        3) écritures candidates ;
+        4) git diff --cached --check ;
+        5) tests déterministes sur les fichiers candidats.
+
+        Aucun fichier cible du projet n'est touché pendant cette phase.
+        """
+        sandbox_dir = self.sandbox_root / request_id
+        if sandbox_dir.exists():
+            shutil.rmtree(sandbox_dir, ignore_errors=True)
+        sandbox_dir.mkdir(parents=True, exist_ok=True)
+        candidate_map = []
+        for item in prepared:
+            rel = Path(str(item["root"])) / Path(str(item["path"]).replace("\\", "/"))
+            target = sandbox_dir / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if item["before"] is not None:
+                target.write_bytes(item["before"])
+            candidate_map.append((item, target))
+
+        git = shutil.which("git")
+        git_info = {"available": bool(git), "baseline": False, "diff_check": None, "diff": ""}
+        if git:
+            def run_git(*args):
+                return subprocess.run(
+                    [git, "-C", str(sandbox_dir), *args],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    timeout=20, creationflags=CREATE_NO_WINDOW
+                )
+            try:
+                init = run_git("init", "-q")
+                if init.returncode == 0:
+                    run_git("config", "user.email", "bazor-sandbox@local")
+                    run_git("config", "user.name", "BAZOR Sandbox")
+                    run_git("add", "-A")
+                    base = run_git("commit", "-q", "--allow-empty", "-m", "baseline")
+                    git_info["baseline"] = base.returncode == 0
+            except Exception as exc:
+                git_info["error"] = f"{type(exc).__name__}: {exc}"[:240]
+
+        # Écriture candidate uniquement dans le sandbox.
+        for item, target in candidate_map:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(item["after"])
+
+        if git and git_info.get("baseline"):
+            try:
+                run_git("add", "-A")
+                chk = run_git("diff", "--cached", "--check")
+                git_info["diff_check"] = chk.returncode == 0
+                if chk.returncode != 0:
+                    git_info["detail"] = (chk.stderr or chk.stdout).strip()[:500]
+                diff = run_git("diff", "--cached", "--no-color", "--stat")
+                git_info["diff"] = (diff.stdout or "").strip()[:4000]
+            except Exception as exc:
+                git_info["diff_check"] = False
+                git_info["detail"] = f"{type(exc).__name__}: {exc}"[:500]
+
+        tests = []
+        seen = set()
+        for _, target in candidate_map:
+            key = str(target).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            tests.append(self._run_test_for_file(target))
+
+        ok = all(t.get("ok") for t in tests)
+        if git_info.get("baseline") and git_info.get("diff_check") is False:
+            ok = False
+
+        result = {
+            "ok": bool(ok),
+            "sandbox_dir": str(sandbox_dir),
+            "git": git_info,
+            "tests": tests,
+            "files": [
+                {"root": item["root"], "path": item["path"], "sandbox": str(target)}
+                for item, target in candidate_map
+            ],
+        }
+        self._journal("ACTION_ENGINE_PREFLIGHT", {
+            "request_id": request_id,
+            "ok": result["ok"],
+            "git_available": git_info.get("available"),
+            "git_diff_check": git_info.get("diff_check"),
+            "tests": tests,
+        })
+        return result
+
     def apply(self, project_id, actions, request_id=None):
         request_id = re.sub(r"[^A-Za-z0-9._-]+","_",str(request_id or ""))[:80] or time.strftime("%Y%m%d_%H%M%S")
         result = {
             "ok": False, "applied": False, "rolled_back": False,
             "request_id": request_id, "actions": [], "tests": [], "files": [],
+            "preflight": None,
         }
         if not actions:
             result.update({"ok":True,"reason":"no_actions"})
@@ -357,6 +455,27 @@ class ActionEngine:
             result["error"]="validation_failed"
             result["detail"]=str(exc)[:240]
             self._journal("ACTION_ENGINE_REJECTED", {"project":project_id,"request_id":request_id,"detail":result["detail"]})
+            return result
+
+        # Étape obligatoire: bac à sable Git + tests déterministes AVANT
+        # toute écriture dans le projet réel.
+        preflight = self._preflight_sandbox(prepared, request_id)
+        result["preflight"] = preflight
+        if not preflight.get("ok"):
+            result["error"] = "preflight_failed"
+            failed = [t for t in preflight.get("tests", []) if not t.get("ok")]
+            detail = preflight.get("git", {}).get("detail") or (failed[0].get("detail") if failed else "sandbox_validation_failed")
+            result["detail"] = str(detail)[:240]
+            self._journal("ACTION_ENGINE_REJECTED", {
+                "project": project_id, "request_id": request_id,
+                "detail": result["detail"], "phase": "preflight",
+            })
+            try:
+                report=self.report_root / f"{request_id}.json"
+                report.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding="utf-8")
+                result["report_file"]=str(report)
+            except Exception:
+                pass
             return result
 
         backup_dir = self.backup_root / request_id
