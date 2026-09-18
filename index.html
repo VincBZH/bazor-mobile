@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto22",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto23",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -175,6 +175,26 @@ async function requestPairCode(){
     if(d.ok){toast(d.printed?"Code envoyé au Hub PC ✓":"Code déjà actif sur le Hub PC");return true}
   }catch(e){}
   toast("Impossible de demander le code pour l'instant");return false
+}
+async function consumePairingQr(){
+  let code="";
+  try{
+    const m=String(location.hash||"").match(/^#pair=([A-Z0-9-]{14})$/i);
+    if(!m)return false;
+    code=decodeURIComponent(m[1]).toUpperCase();
+    history.replaceState(null,"",location.pathname+location.search);
+  }catch(_){return false}
+  try{
+    await pairPhone(code);
+    toast("QR appairage validé ✓");
+    if(biometricAvailable()&&!biometricConfigured()){
+      try{await enableBiometric()}catch(_){toast("TEL OK • biométrie à activer ensuite")}
+    }
+    return true;
+  }catch(e){
+    toast("QR d’appairage refusé ou expiré");
+    return false;
+  }
 }
 async function pairPhone(code){
   if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
@@ -454,7 +474,7 @@ pcStatus.onclick=async()=>{await detectCore();await securityStatus();render()}
 securityBadge.onclick=openSecurity;
 loadSecurityDevice();
 const toastEl=document.getElementById("toast");
-(async()=>{await detectCore();await securityStatus();await loadRegistry();if(SEC_DEVICE)await pullState();await recoverTransientFetchBlocks();render();setInterval(async()=>{await detectCore();if(CORE){await securityStatus();await recoverTransientFetchBlocks()}render()},CORE?20000:5000);setInterval(async()=>{try{const r=await fetch("./index.html?b="+Date.now(),{cache:"no-store"}),t=await r.text(),m=t.match(/APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD)location.reload()}catch(e){}},15000)})();
+(async()=>{await detectCore();await consumePairingQr();await securityStatus();await loadRegistry();if(SEC_DEVICE)await pullState();await recoverTransientFetchBlocks();render();setInterval(async()=>{await detectCore();if(CORE){await securityStatus();await recoverTransientFetchBlocks()}render()},CORE?20000:5000);setInterval(async()=>{try{const r=await fetch("./index.html?b="+Date.now(),{cache:"no-store"}),t=await r.text(),m=t.match(/APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD)location.reload()}catch(e){}},15000)})();
 </script>
 </body>
 </html>
