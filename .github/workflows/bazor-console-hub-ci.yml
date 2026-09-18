@@ -61,6 +61,23 @@ jobs:
           assert 'if not svc.get("managed")' in hub, "external process close guard missing"
           print("Security invariants OK")
           PY
+      - name: Mobile task async regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import ast
+
+          src=Path("pc-relay/bazor_pc_relay_v3.py").read_text(encoding="utf-8")
+          tree=ast.parse(src)
+
+          # Régression 2026-09-18 : request_id était présent dans kwargs ET
+          # passé positionnellement à start_mobile_task, ce qui levait
+          # TypeError et faisait répondre le Gateway en 502.
+          assert '"request_id": body.get("request_id")' not in src
+          assert 'worker_kwargs["request_id"] = rid' in src
+          assert 'result = start_mobile_task(request_id, **kwargs)' in src
+          print("Mobile task async regression OK")
+          PY
       - name: Action Engine smoke test
         run: |
           python - <<'PY'
