@@ -27,8 +27,12 @@ class BazorSecurity:
         if float(pairing.get("expires", 0) or 0) > time.time() and pairing.get("hash"):
             self._pair_hash = str(pairing.get("hash"))
             self._pair_expires = float(pairing.get("expires"))
-        # Premier appairage seulement : on crée un code si aucun code encore valide n'existe.
-        if not bool(self.state.get("devices")) and not self._pair_hash:
+        # Le code brut n'est volontairement pas persiste. Apres un redemarrage,
+        # un hash seul est inutilisable par l'utilisateur : on genere donc UNE
+        # nouvelle cle visible localement, au lieu de conserver un code fantome.
+        if self._pair_hash and not self._pair_code:
+            self.rotate_pair_code(force=True)
+        elif not self._pair_hash:
             self.rotate_pair_code(force=True)
 
     def _load(self):
