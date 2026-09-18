@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto24",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto25",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -308,7 +308,7 @@ function ensureState(){
     p.name=rp.name;p.summary=p.summary||rp.summary;
     state.subprojects[rp.id]=state.subprojects[rp.id]||{};
     for(const rc of rp.subprojects||[]){
-      state.subprojects[rp.id][rc.id]=Object.assign({status:"A_EVALUER",progress:null,summary:"Pas encore évalué",next:rc.next,updated:null},state.subprojects[rp.id][rc.id]||{});
+      state.subprojects[rp.id][rc.id]=Object.assign({status:"A_EVALUER",progress:null,summary:"Pas encore évalué",next:rc.next,updated:null,evidence:null},state.subprojects[rp.id][rc.id]||{});
     }
   }
   localSave(false);
@@ -392,8 +392,28 @@ function activityHtml(p){
   const c=children(p.id).find(x=>x.id===r.subId),checks=(r.checkpoints||[]).slice(-3);
   return '<div class="infobox activity"><div class="row between"><b>ACTIVITÉ</b><span class="badge '+statusClass(r.active?"EN_COURS":r.blocked?"BLOQUE":"OK")+'">'+statusLabel(r.active?"EN_COURS":r.blocked?"BLOQUE":"OK")+'</span></div><div class="mini muted" style="margin-top:5px">'+esc(c?.name||p.name)+' • '+esc(r.stage||"")+'</div><div class="progress" style="margin-top:7px"><div style="width:'+(r.taskProgress||0)+'%"></div></div>'+checks.map(x=>'<div class="checkpoint"><span class="dot '+(x.kind==="ok"?"good":x.kind==="bad"?"bad":"")+'">'+(x.kind==="ok"?"✓":x.kind==="bad"?"!":"•")+'</span><span>'+esc(x.text)+'</span></div>').join("")+'</div>';
 }
+function showEvidence(pid,sid){
+  const x=sp(pid,sid),ev=x?.evidence;
+  document.getElementById("evidenceModal")?.remove();
+  const e=document.createElement("div");e.id="evidenceModal";e.className="modal";
+  if(!ev){
+    e.innerHTML='<div class="row between"><h3>PREUVE</h3><button onclick="this.closest(\'#evidenceModal\').remove()">Fermer</button></div><div class="infobox"><b>ℹ AUCUNE PREUVE DE MODIFICATION</b><div class="mini muted" style="margin-top:5px">Ce GO a seulement analysé. Aucun fichier n’a été modifié.</div></div>';
+  }else{
+    const files=ev.files||[],tests=ev.tests||[];
+    const fileHtml=files.map(f=>'<div class="checkpoint"><span class="dot good">✓</span><span><b>'+esc((f.root||"")+" : "+(f.path||""))+'</b><br><span class="mini muted">avant '+esc((f.before_sha256||"création").slice(0,12))+'… → après '+esc((f.after_sha256||"").slice(0,12))+'…</span></span></div>').join("");
+    const testHtml=tests.map(t=>'<div class="checkpoint"><span class="dot '+(t.ok?"good":"bad")+'">'+(t.ok?"✓":"!")+'</span><span>'+esc(t.test||"test")+' • '+esc(t.ok?"OK":(t.detail||"ÉCHEC"))+'</span></div>').join("");
+    e.innerHTML='<div class="row between"><h3>PREUVE DE TRAVAIL RÉEL</h3><button onclick="this.closest(\'#evidenceModal\').remove()">Fermer</button></div>'+
+      '<div class="infobox"><b>✅ '+files.length+' fichier(s) réellement modifié(s)</b><div class="mini muted" style="margin-top:5px">ID '+esc(ev.request_id||"—")+' • '+new Date(ev.when||Date.now()).toLocaleString("fr-FR")+'</div></div>'+
+      '<div class="infobox"><b>FICHIERS</b>'+fileHtml+'</div>'+
+      '<div class="infobox"><b>TESTS</b>'+testHtml+'</div>'+
+      (ev.backup_dir?'<div class="mini muted">Sauvegarde : '+esc(ev.backup_dir)+'</div>':"")+
+      (ev.report_file?'<div class="mini muted">Rapport : '+esc(ev.report_file)+'</div>':"");
+  }
+  document.body.appendChild(e);
+}
+
 function subRows(p){
-  return children(p.id).map(c=>{const x=sp(p.id,c.id);return '<div class="subrow"><div><div class="subname">'+esc(c.name)+'</div><div class="submeta">'+(x.progress===null?"—":x.progress+"%")+' • '+esc(statusLabel(x.status))+' • '+esc(x.summary||"")+'</div></div><button class="subgo" onclick="event.stopPropagation();goSub(\''+p.id+'\',\''+c.id+'\')">GO</button></div>'}).join("");
+  return children(p.id).map(c=>{const x=sp(p.id,c.id),real=!!x.evidence?.real;return '<div class="subrow"><div><div class="subname">'+esc(c.name)+' '+(real?'<span class="badge ok">PREUVE ✓</span>':'<span class="badge todo">PAS DE PREUVE</span>')+'</div><div class="submeta">'+(x.progress===null?"—":x.progress+"%")+' • '+esc(statusLabel(x.status))+' • '+esc(x.summary||"")+'</div></div><div class="row"><button onclick="event.stopPropagation();showEvidence(\''+p.id+'\',\''+c.id+'\')">PREUVE</button><button class="subgo" onclick="event.stopPropagation();goSub(\''+p.id+'\',\''+c.id+'\')">GO</button></div></div>'}).join("");
 }
 function projectCard(p){
   const open=!!state.expanded[p.id],info=state.info[p.id],r=state.runs[p.id],disp=r?.active?"EN_COURS":p.status,prog=overall(p),n=nextSub(p.id);
@@ -402,7 +422,7 @@ function projectCard(p){
   '<div class="actions"><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'status\')">STATUS</button><button onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'next\')">SUIVANTE</button><button class="primary" onclick="event.stopPropagation();goNext(\''+p.id+'\')">GO</button><button onclick="event.stopPropagation();goAuto(\''+p.id+'\')">AUTO</button></div>'+infoHtml+activityHtml(p)+(open?'<div class="detail">'+subRows(p)+'</div>':"")+'</div>';
 }
 function renderHome(){
-  const c=counts();home.innerHTML='<div class="summarybar"><div class="summarybox"><b>'+c.running+'</b><span class="mini muted">en cours</span></div><div class="summarybox"><b>'+c.blocked+'</b><span class="mini muted">bloqué</span></div><div class="summarybox"><b>'+c.todo+'</b><span class="mini muted">à faire</span></div></div>'+state.projects.sort((a,b)=>(rp(a.id)?.order||99)-(rp(b.id)?.order||99)).map(projectCard).join("");
+  const c=counts();home.innerHTML='<div class="infobox"><b>GO = travail prouvé uniquement si tu vois ✅ TRAVAIL RÉEL / PREUVE ✓</b><div class="mini muted">Sinon BAZOR t’indique clairement ANALYSE SEULE : aucun fichier n’a été modifié.</div></div><div class="summarybar"><div class="summarybox"><b>'+c.running+'</b><span class="mini muted">en cours</span></div><div class="summarybox"><b>'+c.blocked+'</b><span class="mini muted">bloqué</span></div><div class="summarybox"><b>'+c.todo+'</b><span class="mini muted">à faire</span></div></div>'+state.projects.sort((a,b)=>(rp(a.id)?.order||99)-(rp(b.id)?.order||99)).map(projectCard).join("");
 }
 function toggleProject(id){state.expanded[id]=!state.expanded[id];localSave()}
 function toggleInfo(id,t){state.info[id]=state.info[id]===t?null:t;localSave()}
@@ -438,9 +458,25 @@ async function goSub(pid,sid,auto=false){
   try{
     let d=await taskCall(pid,c,false,"");state.runs[pid].stage="Contrôle";state.runs[pid].taskProgress=75;state.runs[pid].checkpoints.push({text:"Premier résultat reçu",kind:d.status==="BLOQUE"?"bad":"ok"});if(d.execution?.mode==="file_changes"){const n=d.execution?.action_result?.files?.length||0;state.runs[pid].checkpoints.push({text:n+" fichier(s) modifié(s) réellement",kind:"ok"});const tests=d.execution?.action_result?.tests||[];if(tests.length)state.runs[pid].checkpoints.push({text:tests.every(t=>t.ok)?"Tests automatiques OK":"Test échoué • rollback",kind:tests.every(t=>t.ok)?"ok":"bad"})}else{state.runs[pid].checkpoints.push({text:"Analyse seule • aucune modification appliquée",kind:"run"})}localSave();
     if(d.status==="BLOQUE"||!d.ok){state.runs[pid].stage="Correction + relance";state.runs[pid].taskProgress=88;state.runs[pid].checkpoints.push({text:"Correction automatique",kind:"run"});localSave();d=await taskCall(pid,c,true,d.answer||JSON.stringify(d))}
-    x.status=d.status||"BLOQUE";x.progress=typeof d.progress==="number"?d.progress:x.progress;x.summary=d.summary||"Résultat reçu";x.next=d.next||x.next||c.next;x.updated=Date.now();
-    const blocked=x.status==="BLOQUE";const real=d.execution?.mode==="file_changes";state.runs[pid]={active:false,blocked,subId:sid,stage:blocked?"Blocage persistant":real?"Modification réelle validée":"Analyse terminée sans changement fichier",taskProgress:100,checkpoints:[{text:blocked?"Blocage après correction":real?"Fichiers modifiés + tests validés":"Aucune modification appliquée",kind:blocked?"bad":real?"ok":"run"}]};
-    p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");p.next=nextSub(pid)?sp(pid,nextSub(pid).id).next:"Contrôle final";log((blocked?"Blocage — ":"OK — ")+c.name,blocked?"BLOQUÉ":"OK");localSave();if(!auto)showResult(c.name,d);return d;
+    const real=d.execution?.mode==="file_changes";
+    const ar=d.execution?.action_result||{};
+    const blocked=(d.status||"BLOQUE")==="BLOQUE";
+    x.progress=typeof d.progress==="number"?d.progress:x.progress;
+    x.next=d.next||x.next||c.next;
+    x.updated=Date.now();
+    if(real){
+      x.status=blocked?"BLOQUE":"OK";
+      x.summary=(d.summary||"Travail terminé")+" • PREUVE: "+((ar.files||[]).length)+" fichier(s), "+((ar.tests||[]).filter(t=>t.ok).length)+"/"+((ar.tests||[]).length)+" test(s) OK";
+      x.evidence={real:true,when:Date.now(),request_id:ar.request_id||null,files:ar.files||[],tests:ar.tests||[],backup_dir:ar.backup_dir||null,report_file:ar.report_file||null};
+    }else{
+      x.status=blocked?"BLOQUE":"A_EVALUER";
+      x.summary=blocked?(d.summary||"Blocage détecté"):"ANALYSE SEULE • aucun fichier modifié";
+      x.evidence=null;
+    }
+    state.runs[pid]={active:false,blocked,subId:sid,stage:blocked?"Blocage persistant":real?"✅ TRAVAIL RÉEL PROUVÉ":"ℹ ANALYSE SEULE • rien n'a été modifié",taskProgress:100,checkpoints:[{text:blocked?"Blocage après correction":real?"Preuve: fichiers + tests validés":"Aucune modification appliquée",kind:blocked?"bad":real?"ok":"run"}]};
+    p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");p.next=nextSub(pid)?sp(pid,nextSub(pid).id).next:"Contrôle final";log((blocked?"Blocage — ":real?"TRAVAIL RÉEL — ":"ANALYSE SEULE — ")+c.name,blocked?"BLOQUÉ":real?"OK":"INFO");localSave();
+    toast(blocked?"GO bloqué":real?"TRAVAIL RÉEL ✓ "+((ar.files||[]).length)+" fichier(s)":"ANALYSE SEULE — aucun fichier modifié");
+    if(!auto)showResult(c.name,d);return d;
   }catch(e){
     const msg=e.name==="AbortError"?"Analyse trop longue (>6 min)":String(e.message||e);
     const transport=isTransportFailureText(msg);
@@ -463,7 +499,7 @@ async function goAuto(pid){
     p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");log("AUTO — "+p.name,blocked?"BLOQUÉ":"OK");localSave();toast(blocked?"AUTO arrêté sur blocage":"AUTO terminé ✓");
   }finally{setTimeout(()=>delete actionBusy[key],900)}
 }
-function showResult(title,d){document.getElementById("resultModal")?.remove();const e=document.createElement("div");e.id="resultModal";e.className="modal";const body=d?.answer||d?.result?.answer||d?.ollama?.answer||d?.mammouth?.answer||JSON.stringify(d,null,2);const ex=d?.execution;const files=ex?.action_result?.files||[];const tests=ex?.action_result?.tests||[];const evidence=ex?'<div class="infobox"><b>'+(ex.mode==="file_changes"?"✅ MODIFICATION RÉELLE":"ℹ ANALYSE SEULE")+'</b><div class="mini muted" style="margin-top:4px">'+(files.length?files.length+" fichier(s) modifié(s) • "+tests.filter(t=>t.ok).length+"/"+tests.length+" test(s) OK":"Aucun fichier modifié")+'</div></div>':"";e.innerHTML='<div class="row between"><h3>'+esc(title)+'</h3><button onclick="this.closest(\'#resultModal\').remove()">Fermer</button></div><div class="mini muted">'+esc([d?.status,d?.engine,d?.model].filter(Boolean).join(" • "))+'</div>'+evidence+'<div style="white-space:pre-wrap;font-size:12px;margin-top:8px">'+esc(body)+'</div>';document.body.appendChild(e)}
+function showResult(title,d){document.getElementById("resultModal")?.remove();const e=document.createElement("div");e.id="resultModal";e.className="modal";const body=d?.answer||d?.result?.answer||d?.ollama?.answer||d?.mammouth?.answer||JSON.stringify(d,null,2);const ex=d?.execution;const ar=ex?.action_result||{};const files=ar.files||[];const tests=ar.tests||[];const fileList=files.map(f=>'<div class="mini">✓ '+esc((f.root||"")+" : "+(f.path||""))+'</div>').join("");const evidence=ex?'<div class="infobox"><b>'+(ex.mode==="file_changes"?"✅ TRAVAIL RÉEL PROUVÉ":"ℹ ANALYSE SEULE — RIEN MODIFIÉ")+'</b><div class="mini muted" style="margin-top:4px">'+(files.length?files.length+" fichier(s) modifié(s) • "+tests.filter(t=>t.ok).length+"/"+tests.length+" test(s) OK":"Aucun fichier modifié")+'</div>'+fileList+'</div>':"";e.innerHTML='<div class="row between"><h3>'+esc(title)+'</h3><button onclick="this.closest(\'#resultModal\').remove()">Fermer</button></div><div class="mini muted">'+esc([d?.status,d?.engine,d?.model].filter(Boolean).join(" • "))+'</div>'+evidence+'<div style="white-space:pre-wrap;font-size:12px;margin-top:8px">'+esc(body)+'</div>';document.body.appendChild(e)}
 function fillProjects(){captureProject.innerHTML='<option value="">Général</option>'+(REGISTRY.projects||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join("")}
 function renderInbox(){inbox.innerHTML='<div class="card"><h2>Inbox</h2><div class="mini muted">'+state.inbox.length+' élément(s)</div></div>'+state.inbox.map(i=>'<div class="card"><b>'+esc(i.title)+'</b><div class="mini muted">'+esc(i.priority||"")+' • '+esc(i.status||"")+'</div></div>').join("")}
 function renderIA(){ollama.innerHTML='<div class="card"><h2>Moteurs IA</h2><div class="project-phrase">'+esc(providerStatus.textContent)+'</div><div class="mini muted">AUTO privilégie le local et peut utiliser Mammouth pour les tâches adaptées. Tu peux forcer OLLAMA ou MAMMOUTH avec le sélecteur en haut.</div></div>'}
