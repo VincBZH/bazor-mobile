@@ -1,0 +1,9 @@
+# BAZOR runtime data (logs, transient state, generated status)
+pc-relay/BAZOR_DATA/
+
+# Python runtime/cache
+__pycache__/
+*.py[cod]
+
+# Local transient files
+*.log
