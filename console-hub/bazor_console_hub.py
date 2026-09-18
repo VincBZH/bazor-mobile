@@ -21,6 +21,8 @@ MOBILE_STATE = DATA / "mobile_state.json"
 LOCK_PORT = 8790
 UPDATE_HELPER = ROOT / "console-hub" / "bazor_interface_update_restart.py"
 MOBILE_REPAIR = ROOT / "console-hub" / "bazor_mobile_network_repair.ps1"
+USB_BRIDGE = ROOT / "console-hub" / "bazor_usb_android_bridge.ps1"
+USB_STATUS_FILE = DATA / "usb_android_status.json"
 MOBILE_URL_FILE = DATA / "mobile_url.txt"
 MOBILE_STATUS_FILE = DATA / "mobile_network_status.json"
 
@@ -176,6 +178,22 @@ def save_hub_state(data):
     except Exception:
         pass
 
+def usb_status_summary():
+    try:
+        if USB_STATUS_FILE.exists():
+            d=json.loads(USB_STATUS_FILE.read_text(encoding="utf-8-sig",errors="replace"))
+            if d.get("ok") and d.get("connected"):
+                return "USB ANDROID OK · biométrie localhost prête", "ok"
+            if d.get("reason") == "unauthorized":
+                return "USB Android · autorisation ADB à accepter sur le téléphone", "warn"
+            if d.get("reason") == "adb_missing":
+                return "USB Android · ADB introuvable", "warn"
+            if d.get("connected"):
+                return "USB Android détecté · pont à réparer", "warn"
+    except Exception:
+        pass
+    return "USB Android non détecté", "warn"
+
 def mobile_network_summary():
     try:
         if MOBILE_STATUS_FILE.exists():
@@ -194,6 +212,13 @@ def mobile_network_summary():
     return "LAN non diagnostiqué", "warn"
 
 def detect_mobile_url():
+    try:
+        if USB_STATUS_FILE.exists():
+            d=json.loads(USB_STATUS_FILE.read_text(encoding="utf-8-sig",errors="replace"))
+            if d.get("ok") and d.get("connected") and d.get("web_reverse"):
+                return "http://127.0.0.1:8776/"
+    except Exception:
+        pass
     try:
         if MOBILE_URL_FILE.exists():
             url=MOBILE_URL_FILE.read_text(encoding="utf-8-sig",errors="replace").strip()
@@ -266,6 +291,10 @@ class Hub:
         net_color={"ok":"#42d483","warn":"#f2c94c","bad":"#ff6b6b"}.get(net_state,"#f2c94c")
         self.mobile_net_label = tk.Label(top, text=net_text, fg=net_color, bg="#11151b", font=("Segoe UI", 9, "bold"))
         self.mobile_net_label.pack(side="left", padx=8)
+        usb_text,usb_state=usb_status_summary()
+        usb_color={"ok":"#42d483","warn":"#f2c94c","bad":"#ff6b6b"}.get(usb_state,"#f2c94c")
+        self.usb_label = tk.Label(top, text=usb_text, fg=usb_color, bg="#11151b", font=("Segoe UI", 9, "bold"))
+        self.usb_label.pack(side="left", padx=8)
         self.code_label = tk.Label(top, text="", fg="black", bg="#f6d04d", font=("Consolas", 13, "bold"), padx=10, pady=5)
         self.code_label.pack(side="right")
         self.code_label.pack_forget()
@@ -275,6 +304,7 @@ class Hub:
         for text, cmd in [
             ("↻ MAJ + RELANCE BAZOR", self.update_restart_bazor),
             ("RÉPARER MOBILE", self.repair_mobile_access),
+            ("USB TÉLÉPHONE", self.usb_mobile),
             ("CENTRALISER / ADOPTER", self.centralize),
             ("ACTUALISER", self.refresh),
             ("VOIR LOG", self.open_log),
@@ -419,6 +449,11 @@ class Hub:
                 net_text,net_state=mobile_network_summary()
                 net_color={"ok":"#42d483","warn":"#f2c94c","bad":"#ff6b6b"}.get(net_state,"#f2c94c")
                 self.mobile_net_label.config(text=net_text,fg=net_color)
+            except Exception:pass
+            try:
+                usb_text,usb_state=usb_status_summary()
+                usb_color={"ok":"#42d483","warn":"#f2c94c","bad":"#ff6b6b"}.get(usb_state,"#f2c94c")
+                self.usb_label.config(text=usb_text,fg=usb_color)
             except Exception:pass
             self.update_security_code()
         finally:
@@ -646,6 +681,21 @@ class Hub:
             self.summary.config(text="Adresse mobile copiée : "+url)
         except Exception:
             pass
+
+    def usb_mobile(self):
+        if not USB_BRIDGE.exists():
+            messagebox.showerror("BAZOR","Outil USB Android absent.")
+            return
+        try:
+            cmd=[
+                "powershell","-NoProfile","-ExecutionPolicy","Bypass","-File",
+                str(USB_BRIDGE),"-Root",str(ROOT),"-OpenPhone"
+            ]
+            subprocess.Popen(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=CREATE_NO_WINDOW)
+            self.summary.config(text="Connexion USB Android + ouverture mobile…")
+            self.root.after(2200,self._refresh_mobile_url)
+        except Exception as exc:
+            messagebox.showerror("BAZOR",f"USB Android impossible : {type(exc).__name__}")
 
     def repair_mobile_access(self):
         if not MOBILE_REPAIR.exists():
