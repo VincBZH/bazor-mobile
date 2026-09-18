@@ -1,0 +1,249 @@
+{
+  "version": "2026.09.18.1",
+  "title": "BAZOR Project Registry",
+  "projects": [
+    {
+      "id": "ai-room",
+      "name": "BAZOR AI Room",
+      "order": 1,
+      "default_progress": 62,
+      "summary": "Coordination centrale, mobile, routage IA, historique et diagnostics.",
+      "local_root": "%LOCALAPPDATA%\\BazorAIROOM",
+      "subprojects": [
+        {
+          "id": "mobile",
+          "name": "BAZOR Mobile / Command Center",
+          "order": 1,
+          "next": "Simplifier le cockpit mobile et fiabiliser le pilotage des outils BAZOR."
+        },
+        {
+          "id": "core",
+          "name": "BAZOR Core / routage IA",
+          "order": 2,
+          "next": "Fiabiliser le routage Ollama / Mammouth et les retours structurés."
+        },
+        {
+          "id": "mammouth",
+          "name": "Mammouth Bridge",
+          "order": 3,
+          "next": "Faire de Mammouth un moteur de premier rang avec statut, budget et fallback visibles."
+        },
+        {
+          "id": "watcher",
+          "name": "GitHub Watcher / Auto-update",
+          "order": 4,
+          "next": "Éviter les redémarrages pendant une tâche et appliquer les mises à jour au bon moment."
+        },
+        {
+          "id": "history",
+          "name": "Historique des sessions",
+          "order": 5,
+          "next": "Brancher l'historique réel des sessions BAZOR."
+        },
+        {
+          "id": "logs",
+          "name": "Logs / diagnostic automatique",
+          "order": 6,
+          "next": "Centraliser blocages, logs, contrôles et propositions de correction."
+        }
+      ]
+    },
+    {
+      "id": "simple-studio",
+      "name": "AI Simple Studio",
+      "order": 2,
+      "default_progress": 88,
+      "summary": "Studio local image/vidéo basé sur ComfyUI et modèles locaux.",
+      "local_root": "C:\\AI\\SimpleStudioV2",
+      "subprojects": [
+        {
+          "id": "comfy",
+          "name": "ComfyUI / bridge",
+          "order": 1,
+          "next": "Fiabiliser Studio ↔ ComfyUI et la détection des dépendances."
+        },
+        {
+          "id": "presets",
+          "name": "Presets & modèles locaux",
+          "order": 2,
+          "next": "Inventorier et exposer les vrais presets et modèles installés."
+        },
+        {
+          "id": "h3",
+          "name": "MiniMax H3 / workflows",
+          "order": 3,
+          "next": "Valider le workflow H3 8 Go VRAM et ses dépendances réelles."
+        },
+        {
+          "id": "quality",
+          "name": "Analyse & correction automatique",
+          "order": 4,
+          "next": "Analyser les générations et retenter automatiquement avec contrôles."
+        },
+        {
+          "id": "gallery",
+          "name": "Galerie / sécurité",
+          "order": 5,
+          "next": "Fiabiliser galerie, suppression, masquage et récupération."
+        },
+        {
+          "id": "diag",
+          "name": "Diagnostic vers BAZOR",
+          "order": 6,
+          "next": "Envoyer erreurs et journaux structurés au Core pour correction."
+        }
+      ]
+    },
+    {
+      "id": "wii-relay",
+      "name": "Projet Wii AI Relay",
+      "order": 3,
+      "default_progress": 34,
+      "summary": "Pont IA sécurisé et développement du jeu Wii/PC.",
+      "local_root": "C:\\projetWII",
+      "subprojects": [
+        {
+          "id": "bridge",
+          "name": "Wii AI Bridge",
+          "order": 1,
+          "next": "Fiabiliser le pont GitHub ↔ PC ↔ Ollama."
+        },
+        {
+          "id": "game",
+          "name": "Prototype jeu Wii / PC",
+          "order": 2,
+          "next": "Poursuivre un prototype minimal jouable et fluide."
+        },
+        {
+          "id": "maze",
+          "name": "Labyrinthes / chunks",
+          "order": 3,
+          "next": "Structurer labyrinthes, chunks et contraintes mémoire Wii."
+        },
+        {
+          "id": "multi",
+          "name": "Multijoueur",
+          "order": 4,
+          "next": "Préparer 2 joueurs écran partagé puis extension 4 joueurs."
+        },
+        {
+          "id": "save",
+          "name": "Sauvegarde / progression",
+          "order": 5,
+          "next": "Structurer sauvegarde, niveaux, pièces et historique."
+        }
+      ]
+    },
+    {
+      "id": "modo-viewer",
+      "name": "MODO Viewer",
+      "order": 4,
+      "default_progress": 45,
+      "summary": "Outil de modération et suivi TikTok Live.",
+      "subprojects": [
+        {
+          "id": "live",
+          "name": "Modération TikTok Live",
+          "order": 1,
+          "next": "Fiabiliser flux, tri et gestion des interventions."
+        },
+        {
+          "id": "profiles",
+          "name": "Profils / notes privées",
+          "order": 2,
+          "next": "Fiabiliser profils, habitués, notes et historique local."
+        },
+        {
+          "id": "translate",
+          "name": "Traduction / lecture vocale",
+          "order": 3,
+          "next": "Fiabiliser traduction arabe et lecture vocale."
+        },
+        {
+          "id": "ui",
+          "name": "Interface / scroll / zoom",
+          "order": 4,
+          "next": "Corriger zoom tactile, redimensionnement et verrouillage du scroll."
+        },
+        {
+          "id": "exports",
+          "name": "Exports / logs",
+          "order": 5,
+          "next": "Fiabiliser exports ZIP, journaux et diagnostic BAZOR."
+        }
+      ]
+    },
+    {
+      "id": "bazor-tools",
+      "name": "BAZOR Tools & Infrastructure",
+      "order": 5,
+      "default_progress": 55,
+      "summary": "Bibliothèque, maintenance, sécurité et outils transverses BAZOR.",
+      "subprojects": [
+        {
+          "id": "library",
+          "name": "Bibliothèque / Encyclopédie BAZOR",
+          "order": 1,
+          "next": "Centraliser projets, fichiers, décisions, versions et état d'avancement."
+        },
+        {
+          "id": "autopilot",
+          "name": "BAZOR Autopilot",
+          "order": 2,
+          "next": "Fiabiliser orchestration et reprise automatique des tâches."
+        },
+        {
+          "id": "cleaner",
+          "name": "Disk / PC Cleaner",
+          "order": 3,
+          "next": "Conserver nettoyage réversible, quarantaines et rapports."
+        },
+        {
+          "id": "tor",
+          "name": "BAZOR TOR",
+          "order": 4,
+          "next": "Conserver recherche sécurisée, instance unique et diagnostics."
+        },
+        {
+          "id": "extractor",
+          "name": "ChatGPT Extractor",
+          "order": 5,
+          "next": "Fiabiliser export DOCX/PDF et suivi des validations."
+        }
+      ]
+    },
+    {
+      "id": "festival",
+      "name": "BAZOR Festival",
+      "order": 6,
+      "default_progress": 10,
+      "summary": "Univers musical et festival numérique BAZOR.",
+      "subprojects": [
+        {
+          "id": "identity",
+          "name": "Identité / univers",
+          "order": 1,
+          "next": "Structurer identité visuelle, narration et scènes."
+        },
+        {
+          "id": "music",
+          "name": "Musique / contenus",
+          "order": 2,
+          "next": "Organiser morceaux originaux, voix et contenus."
+        },
+        {
+          "id": "video",
+          "name": "Vidéos / concerts",
+          "order": 3,
+          "next": "Structurer génération et publication des vidéos."
+        },
+        {
+          "id": "distribution",
+          "name": "TikTok / YouTube / Deezer",
+          "order": 4,
+          "next": "Préparer la chaîne de publication et le suivi."
+        }
+      ]
+    }
+  ]
+}
