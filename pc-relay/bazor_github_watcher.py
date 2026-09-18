@@ -10,6 +10,8 @@ MARK="[BAZOR-WATCHER-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
+HUB_LOG_DIR=os.path.join(ROOT,"pc-relay","BAZOR_DATA","HUB_LOGS")
+CORE_LOG=os.path.join(HUB_LOG_DIR,"core.log")
 
 def _git(*args):
     return subprocess.run(["git","-C",ROOT,*args],capture_output=True,text=True,encoding="utf-8",errors="replace")
@@ -17,16 +19,18 @@ def _git(*args):
 def _restart_core():
     core_script=os.path.join(ROOT,"pc-relay","bazor_pc_relay_v3.py")
     try:
+        os.makedirs(HUB_LOG_DIR,exist_ok=True)
         if os.name=="nt":
             ps=r"""Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'bazor_pc_relay_v3\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"""
-            subprocess.run(["powershell","-NoProfile","-Command",ps],capture_output=True,text=True,timeout=12)
-            flags=getattr(subprocess,"CREATE_NEW_CONSOLE",0)
+            subprocess.run(["powershell","-NoProfile","-Command",ps],capture_output=True,text=True,timeout=12,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+            flags=getattr(subprocess,"CREATE_NO_WINDOW",0) | getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0)
         else:
             flags=0
         env=os.environ.copy()
         env["BAZOR_MOBILE_PORT"]="8775"
-        subprocess.Popen([sys.executable,core_script],cwd=os.path.dirname(core_script),env=env,creationflags=flags)
-        print("[OK CORE RESTART] BAZOR Core 8775 relance avec la nouvelle version.")
+        log=open(CORE_LOG,"a",encoding="utf-8",buffering=1)
+        subprocess.Popen([sys.executable,core_script],cwd=os.path.dirname(core_script),env=env,stdout=log,stderr=subprocess.STDOUT,creationflags=flags)
+        print("[OK CORE RESTART] BAZOR Core 8775 relance en arriere-plan; log centralise dans le Hub.")
     except Exception as e:
         print("[BLOQUE CORE RESTART]",type(e).__name__,str(e))
 
