@@ -27,6 +27,7 @@ jobs:
             console-hub/bazor_hub_expert_review.py \
             console-hub/bazor_popup_guard.py \
             console-hub/bazor_interface_update_restart.py \
+            console-hub/bazor_minimax_h3_repair.py \
             pc-relay/bazor_security.py \
             pc-relay/bazor_pc_relay_v3.py \
             pc-relay/bazor_github_watcher.py \
