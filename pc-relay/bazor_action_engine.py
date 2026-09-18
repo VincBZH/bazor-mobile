@@ -19,8 +19,11 @@ TEXT_EXTS = {
 }
 SKIP_PARTS = {
     ".git","node_modules","models","checkpoints","output","outputs",
-    "venv",".venv","__pycache__","cache","temp","tmp","downloads"
+    "venv",".venv","__pycache__","cache","temp","tmp","downloads",
+    "bazor_data","hub_logs","action_backups","action_reports"
 }
+MAX_CONTEXT_SCAN_FILES = 5000
+MAX_CONTEXT_SCAN_SECONDS = 3.0
 DENY_NAMES = {
     ".env","security_state.json","credentials.json","secrets.json",
     "id_rsa","id_ed25519","known_hosts"
@@ -118,30 +121,61 @@ class ActionEngine:
     def context_for_project(self, project_id, max_files=24, max_chars=76000):
         aliases = self.available_roots(project_id)
         candidates = []
+        started = time.monotonic()
+        deadline = started + MAX_CONTEXT_SCAN_SECONDS
+        scanned_files = 0
+        scan_limited = False
+
+        # GO tourne dans un thread du Core. Un Path.rglob("*") descendait malgré
+        # les dossiers à ignorer (.git, models, logs, etc.) puis les rejetait
+        # seulement après coup. Sur les gros projets cela pouvait monopoliser
+        # disque/CPU assez longtemps pour faire expirer les requêtes du mobile.
+        # os.walk permet de couper ces branches AVANT de les parcourir.
         for info in aliases:
             alias = info["alias"]
             root = Path(info["path"])
             try:
-                for p in root.rglob("*"):
-                    if not p.is_file() or p.suffix.lower() not in TEXT_EXTS:
-                        continue
-                    try:
-                        rel = p.relative_to(root)
-                    except Exception:
-                        continue
-                    if any(part.lower() in SKIP_PARTS for part in rel.parts):
-                        continue
-                    if rel.name.lower() in DENY_NAMES:
-                        continue
-                    try:
-                        st = p.stat()
-                    except Exception:
-                        continue
-                    if st.st_size > 512000:
-                        continue
-                    candidates.append((st.st_mtime, alias, root, p))
+                for current, dirs, names in os.walk(root, topdown=True, followlinks=False):
+                    dirs[:] = [d for d in dirs if d.lower() not in SKIP_PARTS]
+                    if time.monotonic() >= deadline or scanned_files >= MAX_CONTEXT_SCAN_FILES:
+                        scan_limited = True
+                        break
+
+                    current_path = Path(current)
+                    for name in names:
+                        scanned_files += 1
+                        if scanned_files % 250 == 0:
+                            time.sleep(0)  # rend la main aux threads HTTP du Core
+                        if time.monotonic() >= deadline or scanned_files > MAX_CONTEXT_SCAN_FILES:
+                            scan_limited = True
+                            break
+
+                        p = current_path / name
+                        if p.suffix.lower() not in TEXT_EXTS:
+                            continue
+                        try:
+                            rel = p.relative_to(root)
+                        except Exception:
+                            continue
+                        if any(part.lower() in SKIP_PARTS for part in rel.parts):
+                            continue
+                        if rel.name.lower() in DENY_NAMES:
+                            continue
+                        try:
+                            st = p.stat()
+                        except Exception:
+                            continue
+                        if st.st_size > 512000:
+                            continue
+                        candidates.append((st.st_mtime, alias, root, p))
+
+                    if scan_limited:
+                        break
             except Exception:
                 continue
+            if scan_limited:
+                break
+
         candidates.sort(reverse=True)
         chunks, files, used = [], [], 0
         for _, alias, root, p in candidates:
@@ -168,11 +202,16 @@ class ActionEngine:
                 used += len(body)
             except Exception:
                 continue
+
+        scan_ms = int((time.monotonic() - started) * 1000)
         return "".join(chunks), {
             "available": bool(files),
             "roots": aliases,
             "files": files,
             "chars": used,
+            "scan_ms": scan_ms,
+            "scanned_files": scanned_files,
+            "scan_limited": scan_limited,
         }
 
     def parse_actions(self, answer):
