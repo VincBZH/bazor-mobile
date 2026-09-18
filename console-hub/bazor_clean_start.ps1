@@ -21,6 +21,7 @@ $patterns = @(
   'bazor_github_watcher\.py',
   'bazor_pc_relay_v3\.py',
   'http\.server\s+8776',
+  'bazor_mobile_gateway\.py',
   'DEMARRER_GITHUB_WATCHER\.cmd',
   'bazor_popup_guard\.py'
 )
