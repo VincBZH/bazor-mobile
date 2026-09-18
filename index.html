@@ -60,7 +60,7 @@ h2,h3{margin:0 0 7px}
 
 <script>
 const APP_BUILD="2026.09.18-auto29",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
-let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
+let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},taskStates:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
 let SEC_DEVICE=null,SEC_STATUS=null;
@@ -319,14 +319,18 @@ function ensureState(){
   const old=JSON.parse(localStorage.getItem(KEY)||"null");
   if(old&&old.projects)state=Object.assign(state,old);
   state.projects=Array.isArray(state.projects)?state.projects:[];
-  state.subprojects=state.subprojects||{};state.runs=state.runs||{};state.info=state.info||{};state.expanded=state.expanded||{};state.inbox=state.inbox||[];state.journal=state.journal||[];
+  state.subprojects=state.subprojects||{};state.taskStates=state.taskStates||{};state.runs=state.runs||{};state.info=state.info||{};state.expanded=state.expanded||{};state.inbox=state.inbox||[];state.journal=state.journal||[];
   for(const rp of REGISTRY.projects||[]){
     let p=state.projects.find(x=>x.id===rp.id);
     if(!p){p={id:rp.id,name:rp.name,status:"A_FAIRE",progress:rp.default_progress||0,next:(rp.subprojects?.[0]?.next||"À définir"),summary:rp.summary};state.projects.push(p)}
     p.name=rp.name;p.summary=p.summary||rp.summary;
     state.subprojects[rp.id]=state.subprojects[rp.id]||{};
+    state.taskStates[rp.id]=state.taskStates[rp.id]||{};
     for(const rc of rp.subprojects||[]){
       state.subprojects[rp.id][rc.id]=Object.assign({status:"A_EVALUER",progress:null,summary:"Pas encore évalué",next:rc.next,updated:null,evidence:null},state.subprojects[rp.id][rc.id]||{});
+    }
+    for(const t of rp.tasks||[]){
+      state.taskStates[rp.id][t.id]=Object.assign({status:t.status||"TODO",summary:"",updated:null,evidence:null,last_model:null,last_engine:null},state.taskStates[rp.id][t.id]||{});
     }
   }
   localSave(false);
