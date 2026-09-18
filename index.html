@@ -468,7 +468,8 @@ function taskRows(p){
     const s=taskState(p.id,t.id),depsOk=taskDepsDone(p.id,t),deps=(t.dependencies||[]).filter(id=>!["DONE","VERIFIE"].includes(taskState(p.id,id).status));
     const ac=(t.acceptance||[]);const acText=ac.length?(ac.length+" critère(s) DONE • "+ac[0]):"";
     const depText=depsOk?"":" • attend "+deps.join(", ");
-    return '<div class="taskrow"><div><div class="row"><span class="prio '+String(t.priority||"").toLowerCase()+'">'+esc(t.priority||"")+'</span><span class="tasktitle">'+esc(t.id+" • "+t.title)+'</span></div><div class="taskmeta">'+esc(statusLabel(s.status))+(s.last_engine?" • "+esc(s.last_engine+"/"+(s.last_model||"")):"")+esc(depText)+'</div><div class="taskaccept">'+esc(acText)+'</div>'+(s.summary?'<div class="taskmeta">'+esc(s.summary)+'</div>':"")+'</div><div class="row"><button onclick="event.stopPropagation();showTaskEvidence(\''+p.id+'\',\''+t.id+'\')">PREUVE</button><button class="subgo '+(depsOk?"primary":"")+'" onclick="event.stopPropagation();goTask(\''+p.id+'\',\''+t.id+'\')">'+(depsOk?"GO":"ATTEND")+'</button></div></div>';
+    const reviewText=(s.reviews||[]).length?" • avis "+(s.reviews||[]).map(r=>r.profile+":"+(r.ok?"OK":"HS")).join(", "):"";
+    return '<div class="taskrow"><div><div class="row"><span class="prio '+String(t.priority||"").toLowerCase()+'">'+esc(t.priority||"")+'</span><span class="tasktitle">'+esc(t.id+" • "+t.title)+'</span></div><div class="taskmeta">'+esc(statusLabel(s.status))+(s.last_engine?" • "+esc(s.last_engine+"/"+(s.last_model||"")):"")+esc(reviewText)+esc(depText)+'</div><div class="taskaccept">'+esc(acText)+'</div>'+(s.summary?'<div class="taskmeta">'+esc(s.summary)+'</div>':"")+'</div><div class="row"><button onclick="event.stopPropagation();showTaskEvidence(\''+p.id+'\',\''+t.id+'\')">PREUVE</button><button class="subgo '+(depsOk?"primary":"")+'" onclick="event.stopPropagation();goTask(\''+p.id+'\',\''+t.id+'\')">'+(depsOk?"GO":"ATTEND")+'</button></div></div>';
   }).join("");
   const done=defs.filter(t=>["DONE","VERIFIE"].includes(taskState(p.id,t.id).status)).length;
   return '<div class="taskboard"><div class="row between"><b>TÂCHES DYNAMIQUES</b><span class="badge '+(done===defs.length?"ok":"todo")+'">'+done+'/'+defs.length+'</span></div><div class="mini muted" style="margin-top:4px">Ordre, dépendances, preuve et état central synchronisés.</div>'+rows+'</div>';
@@ -522,9 +523,27 @@ async function goTask(pid,tid,auto=false){
   const key="task:"+pid+":"+tid;if(actionBusy[key]){toast("Tâche déjà en cours");return {status:"EN_COURS"}}actionBusy[key]=true;
   const s=taskState(pid,tid);
   const criteria=(t.acceptance||[]).map((x,i)=>(i+1)+". "+x).join("\n");
-  const prompt="TÂCHE BAZOR "+t.id+" — "+t.title+"\nACTION ATTENDUE:\n"+t.action+"\nCRITÈRES DE DONE:\n"+criteria+"\nRÈGLE DE PREUVE: "+(t.proof_required||"file_changes_and_tests")+"\nSi les critères sont déjà satisfaits dans les fichiers réellement lus et qu’aucune modification n’est nécessaire, n’invente aucun changement et commence SUMMARY par DEJA_CONFORME:. Sinon, pour corriger, fournis des BAZOR_ACTIONS minimales et sûres.";
-  s.status="RUNNING";s.summary="Analyse du contexte réel";s.updated=Date.now();state.runs[pid]={active:true,blocked:false,subId:c.id,taskId:tid,stage:t.id+" • analyse",taskProgress:25,checkpoints:[{text:"Critères chargés",kind:"ok"}]};localSave();toast(t.id+" en cours…");
+  const basePrompt="TÂCHE BAZOR "+t.id+" — "+t.title+"\nACTION ATTENDUE:\n"+t.action+"\nCRITÈRES DE DONE:\n"+criteria+"\nRÈGLE DE PREUVE: "+(t.proof_required||"file_changes_and_tests")+"\nSi les critères sont déjà satisfaits dans les fichiers réellement lus et qu’aucune modification n’est nécessaire, n’invente aucun changement et commence SUMMARY par DEJA_CONFORME:. Sinon, pour corriger, fournis des BAZOR_ACTIONS minimales et sûres.";
+  s.status="RUNNING";s.summary="Analyse du contexte réel";s.updated=Date.now();s.reviews=[];state.runs[pid]={active:true,blocked:false,subId:c.id,taskId:tid,stage:t.id+" • seconde lecture IA",taskProgress:12,checkpoints:[{text:"Critères chargés",kind:"ok"}]};localSave();toast(t.id+" en cours…");
   try{
+    const allowedProfiles=new Set(["qwen","gemini","claude","mistral","deepseek","gpt","analysis","code","complex","recommended"]);
+    const profiles=(t.preferred_models||[]).filter(x=>allowedProfiles.has(String(x).toLowerCase())).slice(0,t.priority==="P0"?2:1);
+    const reviews=[];
+    for(const profileRaw of profiles){
+      const profile=String(profileRaw).toLowerCase();
+      state.runs[pid].stage=t.id+" • avis Mammouth "+profile;state.runs[pid].taskProgress=Math.min(35,(state.runs[pid].taskProgress||12)+10);render();
+      const reviewPrompt="SECONDE LECTURE MAMMOUTH. Ne modifie rien et n’émets pas BAZOR_ACTIONS. Lis le contexte local réel fourni. Pour la tâche suivante, donne uniquement: constats confirmés dans les fichiers, risques, correctif minimal recommandé et tests d’acceptation. Si le contexte est insuffisant, dis exactement ce qui manque.\n\n"+basePrompt;
+      try{
+        const rv=await taskCall(pid,c,false,"",reviewPrompt,t.id+"-review-"+profile,{provider:"mammouth",mammouth_profile:profile,apply_actions:false});
+        reviews.push({profile,ok:!!rv.ok,engine:rv.engine||"mammouth",model:rv.model||null,summary:rv.summary||"",answer:String(rv.answer||"").slice(0,3500)});
+      }catch(err){
+        reviews.push({profile,ok:false,engine:"mammouth",model:null,summary:String(err.message||err).slice(0,240),answer:""});
+      }
+    }
+    s.reviews=reviews;
+    const usableReviews=reviews.filter(r=>r.ok&&r.answer).map(r=>"AVIS "+r.profile+" ("+(r.model||r.engine||"mammouth")+"):\n"+r.answer.slice(0,2500)).join("\n\n");
+    const prompt=basePrompt+(usableReviews?"\n\nSECOND AVIS À PRENDRE EN COMPTE SANS LE SUIVRE AVEUGLÉMENT:\n"+usableReviews:"");
+    state.runs[pid].stage=t.id+" • exécution contrôlée";state.runs[pid].taskProgress=42;render();
     let d=await taskCall(pid,c,false,"",prompt,t.id);
     state.runs[pid].stage=t.id+" • contrôle";state.runs[pid].taskProgress=75;localSave(false);
     if(d.status==="BLOQUE"||!d.ok){
