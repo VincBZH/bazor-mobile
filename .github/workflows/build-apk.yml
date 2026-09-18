@@ -2,7 +2,7 @@ name: Build BAZOR APK
 
 on:
   push:
-    branches: [ main, 'feature/**' ]
+    branches: [ main, 'feature/**', 'fix/**' ]
     paths:
       - 'android/**'
       - '.github/workflows/build-apk.yml'
