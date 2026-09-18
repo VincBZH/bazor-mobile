@@ -771,6 +771,10 @@ def start_mobile_task(request_id, **kwargs):
     rid = safe_name(request_id or "").replace(" ", "_")[:120]
     if not rid:
         rid = hashlib.sha256((now_iso() + "|" + str(kwargs.get("project_id")) + "|" + str(time.time_ns())).encode("utf-8")).hexdigest()[:32]
+    # Le request_id identifie aussi les preuves Action Engine du worker.
+    # Il ne doit pas être passé deux fois à start_mobile_task (positionnel + **kwargs).
+    worker_kwargs = dict(kwargs)
+    worker_kwargs["request_id"] = rid
     with TASK_JOBS_LOCK:
         existing = TASK_JOBS.get(rid)
         if existing:
@@ -793,7 +797,7 @@ def start_mobile_task(request_id, **kwargs):
             "subproject_name": kwargs.get("subproject_name"),
             "result": None,
         }
-    threading.Thread(target=_task_worker, args=(rid, kwargs), daemon=True, name="BAZOR-TASK-" + rid[:18]).start()
+    threading.Thread(target=_task_worker, args=(rid, worker_kwargs), daemon=True, name="BAZOR-TASK-" + rid[:18]).start()
     journal("MOBILE_TASK_JOB_START", {
         "request_id": rid,
         "project": kwargs.get("project_id"),
@@ -1071,6 +1075,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/task":
+            request_id = body.get("request_id")
             kwargs = {
                 "project_id": body.get("project_id"),
                 "subproject_name": body.get("subproject_name") or "Sous-projet",
@@ -1080,13 +1085,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "previous": body.get("previous") or "",
                 "provider": body.get("provider") or "auto",
                 "apply_actions": bool(body.get("apply_actions", True)),
-                "request_id": body.get("request_id"),
             }
-            if body.get("async") or body.get("request_id"):
-                result = start_mobile_task(body.get("request_id"), **kwargs)
+            if body.get("async") or request_id:
+                result = start_mobile_task(request_id, **kwargs)
                 self._json(result, 202 if result.get("job_state") == "running" else 200)
             else:
-                result = run_mobile_subtask(**kwargs)
+                result = run_mobile_subtask(request_id=request_id, **kwargs)
                 self._json(result)
             return
 
