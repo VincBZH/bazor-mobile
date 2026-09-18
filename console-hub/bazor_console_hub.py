@@ -46,6 +46,12 @@ SERVICES = [
         "cwd": str(ROOT), "managed": True,
     },
     {
+        "id": "popup-guard", "project": "BAZOR Mobile", "name": "Popup Guard",
+        "match": "bazor_popup_guard.py", "port": None, "health": None,
+        "command": [sys.executable, str(ROOT / "console-hub" / "bazor_popup_guard.py")],
+        "cwd": str(ROOT), "managed": True,
+    },
+    {
         "id": "ai-room", "project": "BAZOR AI Room", "name": "AI Room 8765",
         "match": "BazorAIROOM", "port": 8765, "health": "http://127.0.0.1:8765/",
         "managed": False,
