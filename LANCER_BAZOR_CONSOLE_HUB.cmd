@@ -13,13 +13,19 @@ if not exist "%HUB%" (
   exit /b 1
 )
 
-if exist "%REVIEW%" (
-  echo [INFO] Tests statiques + revue experte Mammouth lances en parallele...
-  start "" /b python "%REVIEW%" >nul 2>&1
-)
-
 where pythonw >nul 2>nul
 if errorlevel 1 (
+  set "PYGUI=python"
+) else (
+  set "PYGUI=pythonw"
+)
+
+if exist "%REVIEW%" (
+  echo [INFO] Tests statiques + revue experte Mammouth lances en parallele...
+  start "" /b %PYGUI% "%REVIEW%" >nul 2>&1
+)
+
+if /I "%PYGUI%"=="python" (
   echo [INFO] pythonw introuvable, lancement avec python.
   start "BAZOR CONSOLE HUB" python "%HUB%" --centralize
 ) else (
