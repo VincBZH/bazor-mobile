@@ -321,7 +321,7 @@ class Hub:
             ("↻ MAJ + RELANCE BAZOR", self.update_restart_bazor),
             ("RÉPARER MOBILE", self.repair_mobile_access),
             ("USB TÉLÉPHONE", self.usb_mobile),
-            ("QR APPAIRAGE", self.open_pairing_qr),
+            ("APPAIRER TÉLÉPHONE", self.open_pairing_qr),
             ("NOUVEAU CODE", self.new_pairing_code),
             ("CENTRALISER / ADOPTER", self.centralize),
             ("ACTUALISER", self.refresh),
@@ -593,36 +593,129 @@ class Hub:
         self._install_qr_modules_async()
 
     def open_pairing_qr(self):
+        # Un clic = une fenêtre d'appairage très visible avec QR.
         if not self.security_code:
-            self.ensure_pairing_code()
-        if not self.security_code:
-            self.summary.config(text="Clé d’appairage en attente du Core…")
-            return
-        self.show_pairing_qr(self.security_code)
+            info=self._local_pairing_info(rotate=False)
+            if not (info and info.get("code")):
+                info=self._local_pairing_info(rotate=True)
+            if info and info.get("code"):
+                self.security_code=str(info["code"])
+                self.code_label.config(text="🔐 APPAIRAGE : "+self.security_code)
+                self.code_label.pack(side="right")
+
         try:
-            win=tk.Toplevel(self.root)
-            win.title("BAZOR • QR APPAIRAGE")
-            win.geometry("430x520")
-            win.configure(bg="#11151b")
-            tk.Label(win,text="BAZOR • APPAIRAGE TÉLÉPHONE",bg="#11151b",fg="white",font=("Segoe UI",16,"bold")).pack(pady=(16,8))
-            url=self._pairing_qr_url(self.security_code)
-            if self._ensure_qr_modules():
-                import qrcode
-                from PIL import ImageTk
-                qr=qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,box_size=8,border=4)
-                qr.add_data(url); qr.make(fit=True)
-                img=qr.make_image(fill_color="black",back_color="white").convert("RGB").resize((320,320))
-                photo=ImageTk.PhotoImage(img)
-                lbl=tk.Label(win,image=photo,bg="white")
-                lbl.image=photo
-                lbl.pack(pady=8)
-            else:
-                tk.Label(win,text="Installation du générateur QR…",bg="#11151b",fg="#f2c94c",font=("Segoe UI",12,"bold")).pack(pady=40)
-                self._install_qr_modules_async()
-            tk.Label(win,text=f"Code secours : {self.security_code}",bg="#11151b",fg="#f6d04d",font=("Consolas",15,"bold")).pack(pady=10)
-            tk.Label(win,text="Scanne avec le téléphone connecté en USB.",bg="#11151b",fg="#cfd7e3",font=("Segoe UI",10)).pack()
-        except Exception as exc:
-            self.summary.config(text=f"QR : {type(exc).__name__}")
+            if getattr(self,"pair_win",None) and self.pair_win.winfo_exists():
+                self.pair_win.lift()
+                self.pair_win.focus_force()
+                self._render_pairing_window()
+                return
+        except Exception:
+            pass
+
+        self.pair_win=tk.Toplevel(self.root)
+        self.pair_win.title("BAZOR • APPAIRER TÉLÉPHONE")
+        self.pair_win.geometry("520x650")
+        self.pair_win.minsize(480,600)
+        self.pair_win.configure(bg="#0f141b")
+        self.pair_win.transient(self.root)
+        try:
+            self.pair_win.attributes("-topmost", True)
+            self.pair_win.after(1200, lambda: self.pair_win.attributes("-topmost", False))
+        except Exception:
+            pass
+
+        self.pair_title=tk.Label(
+            self.pair_win,text="APPAIRER LE TÉLÉPHONE",
+            bg="#0f141b",fg="white",font=("Segoe UI",20,"bold")
+        )
+        self.pair_title.pack(pady=(18,6))
+
+        self.pair_subtitle=tk.Label(
+            self.pair_win,text="Scanne le QR avec le téléphone",
+            bg="#0f141b",fg="#8fd3ff",font=("Segoe UI",11,"bold")
+        )
+        self.pair_subtitle.pack(pady=(0,10))
+
+        self.pair_qr_big=tk.Label(
+            self.pair_win,bg="white",fg="#111111",
+            text="Préparation du QR…",font=("Segoe UI",12,"bold"),
+            width=34,height=17
+        )
+        self.pair_qr_big.pack(pady=8)
+
+        self.pair_code_big=tk.Label(
+            self.pair_win,text="",
+            bg="#f6d04d",fg="#111111",
+            font=("Consolas",18,"bold"),padx=16,pady=8
+        )
+        self.pair_code_big.pack(pady=10)
+
+        self.pair_hint=tk.Label(
+            self.pair_win,
+            text="Le QR contient l'adresse locale BAZOR + la clé d'appairage.\n"
+                 "La clé n'est pas envoyée dans les logs HTTP.",
+            bg="#0f141b",fg="#cfd7e3",font=("Segoe UI",10),justify="center"
+        )
+        self.pair_hint.pack(pady=8)
+
+        btns=tk.Frame(self.pair_win,bg="#0f141b")
+        btns.pack(pady=10)
+        ttk.Button(btns,text="NOUVEAU QR",command=self.new_pairing_code).pack(side="left",padx=5)
+        ttk.Button(btns,text="FERMER",command=self.pair_win.destroy).pack(side="left",padx=5)
+
+        self._render_pairing_window()
+
+    def _render_pairing_window(self):
+        if not getattr(self,"pair_win",None) or not self.pair_win.winfo_exists():
+            return
+        code=self.security_code
+        if not code:
+            self.pair_qr_big.config(image="",text="En attente du Core…",width=34,height=17)
+            self.pair_code_big.config(text="CLÉ EN ATTENTE")
+            self.pair_subtitle.config(text="Le Core prépare la clé d'appairage…")
+            self.pair_win.after(1200,self._retry_pairing_window)
+            return
+
+        self.pair_code_big.config(text=code)
+        url=self._pairing_qr_url(code)
+        mode="USB" if url.startswith("http://127.0.0.1:") else "Wi-Fi"
+        self.pair_subtitle.config(text=f"Scanne le QR • mode {mode}")
+
+        if not self._ensure_qr_modules():
+            self.pair_qr_big.config(image="",text="Installation du générateur QR…",width=34,height=17)
+            self._install_qr_modules_async()
+            self.pair_win.after(1800,self._render_pairing_window)
+            return
+
+        try:
+            import qrcode
+            from PIL import ImageTk
+            qr=qrcode.QRCode(
+                error_correction=qrcode.constants.ERROR_CORRECT_M,
+                box_size=9,border=4
+            )
+            qr.add_data(url)
+            qr.make(fit=True)
+            img=qr.make_image(fill_color="black",back_color="white").convert("RGB")
+            img=img.resize((360,360))
+            self.pair_qr_big_photo=ImageTk.PhotoImage(img)
+            self.pair_qr_big.config(
+                image=self.pair_qr_big_photo,text="",
+                width=360,height=360
+            )
+            self.show_pairing_qr(code)
+        except Exception:
+            self.pair_qr_big.config(image="",text="QR indisponible • clique NOUVEAU QR",width=34,height=17)
+
+    def _retry_pairing_window(self):
+        info=self._local_pairing_info(rotate=False)
+        if not (info and info.get("code")):
+            info=self._local_pairing_info(rotate=True)
+        if info and info.get("code"):
+            self.security_code=str(info["code"])
+            self.code_label.config(text="🔐 APPAIRAGE : "+self.security_code)
+            self.code_label.pack(side="right")
+        self._render_pairing_window()
 
     def _local_pairing_info(self, rotate=False):
         try:
@@ -661,6 +754,8 @@ class Hub:
             self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
             self.code_label.pack(side="right")
             self.show_pairing_qr(self.security_code)
+            try:self._render_pairing_window()
+            except Exception:pass
             self.summary.config(text="Nouveau QR d’appairage prêt")
         else:
             self.summary.config(text="Core non joignable pour l’appairage")
