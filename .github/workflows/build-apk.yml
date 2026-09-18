@@ -8,6 +8,9 @@ on:
       - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -36,7 +39,7 @@ jobs:
       - name: Rename APKs
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk ../BAZOR-Tool.apk
-          cp watchapp/build/outputs/apk/debug/watchapp-debug.apk ../BAZOR-Watch.apk
+          cp watchapp/build/outputs/apk/debug/watchapp-debug.apk ../BAZOR-Montre.apk
 
       - name: Upload BAZOR Tool
         uses: actions/upload-artifact@v4
@@ -45,9 +48,32 @@ jobs:
           path: BAZOR-Tool.apk
           if-no-files-found: error
 
-      - name: Upload BAZOR Watch
+      - name: Upload BAZOR Montre
         uses: actions/upload-artifact@v4
         with:
-          name: BAZOR-Watch-APK
-          path: BAZOR-Watch.apk
+          name: BAZOR-Montre-APK
+          path: BAZOR-Montre.apk
           if-no-files-found: error
+
+      - name: Publier la derniere APK pour la MAJ GitHub
+        if: github.ref == 'refs/heads/main'
+        run: |
+          VERSION_NAME=$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' watchapp/build.gradle | head -1)
+          VERSION_CODE=$(sed -n 's/.*versionCode \([0-9][0-9]*\).*/\1/p' watchapp/build.gradle | head -1)
+          mkdir -p ../downloads
+          cp ../BAZOR-Montre.apk ../downloads/BAZOR-Montre.apk
+          cat > ../watch-update.json <<EOF
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "apkUrl": "https://raw.githubusercontent.com/VincBZH/bazor-mobile/main/downloads/BAZOR-Montre.apk",
+            "notes": "Version stable publiee automatiquement depuis GitHub"
+          }
+          EOF
+          cd ..
+          git config user.name "BAZOR GitHub Update"
+          git config user.email "actions@users.noreply.github.com"
+          git add downloads/BAZOR-Montre.apk watch-update.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Publie BAZOR Montre v${VERSION_NAME} [skip ci]"
+          git push
