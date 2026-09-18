@@ -137,6 +137,11 @@ jobs:
           assert "core_mammouth_task" in watcher
           assert '"provider":"mammouth"' in watcher
           assert '"apply_actions":bool(meta["apply_actions"])' in watcher
+          assert "ThreadPoolExecutor" in watcher, "Mammouth reviews are not parallel"
+          client=Path("pc-relay/mammouth_client.py").read_text(encoding="utf-8")
+          assert "_USAGE_LOCK" in client, "parallel usage accounting lock missing"
+          assert 'explicit_provider == "mammouth"' in core, "explicit Mammouth fallback guard missing"
+          assert 'generic_refusal_no_local_fallback' in core, "Mammouth must not silently fall back to Ollama"
           print("Mammouth profile queue regression OK")
           PY
       - name: Mobile task async regression
