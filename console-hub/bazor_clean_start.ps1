@@ -21,7 +21,8 @@ $patterns = @(
   'bazor_github_watcher\.py',
   'bazor_pc_relay_v3\.py',
   'http\.server\s+8776',
-  'DEMARRER_GITHUB_WATCHER\.cmd'
+  'DEMARRER_GITHUB_WATCHER\.cmd',
+  'bazor_popup_guard\.py'
 )
 
 # Legacy curl probes are allowed to be killed ONLY when they clearly target BAZOR.
