@@ -18,6 +18,7 @@ class BazorSecurity:
         self.challenges = {}
         self._pair_code = None
         self._pair_expires = 0
+        self._last_pair_display = 0
         self.state = self._load()
         self.rotate_pair_code(force=not bool(self.state.get("devices")))
 
@@ -71,6 +72,19 @@ class BazorSecurity:
         code = self.rotate_pair_code()
         mins = max(0, int((self._pair_expires - time.time()) / 60))
         return f"[SECURITY] Code appairage mobile: {code} (expire ~{mins} min)"
+
+    def request_pairing_display(self, ip=None):
+        """Rotate/print a fresh code on the PC only. Never return the code to the requester."""
+        with self.lock:
+            now = time.time()
+            # Avoid LAN spam constantly invalidating a code the owner is typing.
+            if now - self._last_pair_display < 20:
+                return {"ok": True, "printed": False, "retry_in": int(20 - (now - self._last_pair_display))}
+            self._last_pair_display = now
+            self.rotate_pair_code(force=True)
+            print(self.pairing_console_text(), flush=True)
+            self._event("PAIRING_CODE_DISPLAYED", {"ip": ip})
+            return {"ok": True, "printed": True, "expires_in": max(0, int(self._pair_expires - now))}
 
     def public_status(self):
         with self.lock:
