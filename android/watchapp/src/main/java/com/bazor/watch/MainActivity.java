@@ -12,6 +12,7 @@ import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.media.AudioDeviceInfo;
@@ -26,6 +27,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
 import android.provider.Settings;
+import android.net.Uri;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -36,6 +38,10 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -56,8 +62,12 @@ public class MainActivity extends Activity {
     private TextView securityResult;
     private TextView profileResult;
     private TextView audioResult;
+    private TextView versionState;
     private LinearLayout candidatesBox;
     private Button watchToggle;
+    private Button updateButton;
+    private long latestVersionCode = -1L;
+    private String latestApkUrl = "";
 
     private long revealUntil = 0L;
     private BluetoothGatt activeGatt;
@@ -72,6 +82,7 @@ public class MainActivity extends Activity {
         buildUi();
         ensureBlePermissionsAndStart();
         handler.post(refreshRunnable);
+        checkForUpdate(false);
     }
 
     private void buildUi() {
@@ -84,14 +95,29 @@ public class MainActivity extends Activity {
         scroll.addView(root, new ScrollView.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView title = text("⌚ BAZOR Watch", 28, Color.WHITE, true);
+        TextView title = text("⌚ BAZOR Montre", 28, Color.WHITE, true);
         root.addView(title);
 
         TextView subtitle = text(
             "Montre • signal BLE • sécurité • profils audio", 13,
             Color.rgb(154, 181, 207), false);
-        subtitle.setPadding(0, 0, 0, dp(14));
+        subtitle.setPadding(0, 0, 0, dp(8));
         root.addView(subtitle);
+
+        LinearLayout versionCard = card();
+        TextView versionLabel = text("Version " + installedVersionName() + " (" + installedVersionCode() + ")", 13, Color.WHITE, true);
+        versionState = text("Vérification GitHub…", 11, Color.rgb(154, 181, 207), false);
+        updateButton = button("VÉRIFIER LA MAJ", v -> {
+            if (latestVersionCode > installedVersionCode() && latestApkUrl != null && !latestApkUrl.isEmpty()) {
+                openUpdateUrl();
+            } else {
+                checkForUpdate(true);
+            }
+        });
+        versionCard.addView(versionLabel);
+        versionCard.addView(versionState);
+        versionCard.addView(updateButton);
+        root.addView(versionCard);
 
         LinearLayout statusCard = card();
         linkState = text("Initialisation…", 18, Color.rgb(255, 210, 80), true);
@@ -245,6 +271,102 @@ public class MainActivity extends Activity {
 
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
+    private long installedVersionCode() {
+        try {
+            PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+            if (Build.VERSION.SDK_INT >= 28) return pi.getLongVersionCode();
+            return pi.versionCode;
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private String installedVersionName() {
+        try {
+            PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return pi.versionName == null ? "?" : pi.versionName;
+        } catch (Exception e) {
+            return "?";
+        }
+    }
+
+    private void checkForUpdate(boolean manual) {
+        if (versionState != null) versionState.setText(manual ? "Vérification GitHub en cours…" : "Vérification GitHub…");
+        if (updateButton != null) {
+            updateButton.setEnabled(false);
+            updateButton.setText("VÉRIFICATION…");
+        }
+
+        new Thread(() -> {
+            HttpURLConnection con = null;
+            try {
+                URL url = new URL("https://raw.githubusercontent.com/VincBZH/bazor-mobile/main/watch-update.json");
+                con = (HttpURLConnection) url.openConnection();
+                con.setConnectTimeout(7000);
+                con.setReadTimeout(7000);
+                con.setUseCaches(false);
+                con.setRequestProperty("User-Agent", "BAZOR-Montre/" + installedVersionName());
+
+                int code = con.getResponseCode();
+                if (code < 200 || code >= 300) throw new Exception("HTTP " + code);
+
+                BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream()));
+                StringBuilder raw = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) raw.append(line);
+                br.close();
+
+                JSONObject json = new JSONObject(raw.toString());
+                long remoteCode = json.optLong("versionCode", 0L);
+                String remoteName = json.optString("versionName", "?");
+                String apk = json.optString("apkUrl", "");
+                String notes = json.optString("notes", "");
+                latestVersionCode = remoteCode;
+                latestApkUrl = apk;
+
+                runOnUiThread(() -> {
+                    if (remoteCode > installedVersionCode()) {
+                        versionState.setText("MAJ disponible : " + remoteName + (notes.isEmpty() ? "" : " • " + notes));
+                        versionState.setTextColor(Color.rgb(255, 210, 80));
+                        updateButton.setText("METTRE À JOUR VIA GITHUB");
+                    } else {
+                        versionState.setText("À jour • GitHub vérifié");
+                        versionState.setTextColor(Color.rgb(69, 212, 131));
+                        updateButton.setText("VÉRIFIER LA MAJ");
+                    }
+                    updateButton.setEnabled(true);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (versionState != null) {
+                        versionState.setText("GitHub indisponible • la montre reste utilisable");
+                        versionState.setTextColor(Color.rgb(154, 181, 207));
+                    }
+                    if (updateButton != null) {
+                        updateButton.setEnabled(true);
+                        updateButton.setText("RÉESSAYER");
+                    }
+                });
+            } finally {
+                if (con != null) con.disconnect();
+            }
+        }, "bazor-update-check").start();
+    }
+
+    private void openUpdateUrl() {
+        if (latestApkUrl == null || latestApkUrl.isEmpty()) {
+            checkForUpdate(true);
+            return;
+        }
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(latestApkUrl));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception e) {
+            if (versionState != null) versionState.setText("Impossible d’ouvrir le téléchargement GitHub.");
+        }
     }
 
     private void ensureBlePermissionsAndStart() {
