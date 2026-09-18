@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto19",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto20",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -291,6 +291,53 @@ async function pullState(){
     if(remote&&Array.isArray(remote.projects)&&remote.projects.length){state=Object.assign(state,remote);ensureState();syncLabel.textContent="Mobile • état central BAZOR"}else{await pushState()}
   }catch(e){}
 }
+let transportRecoveryBusy=false;
+function isTransportFailureText(v){
+  return /failed to fetch|core non joignable|reconnexion|networkerror|load failed|connexion interrompue/i.test(String(v||""));
+}
+async function recoverTransientFetchBlocks(){
+  if(transportRecoveryBusy||!CORE||!REGISTRY?.projects?.length)return;
+  transportRecoveryBusy=true;
+  try{
+    const done=JSON.parse(sessionStorage.getItem(KEY+".transport-recovery."+APP_BUILD)||"{}");
+    const todo=[];
+    for(const p of state.projects||[]){
+      const r=state.runs?.[p.id];
+      const candidateIds=new Set();
+      if(r?.subId&&isTransportFailureText(r.stage))candidateIds.add(r.subId);
+      for(const c of children(p.id)){
+        const x=sp(p.id,c.id);
+        if(x.status==="BLOQUE"&&isTransportFailureText(x.summary))candidateIds.add(c.id);
+      }
+      for(const sid of candidateIds){
+        const k=p.id+":"+sid;
+        const x=sp(p.id,sid);
+        x.status="A_EVALUER";
+        x.summary="Connexion rétablie • reprise automatique";
+        x.updated=Date.now();
+        if(p.status==="BLOQUE")p.status="A_FAIRE";
+        if(r?.subId===sid){
+          state.runs[p.id]={active:false,blocked:false,subId:sid,stage:"Connexion rétablie • reprise automatique",taskProgress:0,checkpoints:[{text:"Liaison Core rétablie",kind:"ok"}]};
+        }
+        if(!done[k]){
+          done[k]=Date.now();
+          todo.push([p.id,sid]);
+        }
+      }
+    }
+    sessionStorage.setItem(KEY+".transport-recovery."+APP_BUILD,JSON.stringify(done));
+    if(todo.length){
+      localSave();
+      toast("Connexion rétablie • reprise automatique");
+      for(const [pid,sid] of todo){
+        if(!CORE)break;
+        await goSub(pid,sid,true);
+      }
+    }
+  }finally{
+    transportRecoveryBusy=false;
+  }
+}
 function rp(id){return (REGISTRY.projects||[]).find(x=>x.id===id)}
 function children(id){return rp(id)?.subprojects||[]}
 function sp(pid,sid){return state.subprojects?.[pid]?.[sid]||{status:"A_EVALUER",progress:null,summary:"Pas encore évalué",next:"À définir"}}
@@ -362,7 +409,17 @@ async function goSub(pid,sid,auto=false){
     x.status=d.status||"BLOQUE";x.progress=typeof d.progress==="number"?d.progress:x.progress;x.summary=d.summary||"Résultat reçu";x.next=d.next||x.next||c.next;x.updated=Date.now();
     const blocked=x.status==="BLOQUE";state.runs[pid]={active:false,blocked,subId:sid,stage:blocked?"Blocage persistant":"Contrôle validé",taskProgress:100,checkpoints:[{text:blocked?"Blocage après correction":"Résultat contrôlé",kind:blocked?"bad":"ok"}]};
     p.progress=overall(p);p.status=blocked?"BLOQUE":(nextSub(pid)?"A_FAIRE":"OK");p.next=nextSub(pid)?sp(pid,nextSub(pid).id).next:"Contrôle final";log((blocked?"Blocage — ":"OK — ")+c.name,blocked?"BLOQUÉ":"OK");localSave();if(!auto)showResult(c.name,d);return d;
-  }catch(e){x.status="BLOQUE";x.summary=e.name==="AbortError"?"Analyse trop longue (>3 min)":"Erreur de liaison : "+e.message;state.runs[pid]={active:false,blocked:true,subId:sid,stage:x.summary,taskProgress:100,checkpoints:[{text:x.summary,kind:"bad"}]};p.status="BLOQUE";log("Blocage — "+c.name,"BLOQUÉ");localSave();return {status:"BLOQUE"}}
+  }catch(e){
+    const msg=e.name==="AbortError"?"Analyse trop longue (>6 min)":String(e.message||e);
+    const transport=isTransportFailureText(msg);
+    if(transport){
+      x.status="A_EVALUER";x.summary="Connexion interrompue • reprise automatique dès retour du Core";
+      state.runs[pid]={active:false,blocked:false,subId:sid,stage:x.summary,taskProgress:0,checkpoints:[{text:"Liaison Core interrompue",kind:"run"}]};
+      p.status="A_FAIRE";log("Connexion interrompue — "+c.name,"À REPRENDRE");localSave();
+      return {status:"BLOQUE",transport:true};
+    }
+    x.status="BLOQUE";x.summary=msg;state.runs[pid]={active:false,blocked:true,subId:sid,stage:x.summary,taskProgress:100,checkpoints:[{text:x.summary,kind:"bad"}]};p.status="BLOQUE";log("Blocage — "+c.name,"BLOQUÉ");localSave();return {status:"BLOQUE"};
+  }
   finally{setTimeout(()=>delete actionBusy[key],900)}
 }
 async function goNext(pid){const c=nextSub(pid);if(!c){toast("Projet déjà contrôlé");return}return goSub(pid,c.id,false)}
@@ -389,7 +446,7 @@ pcStatus.onclick=async()=>{await detectCore();await securityStatus();render()}
 securityBadge.onclick=openSecurity;
 loadSecurityDevice();
 const toastEl=document.getElementById("toast");
-(async()=>{await detectCore();await securityStatus();await loadRegistry();if(SEC_DEVICE)await pullState();render();setInterval(async()=>{await detectCore();if(CORE)await securityStatus();render()},CORE?20000:5000);setInterval(async()=>{try{const r=await fetch("./index.html?b="+Date.now(),{cache:"no-store"}),t=await r.text(),m=t.match(/APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD)location.reload()}catch(e){}},15000)})();
+(async()=>{await detectCore();await securityStatus();await loadRegistry();if(SEC_DEVICE)await pullState();await recoverTransientFetchBlocks();render();setInterval(async()=>{await detectCore();if(CORE){await securityStatus();await recoverTransientFetchBlocks()}render()},CORE?20000:5000);setInterval(async()=>{try{const r=await fetch("./index.html?b="+Date.now(),{cache:"no-store"}),t=await r.text(),m=t.match(/APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD)location.reload()}catch(e){}},15000)})();
 </script>
 </body>
 </html>
