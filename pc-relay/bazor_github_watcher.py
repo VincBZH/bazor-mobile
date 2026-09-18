@@ -732,6 +732,24 @@ while True:
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
                     continue
+                if title.startswith("[bazor-qualify:studio]"):
+                    if QUALIFY_MARK in comments: continue
+                    print(f"[QUALIFY] #{issue['number']} Studio qualification")
+                    try:
+                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","[BAZOR-QUALIFY-START]\n\nQualification complète AI Simple Studio démarrée sur le PC local. Aucun fichier Studio n’est modifié par ce test."])
+                    except Exception: pass
+                    result=_run_studio_qualification(); s=result.get("summary") or {}; fails=result.get("failures") or []
+                    lines=[QUALIFY_MARK,"","**BAZOR Studio — qualification locale**","",f"Résultat: {'OPÉRATIONNEL' if result.get('ok') else 'NON OPÉRATIONNEL'}",f"Tests: {s.get('passed',0)}/{s.get('total',0)} • {s.get('percent',0)}%",f"Échecs: P0={s.get('p0_failed',0)} • P1={s.get('p1_failed',0)} • P2={s.get('p2_failed',0)}",""]
+                    if fails:
+                        lines.append("**Échecs détectés**")
+                        for x in fails[:35]: lines.append(f"- {x.get('severity')} {x.get('id')} — {x.get('name')}: {str(x.get('detail') or '')[:700]}")
+                    else: lines.append("Aucun échec détecté.")
+                    lines += ["","Rapport local: "+str(result.get("report_file") or "?")]
+                    if result.get("stderr"): lines += ["","stderr (fin):",str(result.get("stderr"))[-2000:]]
+                    try: gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","\n".join(lines)[:12000]])
+                    except Exception: pass
+                    print(f"[OK QUALIFY] #{issue['number']} operational={result.get('ok')} failures={len(fails)}")
+                    continue
                 if title.startswith("[bazor-task:"):
                     if TASK_MARK in comments: continue
                     m=re.match(r"(?i)^\[bazor-task:([^\]]+)\]",issue.get("title") or "")
