@@ -54,6 +54,8 @@ if errorlevel 1 (
  start "BAZOR MOBILE WEB 8776" cmd /k "cd /d %ROOT% && python -m http.server 8776 --bind 0.0.0.0"
 ) else echo [OK] Web 8776 deja actif.
 
+echo [INFO] Rechargement du watcher BAZOR...
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'bazor_github_watcher\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>nul
 start "BAZOR GITHUB WATCHER" cmd /k "cd /d %ROOT% && python pc-relay\bazor_github_watcher.py"
 
 set "BAZOR_IP="
