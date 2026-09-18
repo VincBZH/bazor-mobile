@@ -454,7 +454,7 @@ function showTaskEvidence(pid,tid){
   if(ev?.real){
     const files=(ev.files||[]).map(f=>'<div class="mini">✓ '+esc((f.root||"")+" : "+(f.path||""))+'</div>').join("");
     const tests=(ev.tests||[]).map(x=>'<div class="mini">'+(x.ok?"✓":"!")+' '+esc(x.test||"test")+' • '+esc(x.ok?"OK":(x.detail||"ÉCHEC"))+'</div>').join("");
-    body='<div class="infobox"><b>✅ MODIFICATION RÉELLE</b><div class="mini muted">'+(ev.files||[]).length+' fichier(s) • '+(ev.tests||[]).filter(x=>x.ok).length+'/'+(ev.tests||[]).length+' test(s) OK</div>'+files+tests+'</div>';
+    const pf=ev.preflight;const pfHtml=pf?'<div class="mini" style="margin-top:5px">🧪 Préflight sandbox: '+(pf.ok?'OK':'ÉCHEC')+(pf.git?.available?' • Git '+(pf.git?.diff_check===true?'diff OK':'à vérifier'):' • Git indisponible')+'</div>':'';body='<div class="infobox"><b>✅ MODIFICATION RÉELLE</b><div class="mini muted">'+(ev.files||[]).length+' fichier(s) • '+(ev.tests||[]).filter(x=>x.ok).length+'/'+(ev.tests||[]).length+' test(s) OK</div>'+pfHtml+files+tests+'</div>';
   }else if(ev?.verified){
     const files=(ev.context_files||[]).slice(0,12).map(f=>'<div class="mini">• '+esc((f.root||"")+" : "+(f.path||""))+'</div>').join("");
     body='<div class="infobox"><b>✅ DÉJÀ CONFORME VÉRIFIÉ</b><div class="mini muted">Moteur '+esc(ev.engine||"")+" • modèle "+esc(ev.model||"")+'</div>'+files+'</div>';
@@ -559,7 +559,7 @@ async function goTask(pid,tid,auto=false){
     s.last_engine=d.engine||null;s.last_model=d.model||null;s.updated=Date.now();
     if(real&&testsOk){
       s.status="DONE";s.summary=(d.summary||"Correction appliquée")+" • preuve réelle";
-      s.evidence={real:true,when:Date.now(),request_id:ar.request_id||null,files:ar.files||[],tests,backup_dir:ar.backup_dir||null,report_file:ar.report_file||null,engine:d.engine||null,model:d.model||null};
+      s.evidence={real:true,when:Date.now(),request_id:ar.request_id||null,files:ar.files||[],tests,preflight:ar.preflight||null,backup_dir:ar.backup_dir||null,report_file:ar.report_file||null,engine:d.engine||null,model:d.model||null};
     }else if(already){
       s.status="VERIFIE";s.summary=d.summary||"DEJA_CONFORME";
       s.evidence={verified:true,when:Date.now(),engine:d.engine||null,model:d.model||null,context_files:d.local_context?.files||[],context_chars:d.local_context?.chars||0};
