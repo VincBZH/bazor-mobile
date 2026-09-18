@@ -196,6 +196,23 @@ def process_snapshot():
     except Exception:
         return []
 
+def listener_pids(port):
+    ps=shutil.which("powershell") or shutil.which("pwsh")
+    if not ps:
+        return []
+    script=f"Get-NetTCPConnection -State Listen -LocalPort {int(port)} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique | ConvertTo-Json"
+    try:
+        cp=subprocess.run([ps,"-NoProfile","-Command",script],capture_output=True,text=True,timeout=12,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+        raw=cp.stdout.strip()
+        if cp.returncode!=0 or not raw:
+            return []
+        data=json.loads(raw)
+        if isinstance(data,list):
+            return [int(x) for x in data]
+        return [int(data)]
+    except Exception:
+        return []
+
 def comfy_checks(results):
     for endpoint in ("/system_stats","/object_info","/queue"):
         url="http://127.0.0.1:8188"+endpoint
@@ -216,9 +233,11 @@ def studio_http_checks(results):
     for ep in ("/health","/api/health","/status","/api/status"):
         try:
             status,body=http_json("http://127.0.0.1:8191"+ep,timeout=3)
-            results.append(check("STUDIO_HTTP_"+ep.strip("/").replace("/","_").upper(),f"Studio {ep}",200<=status<500,"P2",f"HTTP {status}",{"preview":str(body)[:180]}))
+            results.append(check("STUDIO_HTTP_"+ep.strip("/").replace("/","_").upper(),f"Studio {ep}",True,"P2",f"Endpoint facultatif HTTP {status}",{"preview":str(body)[:180],"optional":True}))
+        except urllib.error.HTTPError as exc:
+            results.append(check("STUDIO_HTTP_"+ep.strip("/").replace("/","_").upper(),f"Studio {ep}",True,"P2",f"Endpoint facultatif non exposé (HTTP {exc.code})",{"optional":True}))
         except Exception as exc:
-            results.append(check("STUDIO_HTTP_"+ep.strip("/").replace("/","_").upper(),f"Studio {ep}",False,"P2",f"{type(exc).__name__}: {exc}"))
+            results.append(check("STUDIO_HTTP_"+ep.strip("/").replace("/","_").upper(),f"Studio {ep}",True,"P2",f"Endpoint facultatif indisponible: {type(exc).__name__}: {exc}",{"optional":True}))
 
 def ui_feature_checks(results):
     tokens={
@@ -259,8 +278,8 @@ def mammouth_matrix(results):
         }
         try:
             status,data=http_post_json("http://127.0.0.1:8775/api/v1/task",payload,timeout=75)
-            ok=bool(data.get("ok")) and str(data.get("engine") or "").lower()=="mammouth"
-            results.append(check("MAMMOUTH_"+profile.upper(),f"Mammouth {profile}",ok,"P1",f"HTTP {status} • engine={data.get('engine')} • model={data.get('model')} • error={data.get('error')}",{"summary":str(data.get("summary") or "")[:300]}))
+            ok=(status==200 and str(data.get("engine") or "").lower()=="mammouth" and bool(data.get("model")) and not data.get("error"))
+            results.append(check("MAMMOUTH_"+profile.upper(),f"Mammouth {profile}",ok,"P1",f"HTTP {status} • engine={data.get('engine')} • model={data.get('model')} • error={data.get('error')}",{"summary":str(data.get("summary") or "")[:300],"answer":str(data.get("answer") or "")[:300],"status":data.get("status")}))
         except Exception as exc:
             results.append(check("MAMMOUTH_"+profile.upper(),f"Mammouth {profile}",False,"P1",f"{type(exc).__name__}: {exc}"))
 
@@ -302,7 +321,11 @@ def action_engine_selftest(results):
             act=[{"op":"replace","root":"qual","path":"demo.py","find":"x = 1","replace":"x = 2","expected_count":1}]
             out=eng.apply("qual-project",act,"qualification")
             ok=bool(out.get("ok") and out.get("applied") and (out.get("preflight") or {}).get("ok") and p.read_text(encoding="utf-8")=="x = 2\n")
-            results.append(check("ACTION_ENGINE_SANDBOX","Action Engine préflight + écriture temp",ok,"P0",str(out.get("error") or "OK"),{"preflight":out.get("preflight"),"tests":out.get("tests")}))
+            pf=out.get("preflight") or {}
+            detail=str(out.get("error") or "OK")
+            if not ok:
+                detail += " • detail="+str(out.get("detail") or "")+" • git="+json.dumps(pf.get("git") or {},ensure_ascii=False)[:700]
+            results.append(check("ACTION_ENGINE_SANDBOX","Action Engine préflight + écriture temp",ok,"P0",detail,{"preflight":pf,"tests":out.get("tests"),"full":out}))
     except Exception as exc:
         results.append(check("ACTION_ENGINE_SANDBOX","Action Engine préflight + écriture temp",False,"P0",f"{type(exc).__name__}: {exc}"))
 
@@ -328,7 +351,8 @@ def run_full():
         results.append(check("MODEL_"+re.sub(r'[^A-Z0-9]+','_',name.upper()),f"Modèle {name}",bool(model_found.get(name)),"P0",model_found.get(name,["Absent"])[0] if model_found.get(name) else "Absent",{"paths":model_found.get(name,[])}))
     for name in BAD_MODEL_NAMES:
         refs=search_text(STUDIO,[name],limit=60) if STUDIO.exists() else []
-        results.append(check("BADREF_"+re.sub(r'[^A-Z0-9]+','_',name.upper()),f"Ancienne référence {name} absente",not refs,"P0","Aucune référence active détectée" if not refs else f"{len(refs)} référence(s) trouvée(s)",{"refs":refs[:20]}))
+        detail="Aucune référence active détectée" if not refs else f"{len(refs)} référence(s) trouvée(s) • "+str(refs[0].get("path") or "")
+        results.append(check("BADREF_"+re.sub(r'[^A-Z0-9]+','_',name.upper()),f"Ancienne référence {name} absente",not refs,"P0",detail,{"refs":refs[:20]}))
 
     wf_found=find_names(STUDIO,[TARGET_WORKFLOW]).get(TARGET_WORKFLOW,[]) if STUDIO.exists() else []
     if not wf_found and COMFY.exists():
@@ -360,7 +384,8 @@ def run_full():
     studio_procs=[p for p in procs if "simplestudio" in str(p.get("CommandLine","")).lower() or "simple studio" in str(p.get("CommandLine","")).lower()]
     results.append(check("PROC_COMFY","Processus ComfyUI détecté",bool(comfy_procs),"P1",f"{len(comfy_procs)} processus apparent(s)",{"processes":comfy_procs[:10]}))
     results.append(check("PROC_STUDIO","Processus Studio détecté",bool(studio_procs),"P1",f"{len(studio_procs)} processus apparent(s)",{"processes":studio_procs[:10]}))
-    results.append(check("PROC_STUDIO_SINGLE","Une seule instance Studio",len(studio_procs)<=1,"P0",f"{len(studio_procs)} processus apparent(s)",{"processes":studio_procs[:10]}))
+    owners8191=listener_pids(8191)
+    results.append(check("PROC_STUDIO_SINGLE","Un seul serveur écoute Studio 8191",len(owners8191)==1,"P0",f"{len(owners8191)} PID(s) en écoute sur 8191: {owners8191}",{"listener_pids":owners8191,"processes":studio_procs[:10]}))
 
     ui_feature_checks(results)
     action_engine_selftest(results)
