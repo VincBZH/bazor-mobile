@@ -5,8 +5,17 @@ button.tap-confirm{transform:scale(.96);box-shadow:0 0 0 3px rgba(69,212,131,.45
 button.tap-confirm::after{content:"✓";position:absolute;right:7px;top:5px;min-width:20px;height:20px;line-height:20px;text-align:center;border-radius:999px;background:var(--ok);color:#07150d;font-size:12px;font-weight:1000;box-shadow:0 0 10px rgba(69,212,131,.55)}
 button:disabled{opacity:.65;cursor:wait}
 .primary{background:var(--accent);color:#21190b}.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}.danger{background:#4a2328;color:#ffd3d3}.wide{width:100%}textarea,select{width:100%;background:#17191e;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px}textarea{min-height:120px}label{display:block;font-size:12px;color:var(--muted);margin:12px 0 6px}.progress{height:9px;background:#111318;border-radius:999px;overflow:hidden;margin:10px 0}.progress>div{height:100%;background:var(--accent)}nav{position:fixed;left:0;right:0;bottom:0;z-index:10;background:#121419ee;backdrop-filter:blur(12px);border-top:1px solid var(--line);display:flex;justify-content:center;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}nav .tabs{width:min(760px,100%);display:grid;grid-template-columns:repeat(5,1fr);gap:6px}nav button{background:transparent;color:var(--muted);padding:9px 4px;font-size:11px}nav button.active{background:var(--panel2);color:var(--accent)}h2,h3{margin:0 0 8px}h2{font-size:19px}.hidden{display:none!important}hr{border:0;border-top:1px solid var(--line);margin:12px 0}.toast{position:fixed;left:50%;bottom:98px;transform:translateX(-50%);background:#101216;color:#fff;padding:11px 14px;border-radius:12px;border:1px solid var(--line);z-index:20;display:none;max-width:90%}
+.mini-panel{margin:10px 0;padding:10px 12px;border-radius:13px;background:#171a20;border:1px solid var(--line)}
+.subcard{margin:10px 0;padding:12px;border-radius:14px;background:#191c22;border:1px solid #343a46}
+.checkpoint{display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:12px}
+.checkpoint .dot{width:18px;height:18px;flex:0 0 18px;border-radius:999px;display:grid;place-items:center;background:#24303a;color:var(--accent);font-weight:900}
+.checkpoint.okc .dot{background:#173d2b;color:var(--ok)}
+.checkpoint.badc .dot{background:#472226;color:var(--bad)}
+.task-live{border:1px solid rgba(41,168,255,.45);box-shadow:0 0 18px rgba(41,168,255,.08)}
+.tree-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+
 </style></head><body><header><div class="row"><div><div class="brand">BAZOR COMMAND CENTER</div><div class="sub">Mobile • BAZOR Core • Ollama</div></div><span id="pcStatus" class="badge todo" onclick="detectCore()" style="cursor:pointer" title="Toucher pour retester">CONNEXION…</span></div></header><main><section id="home"></section><section id="capture" class="hidden"><div class="card"><h2>BAZOR CAPTURE</h2><div class="muted small">Transforme une idée rapide en tâche.</div><label>Note</label><textarea id="captureText" placeholder="Ex. Ajouter une fonction dans AI Room…"></textarea><div class="row wrap"><button class="secondary grow" id="micBtn">🎙️ Dicter</button><button class="secondary grow" id="clearCapture">Effacer</button></div><label>Projet</label><select id="captureProject"></select><label>Priorité</label><select id="capturePriority"><option>NORMALE</option><option>BASSE</option><option>HAUTE</option><option>URGENTE</option></select><div style="height:10px"></div><button class="primary wide" id="saveCapture">ENVOYER DANS L'INBOX</button></div></section><section id="inbox" class="hidden"></section><section id="ollama" class="hidden"></section><section id="journal" class="hidden"></section></main><div class="toast" id="toast"></div><nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>Ollama</button><button data-tab="journal">≡<br>Journal</button></div></nav><script>
-const APP_BUILD="2026.09.18-auto7";const CORE_PORT=8775;
+const APP_BUILD="2026.09.18-auto8";const CORE_PORT=8775;
 let buildCheckBusy=false;
 async function fetchTimeout(url,opts={},ms=2500){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opts,signal:c.signal})}finally{clearTimeout(t)}}
 async function checkBuild(){if(buildCheckBusy)return;buildCheckBusy=true;try{const r=await fetchTimeout("./index.html?buildcheck="+Date.now(),{cache:"no-store"},3000);const t=await r.text();const m=t.match(/const APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD){location.reload()}}catch(e){}finally{buildCheckBusy=false}}
@@ -63,36 +72,201 @@ const SUBPROJECTS={
  {id:"touch",name:"Interface tactile / zoom",next:"Corriger le zoom tactile et l'ergonomie mobile"}
 ]
 };
-const KEY="bazor.command.center.mobile.v1",uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);const seed={projects:[{id:"ai-room",name:"BAZOR AI Room",status:"A_FAIRE",progress:62,next:"Brancher l'historique des sessions"},{id:"simple-studio",name:"AI Simple Studio",status:"OK",progress:88,next:"Relire les presets de génération"},{id:"wii-relay",name:"Projet Wii AI Relay",status:"BLOQUE",progress:34,next:"Tester le pont quand le PC est disponible"},{id:"modo-viewer",name:"MODO Viewer",status:"A_FAIRE",progress:45,next:"Corriger le zoom tactile"}],inbox:[],jobs:[{id:"j1",label:"Résumer les notes AI Room",model:"mistral:latest",status:"EN ATTENTE"},{id:"j2",label:"Analyser les logs Wii",model:"qwen2.5-coder:7b",status:"PC HORS LIGNE"}],journal:[{id:"l1",what:"Initialisation BAZOR Mobile",tag:"OK",when:Date.now(),who:"BAZOR"}]};let state;try{state=JSON.parse(localStorage.getItem(KEY))||structuredClone(seed)}catch(e){state=structuredClone(seed)}const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));function save(){localStorage.setItem(KEY,JSON.stringify(state));render()}function toast(t){let e=document.getElementById("toast");e.textContent=t;e.style.display="block";setTimeout(()=>e.style.display="none",1700)}function log(what,tag="OK"){state.journal.unshift({id:uid(),what,tag,when:Date.now(),who:"Vincent"})}function pname(id){return state.projects.find(p=>p.id===id)?.name||"Général"}function scl(s){return s==="OK"?"ok":s==="A_FAIRE"?"todo":"blocked"}function subFor(id){return SUBPROJECTS[id]||[]}
+const KEY="bazor.command.center.mobile.v1",uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
+const seed={projects:[{id:"ai-room",name:"BAZOR AI Room",status:"A_FAIRE",progress:62,next:"Brancher l'historique des sessions"},{id:"simple-studio",name:"AI Simple Studio",status:"OK",progress:88,next:"Relire les presets de génération"},{id:"wii-relay",name:"Projet Wii AI Relay",status:"BLOQUE",progress:34,next:"Tester le pont quand le PC est disponible"},{id:"modo-viewer",name:"MODO Viewer",status:"A_FAIRE",progress:45,next:"Corriger le zoom tactile"}],inbox:[],jobs:[{id:"j1",label:"Résumer les notes AI Room",model:"mistral:latest",status:"EN ATTENTE"},{id:"j2",label:"Analyser les logs Wii",model:"qwen2.5-coder:7b",status:"PC HORS LIGNE"}],journal:[{id:"l1",what:"Initialisation BAZOR Mobile",tag:"OK",when:Date.now(),who:"BAZOR"}]};
+let state;try{state=JSON.parse(localStorage.getItem(KEY))||structuredClone(seed)}catch(e){state=structuredClone(seed)}
+state.subprojects=state.subprojects||{};
+state.runs=state.runs||{};
+state.info=state.info||{};
+for(const p of state.projects){
+  state.subprojects[p.id]=state.subprojects[p.id]||{};
+  for(const c of (SUBPROJECTS[p.id]||[])){
+    state.subprojects[p.id][c.id]=state.subprojects[p.id][c.id]||{status:"A_EVALUER",progress:null,next:c.next,summary:"Pas encore évalué",updated:null};
+  }
+}
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
+function save(){localStorage.setItem(KEY,JSON.stringify(state));render()}
+function toast(t){let e=document.getElementById("toast");e.textContent=t;e.style.display="block";setTimeout(()=>e.style.display="none",1700)}
+function log(what,tag="OK"){state.journal.unshift({id:uid(),what,tag,when:Date.now(),who:"BAZOR MOBILE"})}
+function pname(id){return state.projects.find(p=>p.id===id)?.name||"Général"}
+function scl(s){return s==="OK"?"ok":s==="BLOQUE"?"blocked":"todo"}
+function slabel(s){return s==="A_FAIRE"?"À FAIRE":s==="A_EVALUER"?"À ÉVALUER":s==="EN_COURS"?"EN COURS":s||"À ÉVALUER"}
+function subFor(id){return SUBPROJECTS[id]||[]}
+function spState(pid,sid){return state.subprojects?.[pid]?.[sid]||{status:"A_EVALUER",progress:null,next:"À évaluer",summary:"Pas encore évalué"}}
 function treeOpenKey(id){return "bazor.tree."+id}
 function rememberTree(id,open){localStorage.setItem(treeOpenKey(id),open?"1":"0")}
-async function goSubProject(parentId,subId){
-  const p=state.projects.find(x=>x.id===parentId), sub=subFor(parentId).find(x=>x.id===subId);
-  if(!p||!sub)return;
-  const key="sub:"+parentId+":"+subId;
-  if(actionBusy[key]){toast("Action déjà en cours…");return}
-  actionBusy[key]=true;toast("Envoi du sous-projet à BAZOR…");
+function toggleInfo(id,type){state.info[id]=state.info[id]===type?null:type;save()}
+function nextSub(pid){return subFor(pid).find(c=>{const x=spState(pid,c.id);return x.status!=="OK"||x.progress===null||x.progress<100})||null}
+function projectStatusPhrase(p){
+  const r=state.runs[p.id];
+  if(r?.active){
+    const c=subFor(p.id).find(x=>x.id===r.subId);
+    return "En cours : "+(c?.name||"projet")+" — "+(r.stage||"travail en cours")+".";
+  }
+  const kids=subFor(p.id), vals=kids.map(c=>spState(p.id,c.id));
+  const done=vals.filter(x=>x.status==="OK").length, blocked=vals.filter(x=>x.status==="BLOQUE").length, unknown=vals.filter(x=>x.progress===null).length;
+  return done+"/"+kids.length+" sous-projets validés"+(blocked?", "+blocked+" bloqué"+(blocked>1?"s":""):"")+(unknown?", "+unknown+" à évaluer":"")+".";
+}
+function nextPhrase(p){
+  const c=nextSub(p.id);
+  if(!c)return "Tous les sous-projets sont contrôlés.";
+  const x=spState(p.id,c.id);
+  return c.name+" — "+(x.next||c.next);
+}
+function globalFromSubs(p){
+  const vals=subFor(p.id).map(c=>spState(p.id,c.id).progress);
+  if(vals.length&&vals.every(v=>typeof v==="number"))return Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+  return p.progress;
+}
+function addProjectCheck(pid,text,kind){
+  const r=state.runs[pid]||{};
+  r.projectChecks=r.projectChecks||[];
+  r.projectChecks.push({text:text,kind:kind||"run"});
+  r.projectChecks=r.projectChecks.slice(-10);
+  state.runs[pid]=r;
+}
+function setRun(pid,patch){
+  const old=state.runs[pid]||{};
+  state.runs[pid]=Object.assign({},old,patch);
+  save();
+}
+function runPanel(p){
+  const r=state.runs[p.id];
+  if(!r)return "";
+  const c=subFor(p.id).find(x=>x.id===r.subId);
+  const checks=(r.checkpoints||[]).map(x=>'<div class="checkpoint '+(x.kind==="ok"?"okc":x.kind==="bad"?"badc":"")+'"><span class="dot">'+(x.kind==="ok"?"✓":x.kind==="bad"?"!":"•")+'</span><span>'+esc(x.text)+'</span></div>').join("");
+  const projectChecks=(r.projectChecks||[]).map(x=>'<div class="checkpoint '+(x.kind==="ok"?"okc":x.kind==="bad"?"badc":"")+'"><span class="dot">'+(x.kind==="ok"?"✓":x.kind==="bad"?"!":"•")+'</span><span>'+esc(x.text)+'</span></div>').join("");
+  return '<div class="mini-panel task-live"><div class="row"><strong>'+(r.auto?"GO AUTO PROJET":"TÂCHE")+'</strong><span class="badge '+(r.active?"todo":r.blocked?"blocked":"ok")+'">'+(r.active?"EN COURS":r.blocked?"BLOQUÉ":"TERMINÉ")+'</span></div>'+
+    '<div class="small muted" style="margin-top:6px">'+esc(c?.name||p.name)+' • '+esc(r.stage||"")+'</div>'+
+    '<div class="progress"><div style="width:'+(r.taskProgress||0)+'%"></div></div><div class="small">Tâche en cours : '+(r.taskProgress||0)+'%</div>'+
+    checks+(projectChecks?'<hr><div class="small muted">POINTS DE CONTRÔLE PROJET</div>'+projectChecks:"")+'</div>';
+}
+async function callSubTask(pid,c,repair,previous){
+  if(!CORE)await detectCore();
+  if(!CORE)throw new Error("core_unreachable");
+  const x=spState(pid,c.id);
+  const r=await fetch(CORE+"/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+    project_id:pid,subproject_name:c.name,task:x.next||c.next,current_progress:x.progress??0,repair:!!repair,previous:previous||""
+  })});
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  return r.json();
+}
+async function runOneSub(pid,sid,autoMode){
+  const p=state.projects.find(x=>x.id===pid), c=subFor(pid).find(x=>x.id===sid), x=spState(pid,sid);
+  if(!p||!c)return {status:"BLOQUE"};
+  const key="sub:"+pid+":"+sid;
+  if(actionBusy[key]){toast("Action déjà en cours…");return {status:"EN_COURS"}}
+  actionBusy[key]=true;
+  x.status="EN_COURS";x.summary="Préparation de la tâche…";
+  setRun(pid,{active:true,auto:!!autoMode,subId:sid,stage:"Préparation",taskProgress:10,blocked:false,checkpoints:[{text:"Tâche préparée",kind:"ok"}]});
   try{
-    const r=await coreChat("Projet: "+p.name+"\nSous-projet: "+sub.name+"\nAction: "+sub.next+"\nTravaille à partir du contexte réel disponible. N'invente pas de résultat exécuté.","auto");
-    log("Sous-projet traité — "+sub.name);save();showResult(sub.name,r);toast("Réponse reçue ✓")
+    setRun(pid,{stage:"Analyse du contexte réel",taskProgress:35,checkpoints:[{text:"Tâche préparée",kind:"ok"},{text:"Lecture et analyse du contexte",kind:"run"}]});
+    let d=await callSubTask(pid,c,false,"");
+    setRun(pid,{stage:"Contrôle du résultat",taskProgress:72,checkpoints:[{text:"Tâche préparée",kind:"ok"},{text:"Analyse terminée",kind:"ok"},{text:"Contrôle du résultat",kind:"run"}]});
+    if(d.status==="BLOQUE"||!d.ok){
+      setRun(pid,{stage:"Correction automatique",taskProgress:82,checkpoints:[{text:"Tâche préparée",kind:"ok"},{text:"Blocage détecté",kind:"bad"},{text:"Diagnostic et correction de l'approche",kind:"run"}]});
+      const first=d.answer||JSON.stringify(d);
+      d=await callSubTask(pid,c,true,first);
+      setRun(pid,{stage:"Relance et second contrôle",taskProgress:94,checkpoints:[{text:"Blocage détecté",kind:"bad"},{text:"Correction automatique tentée",kind:"ok"},{text:"Relance contrôlée",kind:"run"}]});
+    }
+    x.status=d.status||"BLOQUE";
+    x.progress=typeof d.progress==="number"?d.progress:x.progress;
+    x.summary=d.summary||answerText(d).slice(0,150);
+    x.next=d.next||x.next||c.next;
+    x.updated=Date.now();
+    const blocked=x.status==="BLOQUE";
+    setRun(pid,{active:!!autoMode,stage:blocked?"Blocage confirmé après contrôle":"Contrôle validé",taskProgress:100,blocked:blocked,checkpoints:[{text:"Analyse du contexte réel",kind:"ok"},{text:blocked?"Blocage persistant après correction":"Résultat contrôlé",kind:blocked?"bad":"ok"}]});
+    log((blocked?"Blocage — ":"Sous-projet validé — ")+c.name,blocked?"BLOQUÉ":"OK");
+    if(!autoMode)showResult(c.name,d);
+    save();
+    return d;
   }catch(e){
-    log("Sous-projet en attente — "+sub.name,"BLOQUÉ");save();toast("Relais indisponible")
-  }finally{setTimeout(()=>delete actionBusy[key],1200)}
+    x.status="BLOQUE";x.summary="Relais ou moteur indisponible : "+e.message;
+    setRun(pid,{active:false,stage:"Erreur de liaison",taskProgress:100,blocked:true,checkpoints:[{text:"Erreur : "+e.message,kind:"bad"}]});
+    log("Sous-projet bloqué — "+c.name,"BLOQUÉ");save();toast("Blocage journalisé");
+    return {status:"BLOQUE",error:e.message};
+  }finally{
+    setTimeout(()=>delete actionBusy[key],1200);
+  }
+}
+async function goSubProject(pid,sid){toast("GO sous-projet…");return runOneSub(pid,sid,false)}
+async function goNextStep(pid){
+  const c=nextSub(pid);
+  if(!c){toast("Projet déjà contrôlé.");return}
+  return runOneSub(pid,c.id,false);
+}
+async function goProject(id){
+  const p=state.projects.find(x=>x.id===id);
+  if(!p)return;
+  return goNextStep(id);
+}
+async function goAuto(id){
+  const key="auto:"+id;
+  if(actionBusy[key]){toast("GO AUTO déjà en cours…");return}
+  actionBusy[key]=true;
+  const p=state.projects.find(x=>x.id===id);
+  if(!p)return;
+  try{
+    if(!CORE)await detectCore();
+    if(!CORE){toast("PC absent : GO AUTO impossible pour l'instant");return}
+    state.runs[id]={active:true,auto:true,stage:"Démarrage logique",taskProgress:5,blocked:false,checkpoints:[],projectChecks:[{text:"Ordre logique des sous-projets chargé",kind:"ok"}]};
+    save();
+    let blocked=false;
+    for(const c of subFor(id)){
+      const x=spState(id,c.id);
+      if(x.status==="OK"&&x.progress===100){addProjectCheck(id,c.name+" déjà terminé — ignoré", "ok");save();continue}
+      state.runs[id].subId=c.id;state.runs[id].active=true;state.runs[id].auto=true;save();
+      const d=await runOneSub(id,c.id,true);
+      const ok=d&&d.status!=="BLOQUE";
+      addProjectCheck(id,(ok?"✓ ":"! ")+c.name+(ok?" contrôlé":" bloqué après correction"),ok?"ok":"bad");
+      save();
+      if(!ok){blocked=true;break}
+    }
+    p.progress=globalFromSubs(p);
+    const n=nextSub(id);
+    p.next=n?(spState(id,n.id).next||n.next):"Contrôle final du projet";
+    p.status=blocked?"BLOQUE":(n?"A_FAIRE":"OK");
+    state.runs[id]=Object.assign({},state.runs[id],{active:false,auto:true,stage:blocked?"Arrêt contrôlé sur blocage":"Cycle GO AUTO terminé",taskProgress:100,blocked:blocked});
+    log("GO AUTO projet — "+p.name,blocked?"BLOQUÉ":"OK");
+    save();
+    toast(blocked?"GO AUTO arrêté sur un blocage contrôlé":"GO AUTO projet terminé ✓");
+  }catch(e){
+    p.status="BLOQUE";
+    state.runs[id]=Object.assign({},state.runs[id]||{},{active:false,auto:true,stage:"Blocage GO AUTO",taskProgress:100,blocked:true});
+    log("GO AUTO bloqué — "+p.name,"BLOQUÉ");save();toast("GO AUTO bloqué — voir les points de contrôle");
+  }finally{
+    setTimeout(()=>delete actionBusy[key],1200);
+  }
+}
+function subCard(p,c){
+  const x=spState(p.id,c.id), progress=x.progress;
+  return '<div class="subcard"><div class="row"><strong>'+esc(c.name)+'</strong><span class="badge '+scl(x.status)+'">'+esc(slabel(x.status))+'</span></div>'+
+    (progress===null?'<div class="small muted" style="margin-top:7px">Progression : à évaluer</div>':'<div class="progress"><div style="width:'+progress+'%"></div></div><div class="small muted">Sous-projet : '+progress+'%</div>')+
+    '<div class="small" style="margin-top:7px">'+esc(x.summary||"Pas encore évalué")+'</div>'+
+    '<div class="small muted" style="margin-top:5px">Étape suivante : '+esc(x.next||c.next)+'</div>'+
+    '<button class="secondary wide" style="margin-top:9px" onclick="event.preventDefault();event.stopPropagation();goSubProject(\''+p.id+'\',\''+c.id+'\')">GO SOUS-PROJET</button></div>';
 }
 function projectTreeCard(p){
-  const children=subFor(p.id);
-  const open=localStorage.getItem(treeOpenKey(p.id))!=="0";
+  const children=subFor(p.id), r=state.runs[p.id], open=!!r?.active||localStorage.getItem(treeOpenKey(p.id))==="1", info=state.info[p.id];
+  const statusPanel=info==="status"?'<div class="mini-panel"><strong>Où on en est</strong><div class="small" style="margin-top:5px">'+esc(projectStatusPhrase(p))+'</div></div>':"";
+  const next=nextSub(p.id);
+  const nextPanel=info==="next"?'<div class="mini-panel"><strong>Étape suivante</strong><div class="small" style="margin-top:5px">'+esc(nextPhrase(p))+'</div>'+(next?'<button class="primary wide" style="margin-top:9px" onclick="event.preventDefault();event.stopPropagation();goNextStep(\''+p.id+'\')">GO ÉTAPE SUIVANTE</button>':'')+'</div>':"";
   return '<details class="card" '+(open?'open':'')+' ontoggle="rememberTree(\''+p.id+'\',this.open)">'+
-    '<summary style="cursor:pointer;list-style:none"><div class="row"><div><h2 style="margin:0">'+esc(p.name)+'</h2><div class="small muted">'+children.length+' sous-projet'+(children.length>1?'s':'')+'</div></div><span class="badge '+scl(p.status)+'">'+(p.status==="A_FAIRE"?"À FAIRE":p.status)+'</span></div>'+
-    '<div class="progress" style="margin-top:10px"><div style="width:'+p.progress+'%"></div></div><div class="small muted">Progression '+p.progress+'% • toucher pour '+(open?'replier':'déployer')+'</div></summary>'+
-    '<div style="margin-top:14px;padding-left:10px;border-left:2px solid rgba(41,168,255,.35)">'+
-      children.map((c,i)=>'<div style="padding:10px 0;'+(i?'border-top:1px solid rgba(255,255,255,.08)':'')+'"><div class="row"><strong>'+esc(c.name)+'</strong><span class="badge todo">SOUS-PROJET</span></div><div class="small muted" style="margin:6px 0 9px">'+esc(c.next)+'</div><button class="secondary" onclick="event.preventDefault();event.stopPropagation();goSubProject(\''+p.id+'\',\''+c.id+'\')">GO SOUS-PROJET</button></div>').join('')+
-    '</div><hr><div class="small muted">PROCHAINE ACTION PROJET</div><div style="margin:5px 0 12px">'+esc(p.next)+'</div><div class="row"><button class="primary grow" onclick="event.preventDefault();event.stopPropagation();goProject(\''+p.id+'\')">GO</button><button class="secondary grow" onclick="event.preventDefault();event.stopPropagation();goAuto(\''+p.id+'\')">GO AUTO</button></div></details>'
+    '<summary style="cursor:pointer;list-style:none"><div class="row"><div><h2 style="margin:0">'+esc(p.name)+'</h2><div class="small muted">'+children.length+' sous-projet'+(children.length>1?'s':'')+'</div></div><span class="badge '+scl(p.status)+'">'+esc(slabel(p.status))+'</span></div>'+
+    '<div class="progress" style="margin-top:10px"><div style="width:'+p.progress+'%"></div></div><div class="small muted">Avancée globale : '+p.progress+'% • toucher pour déployer</div></summary>'+
+    '<div class="tree-actions"><button class="secondary" onclick="event.preventDefault();event.stopPropagation();toggleInfo(\''+p.id+'\',\'status\')">STATUS</button><button class="secondary" onclick="event.preventDefault();event.stopPropagation();toggleInfo(\''+p.id+'\',\'next\')">ÉTAPE SUIVANTE</button></div>'+
+    statusPanel+nextPanel+runPanel(p)+
+    '<div style="margin-top:12px;padding-left:9px;border-left:2px solid rgba(41,168,255,.35)">'+children.map(c=>subCard(p,c)).join("")+'</div>'+
+    '<div class="row" style="margin-top:12px"><button class="primary grow" onclick="event.preventDefault();event.stopPropagation();goNextStep(\''+p.id+'\')">GO</button><button class="secondary grow" onclick="event.preventDefault();event.stopPropagation();goAuto(\''+p.id+'\')">GO AUTO TOUT</button></div></details>';
 }
 function renderHome(){
   const totalSubs=state.projects.reduce((n,p)=>n+subFor(p.id).length,0);
-  home.innerHTML='<div class="card"><h2>Arborescence BAZOR</h2><div class="small muted">'+state.projects.length+' projets • '+totalSubs+' sous-projets • toucher un projet pour déployer/replier</div></div>'+state.projects.map(projectTreeCard).join("")
-}async function goProject(id){if(actionBusy[id]){toast("Action déjà en cours…");return}actionBusy[id]=true;let p=state.projects.find(x=>x.id===id);toast("Envoi à BAZOR…");try{let r=await coreChat("Projet: "+p.name+"\nAction: "+p.next,"ollama");log("GO exécuté — "+p.name);save();showResult("Ollama — "+p.name,r);toast("Réponse reçue ✓")}catch(e){log("GO en attente relais — "+p.name,"BLOQUÉ");save();toast("PC non joignable — conserver dans Inbox")}finally{setTimeout(()=>delete actionBusy[id],1200)}}async function goAuto(id){let key="auto:"+id;if(actionBusy[key]){toast("GO AUTO déjà en cours…");return}actionBusy[key]=true;let p=state.projects.find(x=>x.id===id);try{if(!CORE)await detectCore();if(!CORE){state.inbox.unshift({id:uid(),project:id,type:"GO AUTO",title:p.next,priority:"HAUTE",status:"À TRAITER",created:Date.now()});log("GO AUTO mis en attente — "+p.name,"BLOQUÉ");save();toast("PC absent : tâche conservée");return}const r=await fetch(CORE+"/api/v1/go",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({project_id:id,task:p.next,room:"BAZOR MOBILE",files:[],current_progress:p.progress})});if(!r.ok)throw new Error("HTTP "+r.status);const d=await r.json();if(d.project){p.status=d.project.status||p.status;p.progress=d.project.progress??p.progress;p.next=d.project.next||p.next}log("GO AUTO exécuté — "+p.name);save();showResult("GO AUTO — "+p.name,d);toast(d.ok?"GO AUTO terminé ✓":"Réponse reçue")}catch(e){log("GO AUTO bloqué — "+p.name,"BLOQUÉ");save();toast("Blocage GO AUTO — journalisé")}finally{setTimeout(()=>delete actionBusy[key],1200)}}function fillProjects(){captureProject.innerHTML='<option value="">Automatique / Général</option>'+state.projects.map(p=>'<optgroup label="'+esc(p.name)+'"><option value="'+p.id+'">'+esc(p.name)+' — projet</option>'+subFor(p.id).map(c=>'<option value="'+p.id+'">'+esc('↳ '+c.name)+'</option>').join('')+'</optgroup>').join("")}function renderInbox(){inbox.innerHTML='<div class="card"><h2>INBOX</h2><div class="small muted">'+state.inbox.filter(x=>x.status==="À TRAITER").length+' à traiter</div></div>'+state.inbox.map(i=>'<div class="card"><span class="badge todo">'+esc(i.type)+'</span><h3 style="margin-top:10px">'+esc(i.title)+'</h3><div class="small muted">'+esc(pname(i.project))+' • '+esc(i.priority)+' • '+esc(i.status)+'</div><div class="row" style="margin-top:12px"><button class="secondary grow" onclick="treat(\''+i.id+'\')">Traiter</button><button class="danger" onclick="delInbox(\''+i.id+'\')">Suppr.</button></div></div>').join("")}function treat(id){let i=state.inbox.find(x=>x.id===id);i.status="TRAITÉ";log("Inbox traitée — "+i.title);save();toast("Marqué traité")}function delInbox(id){let i=state.inbox.find(x=>x.id===id);if(confirm("Supprimer cet élément ?")){state.inbox=state.inbox.filter(x=>x.id!==id);log("Inbox supprimée — "+i.title,"AMÉLIORATION");save()}}function renderOllama(){ollama.innerHTML='<div class="card"><h2>OLLAMA</h2><div class="small muted">Ollama reste local et protégé derrière BAZOR Core.</div></div>'+state.jobs.map(j=>'<div class="card"><div class="row"><h3>'+esc(j.label)+'</h3><span class="badge '+(j.status==="PC HORS LIGNE"?"blocked":"todo")+'">'+esc(j.status)+'</span></div><div class="small muted">'+esc(j.model)+' • '+(CORE?'RELAIS RÉEL':'EN ATTENTE')+'</div></div>').join("")}function renderJournal(){journal.innerHTML='<div class="card"><h2>JOURNAL</h2><div class="small muted">Traçabilité locale</div></div>'+state.journal.map(j=>'<div class="card"><div class="row"><strong>'+esc(j.what)+'</strong><span class="badge '+(j.tag==="OK"?"ok":j.tag==="BLOQUÉ"?"blocked":"todo")+'">'+esc(j.tag)+'</span></div><div class="small muted" style="margin-top:7px">'+esc(j.who)+' • '+new Date(j.when).toLocaleString("fr-FR")+'</div></div>').join("")}function render(){renderHome();renderInbox();renderOllama();renderJournal();fillProjects()}document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll("main>section").forEach(s=>s.classList.add("hidden"));document.getElementById(b.dataset.tab).classList.remove("hidden")});saveCapture.onclick=async()=>{let t=captureText.value.trim();if(!t){toast("Écris ou dicte une note.");return}let item={id:uid(),project:captureProject.value||null,type:"CAPTURE",title:t.slice(0,80),priority:capturePriority.value,status:"À TRAITER",created:Date.now(),text:t};state.inbox.unshift(item);log("Capture ajoutée — "+t.slice(0,50));captureText.value="";save();if(!CORE)await detectCore();if(CORE){try{let r=await coreChat(t,"auto");item.status="TRAITÉ";log("Capture transmise à BAZOR — "+t.slice(0,50));save();toast(r?"Envoyé à BAZOR ✓":"Capture enregistrée")}catch(e){toast("Conservé dans Inbox — relais indisponible")}}else toast("PC absent : conservé dans Inbox")};clearCapture.onclick=()=>captureText.value="";micBtn.onclick=()=>{let SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Dictée indisponible dans ce navigateur.");return}let r=new SR();r.lang="fr-FR";r.onresult=e=>{captureText.value+=(captureText.value?" ":"")+e.results[0][0].transcript;toast("Dictée ajoutée")};r.onerror=()=>toast("La dictée n'a pas démarré.");r.start()};document.addEventListener("click",e=>{
+  home.innerHTML='<div class="card"><h2>Arborescence BAZOR</h2><div class="small muted">'+state.projects.length+' projets • '+totalSubs+' sous-projets • projets repliés par défaut</div></div>'+state.projects.map(projectTreeCard).join("");
+}
+function fillProjects(){
+  captureProject.innerHTML='<option value="">Automatique / Général</option>'+state.projects.map(p=>'<optgroup label="'+esc(p.name)+'"><option value="'+p.id+'">'+esc(p.name)+' — projet</option>'+subFor(p.id).map(c=>'<option value="'+p.id+'">'+esc("↳ "+c.name)+'</option>').join("")+'</optgroup>').join("");
+}
+function renderInbox(){inbox.innerHTML='<div class="card"><h2>INBOX</h2><div class="small muted">'+state.inbox.filter(x=>x.status==="À TRAITER").length+' à traiter</div></div>'+state.inbox.map(i=>'<div class="card"><span class="badge todo">'+esc(i.type)+'</span><h3 style="margin-top:10px">'+esc(i.title)+'</h3><div class="small muted">'+esc(pname(i.project))+' • '+esc(i.priority)+' • '+esc(i.status)+'</div><div class="row" style="margin-top:12px"><button class="secondary grow" onclick="treat(\''+i.id+'\')">Traiter</button><button class="danger" onclick="delInbox(\''+i.id+'\')">Suppr.</button></div></div>').join("")}function treat(id){let i=state.inbox.find(x=>x.id===id);i.status="TRAITÉ";log("Inbox traitée — "+i.title);save();toast("Marqué traité")}function delInbox(id){let i=state.inbox.find(x=>x.id===id);if(confirm("Supprimer cet élément ?")){state.inbox=state.inbox.filter(x=>x.id!==id);log("Inbox supprimée — "+i.title,"AMÉLIORATION");save()}}function renderOllama(){ollama.innerHTML='<div class="card"><h2>OLLAMA</h2><div class="small muted">Ollama reste local et protégé derrière BAZOR Core.</div></div>'+state.jobs.map(j=>'<div class="card"><div class="row"><h3>'+esc(j.label)+'</h3><span class="badge '+(j.status==="PC HORS LIGNE"?"blocked":"todo")+'">'+esc(j.status)+'</span></div><div class="small muted">'+esc(j.model)+' • '+(CORE?'RELAIS RÉEL':'EN ATTENTE')+'</div></div>').join("")}function renderJournal(){journal.innerHTML='<div class="card"><h2>JOURNAL</h2><div class="small muted">Traçabilité locale</div></div>'+state.journal.map(j=>'<div class="card"><div class="row"><strong>'+esc(j.what)+'</strong><span class="badge '+(j.tag==="OK"?"ok":j.tag==="BLOQUÉ"?"blocked":"todo")+'">'+esc(j.tag)+'</span></div><div class="small muted" style="margin-top:7px">'+esc(j.who)+' • '+new Date(j.when).toLocaleString("fr-FR")+'</div></div>').join("")}function render(){renderHome();renderInbox();renderOllama();renderJournal();fillProjects()}document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll("main>section").forEach(s=>s.classList.add("hidden"));document.getElementById(b.dataset.tab).classList.remove("hidden")});saveCapture.onclick=async()=>{let t=captureText.value.trim();if(!t){toast("Écris ou dicte une note.");return}let item={id:uid(),project:captureProject.value||null,type:"CAPTURE",title:t.slice(0,80),priority:capturePriority.value,status:"À TRAITER",created:Date.now(),text:t};state.inbox.unshift(item);log("Capture ajoutée — "+t.slice(0,50));captureText.value="";save();if(!CORE)await detectCore();if(CORE){try{let r=await coreChat(t,"auto");item.status="TRAITÉ";log("Capture transmise à BAZOR — "+t.slice(0,50));save();toast(r?"Envoyé à BAZOR ✓":"Capture enregistrée")}catch(e){toast("Conservé dans Inbox — relais indisponible")}}else toast("PC absent : conservé dans Inbox")};clearCapture.onclick=()=>captureText.value="";micBtn.onclick=()=>{let SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Dictée indisponible dans ce navigateur.");return}let r=new SR();r.lang="fr-FR";r.onresult=e=>{captureText.value+=(captureText.value?" ":"")+e.results[0][0].transcript;toast("Dictée ajoutée")};r.onerror=()=>toast("La dictée n'a pas démarré.");r.start()};document.addEventListener("click",e=>{
   const b=e.target.closest("button");
   if(!b)return;
   b.classList.remove("tap-confirm");
