@@ -728,24 +728,38 @@ while True:
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","[BAZOR-TASK-START]\n\n"+task_id+" démarrée. État mobile passé EN COURS ; secondes lectures puis préflight Git avant toute écriture."])
                     except Exception:
                         pass
-                    result=_run_registry_task(task_id)
-                    ex=result.get("execution") or {}; ar=ex.get("action_result") or {}
-                    pre=(ar.get("preflight") or {})
-                    proof=(
-                        f"\n\nPreflight sandbox: {'OK' if pre.get('ok') else '—'}"
-                        f"\nFichiers modifiés: {len(ar.get('files') or [])}"
-                        f"\nTests cible: {sum(1 for x in (ar.get('tests') or []) if x.get('ok'))}/{len(ar.get('tests') or [])}"
-                    )
-                    review_lines="\n".join(
-                        "- "+str(x.get("profile"))+" → "+str(x.get("model") or x.get("engine") or "?")+" : "+("OK" if x.get("ok") else "HS")
-                        for x in result.get("reviews") or []
-                    )
-                    reply=TASK_MARK+"\n\n**BAZOR Task — "+task_id+"**\n\nStatut: "+str(result.get("task_status"))+"\nRésumé: "+str(result.get("summary") or "")+proof
-                    if review_lines:
-                        reply+="\n\nSecondes lectures:\n"+review_lines
-                    reply+="\n\nMoteur final: "+str(result.get("engine") or "?")+" / "+str(result.get("model") or "?")
-                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
-                    print(f"[OK TASK] #{issue['number']} {task_id} -> {result.get('task_status')}")
+                    try:
+                        result=_run_registry_task(task_id)
+                        ex=result.get("execution") or {}; ar=ex.get("action_result") or {}
+                        pre=(ar.get("preflight") or {})
+                        proof=(
+                            f"\n\nPreflight sandbox: {'OK' if pre.get('ok') else '—'}"
+                            f"\nFichiers modifiés: {len(ar.get('files') or [])}"
+                            f"\nTests cible: {sum(1 for x in (ar.get('tests') or []) if x.get('ok'))}/{len(ar.get('tests') or [])}"
+                        )
+                        review_lines="\n".join(
+                            "- "+str(x.get("profile"))+" → "+str(x.get("model") or x.get("engine") or "?")+" : "+("OK" if x.get("ok") else "HS")
+                            for x in result.get("reviews") or []
+                        )
+                        reply=TASK_MARK+"\n\n**BAZOR Task — "+task_id+"**\n\nStatut: "+str(result.get("task_status"))+"\nRésumé: "+str(result.get("summary") or "")+proof
+                        if review_lines:
+                            reply+="\n\nSecondes lectures:\n"+review_lines
+                        reply+="\n\nMoteur final: "+str(result.get("engine") or "?")+" / "+str(result.get("model") or "?")
+                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
+                        print(f"[OK TASK] #{issue['number']} {task_id} -> {result.get('task_status')}")
+                    except Exception as task_exc:
+                        detail=(type(task_exc).__name__+": "+str(task_exc))[:1200]
+                        try:
+                            project,task,_=_registry_task(task_id)
+                            _task_update_mobile(project,task,"BLOCKED","Exception tâche autonome: "+detail)
+                        except Exception:
+                            pass
+                        reply=TASK_MARK+"\n\n**BAZOR Task — "+task_id+"**\n\nStatut: BLOCKED\nErreur interne capturée: "+detail
+                        try:
+                            gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
+                        except Exception:
+                            pass
+                        print(f"[BLOQUE TASK] #{issue['number']} {task_id} {detail}")
                     continue
                 if title.startswith("[bazor-mammouth"):
                     if MAMMOUTH_MARK in comments: continue
