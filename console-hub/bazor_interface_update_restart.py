@@ -1,4 +1,5 @@
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -38,11 +39,40 @@ def run():
         return 4
 
     try:
-        # Laisse la réponse HTTP partir avant le nettoyage/redémarrage.
-        time.sleep(1.2)
+        # IMPORTANT : l'ancien Hub detenait le port-verrou 8790. Sans le fermer,
+        # le nouveau code etait bien telecharge mais la nouvelle interface quittait
+        # aussitot, laissant l'utilisateur sur l'ancienne version.
+        time.sleep(1.0)
+        if os.name == "nt":
+            ps = r"""
+Get-CimInstance Win32_Process |
+Where-Object { $_.CommandLine -match 'bazor_console_hub\.py' } |
+ForEach-Object {
+  Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+}
+"""
+            subprocess.run(
+                ["powershell","-NoProfile","-ExecutionPolicy","Bypass","-Command",ps],
+                capture_output=True,text=True,timeout=12,creationflags=CREATE_NO_WINDOW
+            )
+            log("ancien Hub ferme avant relance")
+
+        # Attend explicitement que le verrou TCP du Hub soit libere.
+        deadline=time.time()+8
+        while time.time()<deadline:
+            sock=socket.socket()
+            sock.settimeout(0.25)
+            try:
+                busy=(sock.connect_ex(("127.0.0.1",8790)) == 0)
+            finally:
+                sock.close()
+            if not busy:
+                break
+            time.sleep(0.25)
+
         flags=CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
         subprocess.Popen(["cmd.exe","/c",str(launcher)],cwd=str(ROOT),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
-        log("launcher déclenché")
+        log("launcher declenche avec nouveau Hub")
         return 0
     except Exception as e:
         log("launcher erreur: "+type(e).__name__+": "+str(e))
