@@ -296,46 +296,52 @@ def _http_502_endpoints(text,limit=8):
 
 
 def _task_start_smoke():
-    rid="diag-go-"+str(int(time.time()))
-    payload={
-        "project_id":"bazor-security",
-        "subproject_name":"Diagnostic GO local",
-        "task":"Diagnostic uniquement. Ne modifie aucun fichier. Termine par STATUS: OK, PROGRESS: 0, SUMMARY: test local, NEXT: aucun.",
-        "current_progress":0,
-        "repair":False,
-        "previous":"",
-        "provider":"ollama",
-        "request_id":rid,
-        "async":True,
-        "apply_actions":False,
+    def one(base_url,label):
+        rid="diag-go-"+label+"-"+str(int(time.time()*1000))
+        payload={
+            "project_id":"bazor-security",
+            "subproject_name":"Diagnostic GO local",
+            "task":"Diagnostic uniquement. Ne modifie aucun fichier. Termine par STATUS: OK, PROGRESS: 0, SUMMARY: test local, NEXT: aucun.",
+            "current_progress":0,
+            "repair":False,
+            "previous":"",
+            "provider":"ollama",
+            "request_id":rid,
+            "async":True,
+            "apply_actions":False,
+        }
+        data=json.dumps(payload,ensure_ascii=False).encode("utf-8")
+        req=urllib.request.Request(
+            base_url+"/api/v1/task",
+            data=data,
+            headers={"Content-Type":"application/json"},
+            method="POST",
+        )
+        started=time.monotonic()
+        try:
+            with urllib.request.urlopen(req,timeout=6.0) as r:
+                raw=r.read().decode("utf-8","replace")
+                status=getattr(r,"status",200)
+            body=json.loads(raw) if raw else {}
+            return {
+                "ok":status in (200,202) and bool(body.get("ok")),
+                "http":status,
+                "job_state":body.get("job_state"),
+                "request_id_match":body.get("request_id")==rid,
+                "elapsed_ms":int((time.monotonic()-started)*1000),
+            }
+        except Exception as e:
+            return {
+                "ok":False,
+                "error":type(e).__name__,
+                "detail":_sanitize_diag_text(str(e)),
+                "elapsed_ms":int((time.monotonic()-started)*1000),
+            }
+    return {
+        "core8775":one("http://127.0.0.1:8775","core"),
+        "gateway8776":one("http://127.0.0.1:8776","gateway"),
     }
-    data=json.dumps(payload,ensure_ascii=False).encode("utf-8")
-    req=urllib.request.Request(
-        "http://127.0.0.1:8775/api/v1/task",
-        data=data,
-        headers={"Content-Type":"application/json"},
-        method="POST",
-    )
-    started=time.monotonic()
-    try:
-        with urllib.request.urlopen(req,timeout=6.0) as r:
-            raw=r.read().decode("utf-8","replace")
-            status=getattr(r,"status",200)
-        body=json.loads(raw) if raw else {}
-        return {
-            "ok":status in (200,202) and bool(body.get("ok")),
-            "http":status,
-            "job_state":body.get("job_state"),
-            "request_id_match":body.get("request_id")==rid,
-            "elapsed_ms":int((time.monotonic()-started)*1000),
-        }
-    except Exception as e:
-        return {
-            "ok":False,
-            "error":type(e).__name__,
-            "detail":_sanitize_diag_text(str(e)),
-            "elapsed_ms":int((time.monotonic()-started)*1000),
-        }
+
 
 def diagnostic_summary(force_usb=False, task_smoke=False):
     usb_result=None
