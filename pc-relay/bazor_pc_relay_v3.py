@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import mammouth_client
 
 UDP_PORT = 8766
-API_PORT = 8765
+API_PORT = int(os.environ.get("BAZOR_MOBILE_PORT", "8775"))
 MAGIC = b"BAZOR_DISCOVER_V1"
 OLLAMA_URL = "http://127.0.0.1:11434"
 hostname = platform.node() or "BAZOR-PC"
