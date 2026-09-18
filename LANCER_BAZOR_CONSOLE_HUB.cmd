@@ -7,6 +7,7 @@ set "ROOT=%USERPROFILE%\bazor-mobile"
 set "HUB=%ROOT%\console-hub\bazor_console_hub.py"
 set "REVIEW=%ROOT%\console-hub\bazor_hub_expert_review.py"
 set "CLEAN=%ROOT%\console-hub\bazor_clean_start.ps1"
+set "GUARD=%ROOT%\console-hub\bazor_popup_guard.py"
 
 if not exist "%HUB%" (
   echo [BLOQUE] BAZOR Console Hub absent : %HUB%
@@ -33,6 +34,10 @@ if errorlevel 1 (
 
 if exist "%REVIEW%" (
   start "" /b %PYGUI% "%REVIEW%" >nul 2>&1
+)
+
+if exist "%GUARD%" (
+  start "" /b %PYGUI% "%GUARD%" >nul 2>&1
 )
 
 if /I "%PYGUI%"=="python" (
