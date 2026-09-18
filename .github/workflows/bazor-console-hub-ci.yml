@@ -191,8 +191,13 @@ jobs:
           assert "bazor_studio_certified_launcher.py" in cmd
           assert "bazor_pc_relay_v3" in cmd
           assert "pause" in cmd.lower(), "CMD must stay open on failure"
+          assert "BAZOR_STUDIO_NO_PAUSE" in cmd, "automated no-pause gate missing"
+          assert "BAZOR_STUDIO_TEST_ONLY" in launcher, "safe env test gate missing"
           assert "[bazor-certify:studio]" in watcher
           assert "_run_studio_certified_test" in watcher
+          assert '["cmd","/c",cmd]' in watcher, "watcher must test the real CMD"
+          assert 'env["BAZOR_STUDIO_TEST_ONLY"]="1"' in watcher
+          assert 'env["BAZOR_STUDIO_NO_PAUSE"]="1"' in watcher
           print("Studio certified launcher integration OK")
           PY
       - name: Action Engine smoke test
