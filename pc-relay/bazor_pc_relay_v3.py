@@ -709,6 +709,11 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._json(data)
             return
 
+        if path == "/api/v1/security/pairing-request":
+            result = SECURITY.request_pairing_display(self.client_address[0])
+            self._json(result)
+            return
+
         if path == "/api/v1/security/challenge":
             device_id = (qs.get("device_id") or [""])[0]
             result = SECURITY.challenge(device_id, self.client_address[0])
