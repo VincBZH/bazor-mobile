@@ -75,6 +75,28 @@ STATUS_UI = {
     "EXTERNAL": ("● DÉTECTÉ", "external"),
 }
 
+def kill_legacy_bazor_wrappers():
+    """Stop only obsolete BAZOR CMD wrappers known to relaunch the watcher in a loop."""
+    if os.name != "nt":
+        return 0
+    ps = r"""
+$me=$PID
+Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" |
+Where-Object {
+  $_.CommandLine -match 'DEMARRER_GITHUB_WATCHER\.cmd' -or
+  $_.CommandLine -match 'BAZOR GITHUB WATCHER'
+} |
+ForEach-Object {
+  if ($_.ProcessId -ne $me) { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+"""
+    try:
+        subprocess.run(["powershell","-NoProfile","-ExecutionPolicy","Bypass","-Command",ps],
+                       capture_output=True,text=True,timeout=8,creationflags=CREATE_NO_WINDOW)
+        return 1
+    except Exception:
+        return 0
+
 def powershell_processes():
     cmd = [
         "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
@@ -170,10 +192,10 @@ class Hub:
             self.lock_socket.bind(("127.0.0.1", LOCK_PORT))
             self.lock_socket.listen(1)
         except OSError:
-            messagebox.showinfo("BAZOR Console Hub", "BAZOR Console Hub est déjà ouvert.")
             self.root.destroy()
             raise SystemExit(0)
         self.build_ui()
+        kill_legacy_bazor_wrappers()
         if centralize:
             self.root.after(700, self.centralize)
         self.root.after(1000, self.refresh)
@@ -331,6 +353,7 @@ class Hub:
             return False
         log = open(self.log_path(svc["id"]), "a", encoding="utf-8", buffering=1)
         env = os.environ.copy()
+        env["BAZOR_HUB_MANAGED"] = "1"
         if svc["id"] == "core":
             env["BAZOR_MOBILE_PORT"] = "8775"
         subprocess.Popen(
