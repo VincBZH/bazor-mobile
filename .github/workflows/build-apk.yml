@@ -30,15 +30,24 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Build APKs
+        run: gradle :app:assembleDebug :watchapp:assembleDebug --stacktrace
 
-      - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk ../BAZOR-Tool.apk
+      - name: Rename APKs
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk ../BAZOR-Tool.apk
+          cp watchapp/build/outputs/apk/debug/watchapp-debug.apk ../BAZOR-Watch.apk
 
-      - name: Upload APK
+      - name: Upload BAZOR Tool
         uses: actions/upload-artifact@v4
         with:
           name: BAZOR-Tool-APK
           path: BAZOR-Tool.apk
+          if-no-files-found: error
+
+      - name: Upload BAZOR Watch
+        uses: actions/upload-artifact@v4
+        with:
+          name: BAZOR-Watch-APK
+          path: BAZOR-Watch.apk
           if-no-files-found: error
