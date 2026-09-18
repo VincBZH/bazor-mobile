@@ -54,6 +54,16 @@ DEFAULT_PROJECTS = [
     {"id": "modo", "name": "MODO Viewer", "priority": 4, "status": "A_FAIRE", "next": "Raccorder progressivement à BAZOR Core"},
 ]
 
+# Racines locales explicitement autorisees pour donner du contexte reel a GO AUTO.
+# Lecture seule; aucun shell, aucune execution de fichier.
+PROJECT_ROOTS = {
+    "ai-room": os.path.expandvars(r"%LOCALAPPDATA%\BazorAIROOM"),
+    "simple-studio": r"C:\AI\SimpleStudioV2",
+    "wii": r"C:\projetWII",
+}
+PROJECT_CONTEXT_EXTS = {".py",".js",".ts",".tsx",".jsx",".html",".css",".json",".md",".txt",".ps1",".cmd",".bat",".yml",".yaml"}
+PROJECT_CONTEXT_SKIP = {"node_modules",".git","models","checkpoints","output","outputs","venv",".venv","__pycache__","cache","temp","tmp","downloads"}
+
 
 def now_iso():
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
@@ -146,6 +156,49 @@ def decode_plain_text(raw):
         except UnicodeDecodeError:
             continue
     return None, None
+
+
+def project_local_context(project_id, max_files=18, max_chars=60000):
+    root_s = PROJECT_ROOTS.get(project_id)
+    if not root_s:
+        return "", {"available": False, "reason": "no_whitelisted_root"}
+    root = Path(root_s)
+    if not root.exists():
+        return "", {"available": False, "root": str(root), "reason": "root_missing"}
+    candidates = []
+    try:
+        for p in root.rglob("*"):
+            if not p.is_file() or p.suffix.lower() not in PROJECT_CONTEXT_EXTS:
+                continue
+            if any(part.lower() in PROJECT_CONTEXT_SKIP for part in p.parts):
+                continue
+            try:
+                st = p.stat()
+            except Exception:
+                continue
+            if st.st_size > 512000:
+                continue
+            candidates.append((st.st_mtime, p))
+    except Exception as exc:
+        return "", {"available": False, "root": str(root), "reason": "scan_failed:" + str(exc)[:120]}
+    candidates.sort(reverse=True)
+    chunks, files, used = [], [], 0
+    for _, p in candidates[:max_files]:
+        try:
+            text, enc = decode_plain_text(p.read_bytes())
+            if not text:
+                continue
+            remaining = max_chars - used
+            if remaining <= 1000:
+                break
+            rel = str(p.relative_to(root))
+            text = text[:min(12000, remaining)]
+            chunks.append("\n--- " + rel + " ---\n" + text)
+            files.append(rel)
+            used += len(text)
+        except Exception:
+            continue
+    return "".join(chunks), {"available": bool(files), "root": str(root), "files": files, "chars": used}
 
 
 def read_docx(path):
@@ -369,37 +422,64 @@ def run_routed(text, mode="auto"):
     return route, {"ok": False, "error": "no_engine_available", "message": "Aucun moteur IA disponible."}
 
 
-def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None):
+def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None, current_progress=None):
     projects = load_projects()
     project = next((p for p in projects if p.get("id") == project_id), None)
     if not project:
         return {"ok": False, "error": "project_not_found"}
+
     task = (task or project.get("next") or "Analyse la prochaine étape").strip()
+    if current_progress is not None:
+        try:
+            project["progress"] = max(0, min(100, int(current_progress)))
+        except Exception:
+            pass
+    current_progress = int(project.get("progress", 0) or 0)
+
     file_context, file_report = build_file_context(room, files or [])
+    local_context, local_report = project_local_context(project_id)
+
     prompt = (
         f"Tu travailles pour BAZOR sur le projet {project['name']}.\n"
-        f"Tâche: {task}\n"
-        "Travaille en autonomie sans exécuter de commande système. "
-        "Donne un résultat concret, les fichiers ou patchs à produire. "
-        "Termine obligatoirement par trois lignes: STATUS: OK, BLOQUE ou AMELIORER ; PROGRESS: nombre entier de 0 à 100 ; NEXT: prochaine action concrète. "
-        "La progression doit estimer l'avancement réel du projet après cette action, pas seulement cette tâche."
-        + ("\nFichiers:\n" + file_context if file_context else "")
+        f"Tâche demandée: {task}\n"
+        f"Progression actuelle enregistrée: {current_progress}%.\n"
+        "Tu dois t'appuyer UNIQUEMENT sur le contexte réel fourni ci-dessous. "
+        "N'invente aucun format de fichier, nœud, API, patch ou fonctionnalité. "
+        "Ne prétends jamais avoir créé ou modifié un fichier si ce n'est pas réellement le cas. "
+        "Si le contexte est insuffisant pour avancer concrètement, explique ce qui manque et mets STATUS: BLOQUE. "
+        "Si tu proposes un correctif, cite précisément les vrais fichiers concernés et les changements fondés sur leur contenu. "
+        "La progression ne doit AUGMENTER que si un résultat vérifiable a réellement été produit; sinon garde exactement la progression actuelle. "
+        "Termine OBLIGATOIREMENT par ces trois lignes, sans variante:\n"
+        "STATUS: OK|BLOQUE|AMELIORER\n"
+        "PROGRESS: <0-100>\n"
+        "NEXT: <prochaine action concrète>\n"
+        + ("\nFICHIERS FOURNIS PAR MOBILE:\n" + file_context if file_context else "")
+        + ("\nCONTEXTE LOCAL REEL EN LECTURE SEULE:\n" + local_context if local_context else "\nCONTEXTE LOCAL REEL: indisponible.\n")
     )
+
     route, result = run_routed(prompt, mode="auto_plus")
-    status = "OK" if result.get("ok") else "BLOQUE"
     answer = result.get("answer", "")
+    status = "OK" if result.get("ok") else "BLOQUE"
     upper = answer.upper()
     if "STATUS: BLO" in upper:
         status = "BLOQUE"
     elif "STATUS: AMEL" in upper:
         status = "AMELIORER"
 
-    # La barre de progression n'est mise à jour que si l'IA fournit
-    # explicitement une estimation structurée 0..100.
     m_progress = re.search(r"(?im)^\s*PROGRESS\s*:\s*(\d{1,3})\s*%?\s*$", answer)
     if m_progress:
-        project["progress"] = max(0, min(100, int(m_progress.group(1))))
-        project["progress_source"] = "go_auto_estimate"
+        proposed = max(0, min(100, int(m_progress.group(1))))
+        # Une reponse de conseil seule n'est pas une preuve d'avancement.
+        # On accepte une hausse uniquement si le moteur affirme un resultat verifiable ET dispose d'un contexte local reel.
+        if proposed <= current_progress or (local_report.get("available") and status == "OK"):
+            project["progress"] = proposed
+            project["progress_source"] = "go_auto_evidence_based"
+        else:
+            project["progress"] = current_progress
+            project["progress_source"] = "unchanged_no_evidence"
+    else:
+        project["progress"] = current_progress
+        project["progress_source"] = "unchanged_missing_progress"
 
     m_next = re.search(r"(?im)^\s*NEXT\s*:\s*(.+?)\s*$", answer)
     if m_next and m_next.group(1).strip():
@@ -410,8 +490,17 @@ def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None):
     project["last_engine"] = result.get("provider") or route.get("target")
     project["last_model"] = result.get("model") or route.get("model")
     save_projects(projects)
-    journal("GO_AUTO", {"project": project_id, "task": task[:240], "status": status, "engine": project["last_engine"], "model": project["last_model"]})
-    return {"ok": result.get("ok", False), "project": project, "task": task, "route": route, "result": result, "files": file_report, "status": status}
+    journal("GO_AUTO", {
+        "project": project_id, "task": task[:240], "status": status,
+        "progress": project.get("progress"), "progress_source": project.get("progress_source"),
+        "engine": project["last_engine"], "model": project["last_model"],
+        "local_context": local_report
+    })
+    return {
+        "ok": result.get("ok", False), "project": project, "task": task,
+        "route": route, "result": result, "files": file_report,
+        "local_context": local_report, "status": status
+    }
 
 
 class ApiHandler(BaseHTTPRequestHandler):
@@ -529,7 +618,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/go":
-            result = go_auto(body.get("project_id"), body.get("task"), body.get("room") or "ROOM PRINCIPALE", body.get("files") or [])
+            result = go_auto(body.get("project_id"), body.get("task"), body.get("room") or "ROOM PRINCIPALE", body.get("files") or [], body.get("current_progress"))
             self._json(result, 200 if result.get("ok") else 400)
             return
 
