@@ -145,11 +145,15 @@ def port_open(port):
 def http_ok(url):
     if not url:
         return None
-    try:
-        with urllib.request.urlopen(url, timeout=0.75) as r:
-            return 200 <= getattr(r, "status", 200) < 500
-    except Exception:
-        return False
+    # Un seul timeout court produisait un faux rouge/vert toutes les ~3 s.
+    # Deux essais et un délai raisonnable évitent de confondre latence et panne.
+    for timeout in (1.2, 2.2):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as r:
+                return 200 <= getattr(r, "status", 200) < 500
+        except Exception:
+            pass
+    return False
 
 def tail(path, lines=80):
     try:
@@ -279,6 +283,8 @@ class Hub:
         self.refresh_inflight = False
         self.centralize_inflight = False
         self.ui_queue = queue.Queue()
+        self.stable_states = {}
+        self.state_fail_counts = {}
         self.build_ui()
         threading.Thread(target=kill_legacy_bazor_wrappers, daemon=True).start()
         if centralize:
@@ -442,10 +448,7 @@ class Hub:
         if self.refresh_inflight:
             return
         self.refresh_inflight = True
-        try:
-            self.summary.config(text="Analyse en arrière-plan…")
-        except Exception:
-            pass
+        # Pas de clignotement "analyse/OK" toutes les 2,5 s.
         threading.Thread(target=self._refresh_worker, daemon=True).start()
 
     def _refresh_worker(self):
@@ -463,8 +466,33 @@ class Hub:
         except Exception as exc:
             self.ui_queue.put(("refresh_error", type(exc).__name__))
 
+    def _stable_snapshot(self, snapshot):
+        out=[]
+        for sid,state,project,name,pid,detail in snapshot:
+            prev=self.stable_states.get(sid)
+            # OK/WORK are accepted immediately. A transient ERROR/CLOSED/EXTERNAL
+            # must repeat 3 times before changing a previously healthy display.
+            bad=state in ("ERROR","CLOSED","EXTERNAL")
+            prev_good=prev and prev[0] in ("OK","WORK")
+            if bad and prev_good:
+                n=self.state_fail_counts.get(sid,0)+1
+                self.state_fail_counts[sid]=n
+                if n < 3:
+                    out.append(prev)
+                    continue
+            else:
+                self.state_fail_counts[sid]=0
+            row=(sid,state,project,name,pid,detail)
+            self.stable_states[sid]=row
+            out.append(row)
+        return out
+
     def _apply_refresh(self, snapshot, counts):
         try:
+            snapshot=self._stable_snapshot(snapshot)
+            counts={"OK":0,"WORK":0,"ERROR":0,"DUPLICATE":0,"CLOSED":0,"EXTERNAL":0}
+            for row in snapshot:
+                counts[row[1]] = counts.get(row[1],0) + 1
             for sid, state, project, name, pid, detail in snapshot:
                 label, tag = STATUS_UI[state]
                 vals = (label, project, name, pid, detail)
@@ -489,7 +517,7 @@ class Hub:
         finally:
             self.refresh_inflight = False
             try:
-                self.root.after(2500, self.refresh)
+                self.root.after(5000, self.refresh)
             except Exception:
                 pass
 
@@ -497,7 +525,7 @@ class Hub:
         self.refresh_inflight = False
         try:
             self.summary.config(text=f"Analyse temporairement indisponible : {error_name}")
-            self.root.after(2500, self.refresh)
+            self.root.after(5000, self.refresh)
         except Exception:
             pass
 
