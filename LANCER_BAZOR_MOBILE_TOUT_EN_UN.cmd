@@ -22,6 +22,25 @@ where gh >nul 2>nul || (echo [BLOQUE] GitHub CLI introuvable.& pause& exit /b 1)
 
 git pull
 
+echo [INFO] Verification acces reseau local BAZOR...
+netsh advfirewall firewall show rule name="BAZOR Mobile Core 8775" >nul 2>nul
+if errorlevel 1 (
+  netsh advfirewall firewall add rule name="BAZOR Mobile Core 8775" dir=in action=allow protocol=TCP localport=8775 profile=private remoteip=localsubnet >nul 2>nul
+  if errorlevel 1 (
+    echo [BLOQUE] Impossible d'ouvrir 8775 au reseau local. Lance ce fichier en Administrateur.
+  ) else (
+    echo [OK] Pare-feu : Core 8775 autorise uniquement sur le reseau prive/local.
+  )
+) else (
+  echo [OK] Pare-feu Core 8775 deja configure.
+)
+
+netsh advfirewall firewall show rule name="BAZOR Mobile Web 8776" >nul 2>nul
+if errorlevel 1 (
+  netsh advfirewall firewall add rule name="BAZOR Mobile Web 8776" dir=in action=allow protocol=TCP localport=8776 profile=private remoteip=localsubnet >nul 2>nul
+  if not errorlevel 1 echo [OK] Pare-feu : Web 8776 autorise uniquement sur le reseau prive/local.
+)
+
 powershell -NoProfile -Command "if(Get-NetTCPConnection -LocalPort 8775 -State Listen -ErrorAction SilentlyContinue){exit 0}else{exit 1}"
 if errorlevel 1 (
  start "BAZOR MOBILE CORE 8775" cmd /k "cd /d %ROOT% && set BAZOR_MOBILE_PORT=8775 && python pc-relay\bazor_pc_relay_v3.py"
