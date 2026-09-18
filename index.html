@@ -58,7 +58,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto16",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto17",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -151,17 +151,22 @@ async function requestPairCode(){
 }
 async function pairPhone(code){
   if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
-  const r=await fetchTimeout(CORE+"/api/v1/security/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:String(code||"").trim().toUpperCase(),device_id:deviceId(),device_name:"BAZOR Mobile Android"})},5000);
+  const clean=String(code||"").trim().toUpperCase();
+  if(!/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(clean))throw new Error("Code incomplet");
+  const r=await fetchTimeout(CORE+"/api/v1/security/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:clean,device_id:deviceId(),device_name:"BAZOR Mobile Android"})},5000);
   const d=await r.json();if(!r.ok||!d.ok)throw new Error("Code refusé ou expiré");
-  SEC_DEVICE={device_id:d.device_id,secret:d.secret,name:d.name};localStorage.setItem(SECURITY_KEY,JSON.stringify(SEC_DEVICE));
-  await securityStatus();return d;
+  SEC_DEVICE={device_id:d.device_id,secret:d.secret,name:d.name};
+  localStorage.setItem(SECURITY_KEY,JSON.stringify(SEC_DEVICE));
+  const st=await securityStatus();
+  if(!securityBadge.textContent.includes("TEL OK"))throw new Error("Appairage enregistré mais contrôle de preuve non validé");
+  return d;
 }
 async function openSecurity(){
   await securityStatus();
   document.getElementById("securityModal")?.remove();
   const e=document.createElement("div");e.id="securityModal";e.className="modal";
   if(!SEC_DEVICE||securityBadge.textContent.includes("APPAIRER")){
-    e.innerHTML='<div class="row between"><h3>BAZOR Security Tool</h3><button onclick="this.closest(\'#securityModal\').remove()">Fermer</button></div><div class="infobox">Le code est affiché <b>uniquement sur le PC</b>. BAZOR ne l’envoie jamais au téléphone.</div><button class="wide" style="margin-top:8px" onclick="requestPairCode()">AFFICHER UN NOUVEAU CODE SUR LE PC</button><label>Code du PC</label><input id="pairCode" class="security-code wide" placeholder="XXXX-XXXX-XXXX" maxlength="14" style="background:#15191f;color:white;border:1px solid var(--line);border-radius:10px;padding:10px"><button class="primary wide" style="margin-top:9px" onclick="pairPhone(pairCode.value).then(()=>{toast(\'Téléphone authentifié ✓\');openSecurity()}).catch(x=>toast(x.message))">APPAIRER CE TÉLÉPHONE</button><div class="mini muted" style="margin-top:8px">VPN accepté : l’adresse IP n’est pas ta preuve d’identité. C’est l’appareil appairé qui compte.</div>';requestPairCode();
+    e.innerHTML='<div class="row between"><h3>BAZOR Security Tool</h3><button onclick="this.closest(\'#securityModal\').remove()">Fermer</button></div><div class="infobox">Le code est affiché <b>uniquement sur le PC</b>. Appuie une seule fois sur le bouton ci-dessous, puis saisis ce même code. Il ne sera plus remplacé automatiquement.</div><button class="wide" style="margin-top:8px" onclick="requestPairCode()">AFFICHER UN NOUVEAU CODE SUR LE PC</button><label>Code du PC</label><input id="pairCode" class="security-code wide" placeholder="XXXX-XXXX-XXXX" maxlength="14" style="background:#15191f;color:white;border:1px solid var(--line);border-radius:10px;padding:10px"><button class="primary wide" style="margin-top:9px" onclick="pairPhone(pairCode.value).then(()=>{toast(\'Téléphone authentifié ✓\');document.getElementById(\'securityModal\')?.remove()}).catch(x=>toast(x.message))">APPAIRER CE TÉLÉPHONE</button><div class="mini muted" style="margin-top:8px">VPN accepté : l’adresse IP n’est pas ta preuve d’identité. C’est l’appareil appairé qui compte.</div>';
   }else{
     let alerts=[],approvals=[],dev=null;
     try{dev=(await signedFetch("/api/v1/security/device",{method:"GET"},3000)).device}catch(_){}
