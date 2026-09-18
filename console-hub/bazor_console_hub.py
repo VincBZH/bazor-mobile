@@ -315,6 +315,7 @@ class Hub:
             ("↻ MAJ + RELANCE BAZOR", self.update_restart_bazor),
             ("RÉPARER MOBILE", self.repair_mobile_access),
             ("USB TÉLÉPHONE", self.usb_mobile),
+            ("QR APPAIRAGE", self.open_pairing_qr),
             ("NOUVEAU CODE", self.new_pairing_code),
             ("CENTRALISER / ADOPTER", self.centralize),
             ("ACTUALISER", self.refresh),
@@ -340,8 +341,9 @@ class Hub:
         )
         self.pair_text.pack(side="left", fill="x", expand=True)
         ttk.Button(self.pair_frame, text="NOUVEAU QR", command=self.new_pairing_code).pack(side="right", padx=(12,0))
+        self.pair_text.config(text="APPAIRAGE BAZOR\nPréparation du QR…")
+        self.qr_label.config(text="QR…", image="", width=20, height=10)
         self.pair_frame.pack(fill="x", padx=10, pady=(0,8))
-        self.pair_frame.pack_forget()
 
         cols = ("status", "project", "service", "pid", "detail")
         self.tree = ttk.Treeview(self.root, columns=cols, show="headings", height=13)
@@ -512,47 +514,87 @@ class Hub:
             from PIL import ImageTk  # noqa
             return True
         except Exception:
+            return False
+
+    def _install_qr_modules_async(self):
+        def worker():
             try:
                 subprocess.run(
                     [sys.executable,"-m","pip","install","qrcode[pil]","--disable-pip-version-check","-q"],
-                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=90,
+                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=120,
                     creationflags=CREATE_NO_WINDOW
                 )
-                import qrcode  # noqa
-                from PIL import ImageTk  # noqa
-                return True
             except Exception:
-                return False
+                pass
+            try:
+                self.root.after(0, lambda: self.show_pairing_qr(self.security_code) if self.security_code else None)
+            except Exception:
+                pass
+        threading.Thread(target=worker,daemon=True).start()
 
     def show_pairing_qr(self, code):
         if not code:
-            try:self.pair_frame.pack_forget()
-            except Exception:pass
+            self.pair_text.config(text="APPAIRAGE BAZOR\nEn attente d'une clé du Core…")
+            self.qr_label.config(image="",text="QR en attente",width=20,height=10)
+            self.pair_frame.pack(fill="x", padx=10, pady=(0,8))
             return
         url=self._pairing_qr_url(code)
         mode="USB" if url.startswith("http://127.0.0.1:") else "Wi-Fi"
         self.pair_text.config(
             text=f"APPAIRAGE BAZOR • {mode}\n"
                  f"Scanne ce QR avec le téléphone.\n"
-                 f"L'appairage se fera automatiquement.\n"
+                 f"Appairage automatique après ouverture.\n"
                  f"Code secours : {code}"
         )
+        self.pair_frame.pack(fill="x", padx=10, pady=(0,8))
         if self._ensure_qr_modules():
             try:
                 import qrcode
                 from PIL import ImageTk
-                qr=qrcode.QRCode(version=None,error_correction=qrcode.constants.ERROR_CORRECT_M,box_size=5,border=4)
+                qr=qrcode.QRCode(version=None,error_correction=qrcode.constants.ERROR_CORRECT_M,box_size=6,border=4)
                 qr.add_data(url)
                 qr.make(fit=True)
                 img=qr.make_image(fill_color="black",back_color="white").convert("RGB")
-                img=img.resize((156,156))
+                img=img.resize((180,180))
                 self.qr_photo=ImageTk.PhotoImage(img)
-                self.qr_label.config(image=self.qr_photo,text="",width=156,height=156)
+                self.qr_label.config(image=self.qr_photo,text="",width=180,height=180)
+                return
             except Exception:
-                self.qr_label.config(image="",text="QR indisponible",width=20,height=10)
-        else:
-            self.qr_label.config(image="",text="QR indisponible",width=20,height=10)
-        self.pair_frame.pack(fill="x", padx=10, pady=(0,8), before=self.tree if hasattr(self,"tree") else None)
+                pass
+        self.qr_label.config(image="",text="Installation QR…",width=20,height=10)
+        self._install_qr_modules_async()
+
+    def open_pairing_qr(self):
+        if not self.security_code:
+            self.ensure_pairing_code()
+        if not self.security_code:
+            self.summary.config(text="Clé d’appairage en attente du Core…")
+            return
+        self.show_pairing_qr(self.security_code)
+        try:
+            win=tk.Toplevel(self.root)
+            win.title("BAZOR • QR APPAIRAGE")
+            win.geometry("430x520")
+            win.configure(bg="#11151b")
+            tk.Label(win,text="BAZOR • APPAIRAGE TÉLÉPHONE",bg="#11151b",fg="white",font=("Segoe UI",16,"bold")).pack(pady=(16,8))
+            url=self._pairing_qr_url(self.security_code)
+            if self._ensure_qr_modules():
+                import qrcode
+                from PIL import ImageTk
+                qr=qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,box_size=8,border=4)
+                qr.add_data(url); qr.make(fit=True)
+                img=qr.make_image(fill_color="black",back_color="white").convert("RGB").resize((320,320))
+                photo=ImageTk.PhotoImage(img)
+                lbl=tk.Label(win,image=photo,bg="white")
+                lbl.image=photo
+                lbl.pack(pady=8)
+            else:
+                tk.Label(win,text="Installation du générateur QR…",bg="#11151b",fg="#f2c94c",font=("Segoe UI",12,"bold")).pack(pady=40)
+                self._install_qr_modules_async()
+            tk.Label(win,text=f"Code secours : {self.security_code}",bg="#11151b",fg="#f6d04d",font=("Consolas",15,"bold")).pack(pady=10)
+            tk.Label(win,text="Scanne avec le téléphone connecté en USB.",bg="#11151b",fg="#cfd7e3",font=("Segoe UI",10)).pack()
+        except Exception as exc:
+            self.summary.config(text=f"QR : {type(exc).__name__}")
 
     def _local_pairing_info(self, rotate=False):
         try:
@@ -579,6 +621,10 @@ class Hub:
             self.code_label.pack(side="right")
             self.show_pairing_qr(self.security_code)
             self.summary.config(text="Clé + QR d’appairage prêts")
+            return
+        self.show_pairing_qr(None)
+        self.summary.config(text="Appairage : attente du Core…")
+        self.root.after(1800, self.ensure_pairing_code)
 
     def new_pairing_code(self):
         info = self._local_pairing_info(rotate=True)
