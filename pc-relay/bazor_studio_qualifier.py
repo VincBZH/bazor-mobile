@@ -160,9 +160,10 @@ def check_ps(root):
     failures=[]; checked=0
     for p in walk_files(root,{".ps1"},max_files=120,max_size=1_000_000):
         checked+=1
+        escaped = str(p).replace("'", "''")
         script = (
             "$e=$null;$t=$null;"
-            f"[System.Management.Automation.Language.Parser]::ParseFile('{str(p).replace(\"'\",\"''\")}',[ref]$t,[ref]$e)|Out-Null;"
+            f"[System.Management.Automation.Language.Parser]::ParseFile('{escaped}',[ref]$t,[ref]$e)|Out-Null;"
             "if($e.Count -gt 0){$e|ForEach-Object{$_.Message};exit 2}"
         )
         try:
