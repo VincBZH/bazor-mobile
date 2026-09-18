@@ -12,6 +12,21 @@ PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_res
 LAST_HEAD=None
 HUB_LOG_DIR=os.path.join(ROOT,"pc-relay","BAZOR_DATA","HUB_LOGS")
 CORE_LOG=os.path.join(HUB_LOG_DIR,"core.log")
+WATCHER_LOCK_PORT=8791
+_WATCHER_LOCK=None
+
+def _single_instance():
+    global _WATCHER_LOCK
+    try:
+        import socket
+        s=socket.socket()
+        s.bind(("127.0.0.1",WATCHER_LOCK_PORT))
+        s.listen(1)
+        _WATCHER_LOCK=s
+        return True
+    except OSError:
+        return False
+
 
 def _git(*args):
     return subprocess.run(["git","-C",ROOT,*args],capture_output=True,text=True,encoding="utf-8",errors="replace")
@@ -152,6 +167,10 @@ def answer_text(result):
     for k in ("response","answer","content","text"):
         if o.get(k): return str(o[k])
     return json.dumps(o,ensure_ascii=False,indent=2)[:12000]
+
+if not _single_instance():
+    print("[WATCHER] Une instance existe deja. Sortie sans relance.")
+    raise SystemExit(0)
 
 print("=== BAZOR GITHUB WATCHER V1 ===")
 print("Repo :",REPO)
