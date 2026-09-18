@@ -16,7 +16,7 @@ where git >nul 2>nul || (echo [BLOQUE] Git introuvable.& pause& exit /b 1)
 git pull >nul 2>&1
 
 if exist "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" -Root "%ROOT%" >nul 2>&1
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\console-hub\bazor_usb_android_bridge.ps1" -Root "%ROOT%" -OpenPhone >nul 2>&1
 )
 
 if exist "%ROOT%\console-hub\bazor_mobile_network_repair.ps1" (
