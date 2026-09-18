@@ -285,6 +285,7 @@ class Hub:
         self.root.after(100, self._drain_ui_queue)
         self.root.after(300, self.refresh)
         self.root.after(1400, self.refresh_logs)
+        self.root.after(1700, self.ensure_pairing_code)
 
     def build_ui(self):
         top = tk.Frame(self.root, bg="#11151b", padx=12, pady=10)
@@ -487,6 +488,22 @@ class Hub:
                 return json.loads(r.read().decode("utf-8"))
         except Exception:
             return None
+
+    def ensure_pairing_code(self):
+        # Le Hub PC doit toujours afficher une cle utilisable.
+        # Si le Core n'en a pas en memoire, on en cree une seule fois ici.
+        info = self._local_pairing_info(rotate=False)
+        if info and info.get("code"):
+            self.security_code = str(info["code"])
+            self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
+            self.code_label.pack(side="right")
+            return
+        info = self._local_pairing_info(rotate=True)
+        if info and info.get("code"):
+            self.security_code = str(info["code"])
+            self.code_label.config(text="🔐 APPAIRAGE : " + self.security_code)
+            self.code_label.pack(side="right")
+            self.summary.config(text="Clé d’appairage prête")
 
     def new_pairing_code(self):
         info = self._local_pairing_info(rotate=True)
