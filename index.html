@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto25",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto26",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -128,11 +128,11 @@ async function securityStatus(){
   try{
     const r=await fetchTimeout(CORE+"/api/v1/security/status?device_id="+encodeURIComponent(deviceId()),{cache:"no-store"},2500);
     SEC_STATUS=await r.json();
-    if(!SEC_DEVICE){securityBadge.textContent="🔒 À APPAIRER";securityBadge.className="badge todo";autoRequestPairCodeOnce();return SEC_STATUS}
+    if(!SEC_DEVICE){securityBadge.textContent="🔒 À APPAIRER";securityBadge.className="badge todo";return SEC_STATUS}
     try{
       const d=await signedFetch("/api/v1/security/device",{method:"GET"},3000);
       if(d.ok){securityBadge.textContent="🔒 TEL OK";securityBadge.className="badge ok"}else throw 0;
-    }catch(e){securityBadge.textContent="🔒 À RÉAPPAIRER";securityBadge.className="badge blocked";autoRequestPairCodeOnce()}
+    }catch(e){securityBadge.textContent="🔒 À RÉAPPAIRER";securityBadge.className="badge blocked"}
     return SEC_STATUS;
   }catch(e){securityBadge.textContent="🔒 ?";securityBadge.className="badge blocked";return null}
 }
@@ -158,9 +158,13 @@ async function signedFetch(path,opts={},ms=5000){
     }catch(e){
       lastErr=e;
       if(!retrySafe||/Authentification refusée|Téléphone non appairé|Appareil non reconnu/.test(String(e.message||"")))throw e;
-      CORE=null;
-      pcStatus.textContent="RECONNEXION…";pcStatus.className="badge todo";
-      providerStatus.textContent="Reconnexion automatique en cours";
+      // Une micro-coupure ne doit pas faire tomber visuellement la liaison.
+      // On garde le Core courant pendant les retries et on ne bascule en
+      // reconnexion qu’après plusieurs échecs réels.
+      if(attempt>=3){
+        pcStatus.textContent="RÉSEAU INSTABLE…";pcStatus.className="badge todo";
+        providerStatus.textContent="Nouvelle tentative automatique";
+      }
       await new Promise(r=>setTimeout(r,Math.min(2200,350*attempt*attempt)));
     }
   }
@@ -246,8 +250,13 @@ function statusLabel(s){return s==="A_FAIRE"?"À FAIRE":s==="A_EVALUER"?"À ÉVA
 function log(what,tag="OK"){state.journal.unshift({id:uid(),what,tag,when:Date.now()});state.journal=state.journal.slice(0,250)}
 
 async function fetchTimeout(url,opts={},ms=3000){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opts,signal:c.signal})}finally{clearTimeout(t)}}
-let coreMisses=0,lastCoreOk=0;
+let coreMisses=0,lastCoreOk=0,coreProbePromise=null;
 async function detectCore(){
+  if(coreProbePromise)return coreProbePromise;
+  coreProbePromise=detectCoreOnce();
+  try{return await coreProbePromise}finally{coreProbePromise=null}
+}
+async function detectCoreOnce(){
   const candidates=[];
   const origin=location.origin;
   if(/^https?:\/\//.test(origin))candidates.push(origin);
@@ -255,7 +264,8 @@ async function detectCore(){
   if(!candidates.includes(direct))candidates.push(direct);
   if(location.hostname!=="127.0.0.1"&&!candidates.includes("http://127.0.0.1:"+CORE_PORT))candidates.push("http://127.0.0.1:"+CORE_PORT);
 
-  pcStatus.textContent=lastCoreOk?"RECONNEXION…":"CONNEXION…";pcStatus.className="badge todo";
+  // Pendant un simple contrôle périodique, conserver l’état OK affiché.
+  if(!lastCoreOk){pcStatus.textContent="CONNEXION…";pcStatus.className="badge todo"}
   for(let attempt=1;attempt<=3;attempt++){
     for(const base of candidates){
       try{
@@ -281,9 +291,11 @@ async function detectCore(){
     await new Promise(r=>setTimeout(r,350*attempt));
   }
   coreMisses++;
-  if(lastCoreOk && Date.now()-lastCoreOk<30000){
-    pcStatus.textContent="CORE REDÉMARRE…";pcStatus.className="badge todo";
-    providerStatus.textContent="Reconnexion automatique en cours";
+  // Tolérance aux micro-coupures Wi-Fi : ne déclarer le téléphone hors ligne
+  // qu’après plusieurs contrôles consécutifs ratés ou une absence prolongée.
+  if(lastCoreOk && Date.now()-lastCoreOk<90000 && coreMisses<4){
+    pcStatus.textContent="PC + CORE OK";pcStatus.className="badge ok";
+    providerStatus.textContent="Liaison conservée • micro-coupure absorbée";
   }else{
     CORE=null;pcStatus.textContent="CORE NON JOIGNABLE";pcStatus.className="badge blocked";providerStatus.textContent="Gateway/Core indisponible";
   }
