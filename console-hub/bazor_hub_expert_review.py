@@ -25,9 +25,9 @@ FILES = [
 ]
 
 EXPERTS = [
-    ("qwen3.8-flash", "Expert code Windows/Python. Cherche bugs, courses critiques, doublons de processus et erreurs de lancement."),
-    ("claude-sonnet-5", "Expert architecture et sécurité. Vérifie isolation, arrêt sûr, logs, authentification et absence de shell distant dangereux."),
-    ("gemini-3.1-pro-preview", "Expert fiabilité et UX. Vérifie que Vincent peut comprendre immédiatement quoi garder, fermer, relancer et quel projet est concerné."),
+    ("deepseek", "Expert code Windows/Python. Cherche bugs, courses critiques, doublons de processus et erreurs de lancement."),
+    ("claude", "Expert architecture et sécurité. Vérifie isolation, arrêt sûr, logs, authentification et absence de shell distant dangereux."),
+    ("gemini", "Expert fiabilité et UX. Vérifie que Vincent peut comprendre immédiatement quoi garder, fermer, relancer et quel projet est concerné."),
 ]
 
 def stamp(msg):
