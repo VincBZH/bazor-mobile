@@ -7,6 +7,7 @@ on:
       - "pc-relay/bazor_security.py"
       - "pc-relay/bazor_pc_relay_v3.py"
       - "pc-relay/bazor_github_watcher.py"
+      - "pc-relay/bazor_action_engine.py"
       - "bazor_registry.json"
       - ".github/workflows/bazor-console-hub-ci.yml"
   workflow_dispatch:
@@ -21,7 +22,16 @@ jobs:
           python-version: "3.11"
       - name: Compile Python
         run: |
-          python -m py_compile             console-hub/bazor_console_hub.py             console-hub/bazor_hub_expert_review.py             pc-relay/bazor_security.py             pc-relay/bazor_pc_relay_v3.py             pc-relay/bazor_github_watcher.py             pc-relay/mammouth_client.py
+          python -m py_compile \
+            console-hub/bazor_console_hub.py \
+            console-hub/bazor_hub_expert_review.py \
+            console-hub/bazor_popup_guard.py \
+            console-hub/bazor_interface_update_restart.py \
+            pc-relay/bazor_security.py \
+            pc-relay/bazor_pc_relay_v3.py \
+            pc-relay/bazor_github_watcher.py \
+            pc-relay/bazor_action_engine.py \
+            pc-relay/mammouth_client.py
       - name: Validate central registry
         run: |
           python - <<'PY'
@@ -49,4 +59,34 @@ jobs:
           assert "SERVICES = [" in hub, "managed service allow-list missing"
           assert 'if not svc.get("managed")' in hub, "external process close guard missing"
           print("Security invariants OK")
+          PY
+      - name: Action Engine smoke test
+        run: |
+          python - <<'PY'
+          import tempfile
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, "pc-relay")
+          from bazor_action_engine import ActionEngine
+
+          with tempfile.TemporaryDirectory() as td:
+              root=Path(td)
+              p=root/"demo.py"
+              p.write_text("x = 1\n",encoding="utf-8")
+              eng=ActionEngine(root/"data")
+              eng.roots={"test":root}
+              eng.project_aliases={"demo":["test"]}
+              answer='''STATUS: OK
+          PROGRESS: 50
+          SUMMARY: modif
+          NEXT: suite
+          BAZOR_ACTIONS:
+          {"actions":[{"op":"replace","root":"test","path":"demo.py","find":"x = 1","replace":"x = 2","expected_count":1}]}'''
+              actions=eng.parse_actions(answer)
+              assert len(actions)==1, actions
+              result=eng.apply("demo",actions,"ci")
+              assert result["ok"] and result["applied"], result
+              assert p.read_text(encoding="utf-8")=="x = 2\n"
+              assert all(t["ok"] for t in result["tests"]), result
+              print("Action Engine OK")
           PY
