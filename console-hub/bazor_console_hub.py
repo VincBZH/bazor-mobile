@@ -195,11 +195,13 @@ class Hub:
         except OSError:
             self.root.destroy()
             raise SystemExit(0)
+        self.refresh_inflight = False
+        self.centralize_inflight = False
         self.build_ui()
-        kill_legacy_bazor_wrappers()
+        threading.Thread(target=kill_legacy_bazor_wrappers, daemon=True).start()
         if centralize:
             self.root.after(700, self.centralize)
-        self.root.after(1000, self.refresh)
+        self.root.after(300, self.refresh)
         self.root.after(1400, self.refresh_logs)
 
     def build_ui(self):
@@ -259,17 +261,18 @@ class Hub:
     def log_path(self, sid):
         return LOG_DIR / f"{sid}.log"
 
-    def matching(self, service):
+    def matching(self, service, cache=None):
         pat = service.get("match","").lower()
         out = []
-        for p in self.proc_cache:
+        source = self.proc_cache if cache is None else cache
+        for p in source:
             cl = str(p.get("CommandLine") or "")
             if pat and pat in cl.lower():
                 out.append(p)
         return out
 
-    def service_state(self, service):
-        procs = self.matching(service)
+    def service_state(self, service, cache=None):
+        procs = self.matching(service, cache)
         port = port_open(service.get("port")) if service.get("port") else None
         healthy = http_ok(service.get("health")) if service.get("health") else None
         detail = ""
@@ -299,21 +302,58 @@ class Hub:
         return state, procs, detail
 
     def refresh(self):
-        self.proc_cache = powershell_processes()
-        counts = {"OK":0,"WORK":0,"ERROR":0,"DUPLICATE":0,"CLOSED":0,"EXTERNAL":0}
-        for svc in SERVICES:
-            state, procs, detail = self.service_state(svc)
-            counts[state] += 1
-            label, tag = STATUS_UI[state]
-            pid = ",".join(str(p.get("ProcessId")) for p in procs[:3]) or "—"
-            vals = (label, svc["project"], svc["name"], pid, detail)
-            if svc["id"] in self.rows:
-                self.tree.item(self.rows[svc["id"]], values=vals, tags=(tag,))
-            else:
-                self.rows[svc["id"]] = self.tree.insert("", "end", values=vals, tags=(tag,), iid=svc["id"])
-        self.summary.config(text=f"{counts['OK']} OK · {counts['WORK']} en cours · {counts['ERROR']+counts['DUPLICATE']} à voir · {counts['CLOSED']} fermés")
-        self.update_security_code()
-        self.root.after(2500, self.refresh)
+        if self.refresh_inflight:
+            return
+        self.refresh_inflight = True
+        try:
+            self.summary.config(text="Analyse en arrière-plan…")
+        except Exception:
+            pass
+        threading.Thread(target=self._refresh_worker, daemon=True).start()
+
+    def _refresh_worker(self):
+        try:
+            cache = powershell_processes()
+            counts = {"OK":0,"WORK":0,"ERROR":0,"DUPLICATE":0,"CLOSED":0,"EXTERNAL":0}
+            snapshot = []
+            for svc in SERVICES:
+                state, procs, detail = self.service_state(svc, cache)
+                counts[state] += 1
+                pid = ",".join(str(p.get("ProcessId")) for p in procs[:3]) or "—"
+                snapshot.append((svc["id"], state, svc["project"], svc["name"], pid, detail))
+            self.proc_cache = cache
+            self.root.after(0, lambda: self._apply_refresh(snapshot, counts))
+        except Exception as exc:
+            try:
+                self.root.after(0, lambda: self._refresh_failed(exc))
+            except Exception:
+                self.refresh_inflight = False
+
+    def _apply_refresh(self, snapshot, counts):
+        try:
+            for sid, state, project, name, pid, detail in snapshot:
+                label, tag = STATUS_UI[state]
+                vals = (label, project, name, pid, detail)
+                if sid in self.rows:
+                    self.tree.item(self.rows[sid], values=vals, tags=(tag,))
+                else:
+                    self.rows[sid] = self.tree.insert("", "end", values=vals, tags=(tag,), iid=sid)
+            self.summary.config(text=f"{counts['OK']} OK · {counts['WORK']} en cours · {counts['ERROR']+counts['DUPLICATE']} à voir · {counts['CLOSED']} fermés")
+            self.update_security_code()
+        finally:
+            self.refresh_inflight = False
+            try:
+                self.root.after(2500, self.refresh)
+            except Exception:
+                pass
+
+    def _refresh_failed(self, exc):
+        self.refresh_inflight = False
+        try:
+            self.summary.config(text=f"Analyse temporairement indisponible : {type(exc).__name__}")
+            self.root.after(2500, self.refresh)
+        except Exception:
+            pass
 
     def update_security_code(self):
         text = tail(self.log_path("core"), 120)
@@ -446,44 +486,65 @@ class Hub:
         return ok
 
     def centralize(self):
-        # Première exécution: migrer les anciennes consoles visibles vers des processus cachés,
-        # mais ne jamais couper Core pendant une tâche ou un appairage.
-        first = int(self.hub_state.get("migration_version",0) or 0) < 2
+        if self.centralize_inflight:
+            return
+        self.centralize_inflight = True
+        try:
+            self.summary.config(text="Centralisation en arrière-plan…")
+        except Exception:
+            pass
+        threading.Thread(target=self._centralize_worker, daemon=True).start()
+
+    def _centralize_worker(self):
         notes=[]
-        self.proc_cache = powershell_processes()
+        try:
+            # Première exécution: migrer les anciennes consoles visibles vers des processus cachés,
+            # mais ne jamais couper Core pendant une tâche ou un appairage.
+            first = int(self.hub_state.get("migration_version",0) or 0) < 2
+            self.proc_cache = powershell_processes()
 
-        if first:
-            core = SERVICES[0]
-            if self.matching(core):
-                if mobile_working() or pairing_busy():
-                    notes.append("Core conservé temporairement : tâche/appairage en cours.")
+            if first:
+                core = SERVICES[0]
+                if self.matching(core):
+                    if mobile_working() or pairing_busy():
+                        notes.append("Core conservé temporairement : tâche/appairage en cours.")
+                    else:
+                        self._migrate_service_hidden(core)
+                        notes.append("Core migré vers le Hub.")
                 else:
-                    self._migrate_service_hidden(core)
-                    notes.append("Core migré vers le Hub.")
+                    self.start_service(core)
+                    notes.append("Core démarré par le Hub.")
+
+                for svc in SERVICES[1:3]:
+                    self._migrate_service_hidden(svc)
+                    notes.append(svc["name"]+" migré vers le Hub.")
+
+                self.hub_state["migration_version"]=2
+                self.hub_state["migration_at"]=time.time()
+                save_hub_state(self.hub_state)
             else:
-                self.start_service(core)
-                notes.append("Core démarré par le Hub.")
+                for svc in SERVICES[:3]:
+                    cache = powershell_processes()
+                    self.proc_cache = cache
+                    if not self.matching(svc, cache):
+                        self.start_service(svc)
+                        notes.append(svc["name"]+" était arrêté : redémarré.")
 
-            # Web + Watcher peuvent être migrés sans casser une tâche IA locale.
-            for svc in SERVICES[1:3]:
-                self._migrate_service_hidden(svc)
-                notes.append(svc["name"]+" migré vers le Hub.")
+            self.root.after(0, lambda: self._centralize_done(notes))
+        except Exception as exc:
+            self.root.after(0, lambda: self._centralize_failed(exc))
 
-            self.hub_state["migration_version"]=2
-            self.hub_state["migration_at"]=time.time()
-            save_hub_state(self.hub_state)
-        else:
-            # Exécutions suivantes: aucun redémarrage inutile. Démarrer seulement ce qui manque.
-            for svc in SERVICES[:3]:
-                self.proc_cache=powershell_processes()
-                if not self.matching(svc):
-                    self.start_service(svc)
-                    notes.append(svc["name"]+" était arrêté : redémarré.")
-
+    def _centralize_done(self, notes):
+        self.centralize_inflight = False
         self.summary.config(text="Centralisation stable")
-        self.root.after(1200,self.refresh)
+        self.refresh()
         if notes:
             messagebox.showinfo("BAZOR Console Hub","\n".join(notes))
+
+    def _centralize_failed(self, exc):
+        self.centralize_inflight = False
+        self.summary.config(text=f"Centralisation bloquée : {type(exc).__name__}")
+        self.refresh()
 
     def update_restart_bazor(self):
         if not UPDATE_HELPER.exists():
