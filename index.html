@@ -15,7 +15,7 @@ button:disabled{opacity:.65;cursor:wait}
 .tree-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
 
 </style></head><body><header><div class="row"><div><div class="brand">BAZOR COMMAND CENTER</div><div class="sub">Mobile • BAZOR Core • Ollama</div></div><span id="pcStatus" class="badge todo" onclick="detectCore()" style="cursor:pointer" title="Toucher pour retester">CONNEXION…</span></div></header><main><section id="home"></section><section id="capture" class="hidden"><div class="card"><h2>BAZOR CAPTURE</h2><div class="muted small">Transforme une idée rapide en tâche.</div><label>Note</label><textarea id="captureText" placeholder="Ex. Ajouter une fonction dans AI Room…"></textarea><div class="row wrap"><button class="secondary grow" id="micBtn">🎙️ Dicter</button><button class="secondary grow" id="clearCapture">Effacer</button></div><label>Projet</label><select id="captureProject"></select><label>Priorité</label><select id="capturePriority"><option>NORMALE</option><option>BASSE</option><option>HAUTE</option><option>URGENTE</option></select><div style="height:10px"></div><button class="primary wide" id="saveCapture">ENVOYER DANS L'INBOX</button></div></section><section id="inbox" class="hidden"></section><section id="ollama" class="hidden"></section><section id="journal" class="hidden"></section></main><div class="toast" id="toast"></div><nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>Ollama</button><button data-tab="journal">≡<br>Journal</button></div></nav><script>
-const APP_BUILD="2026.09.18-auto9";const CORE_PORT=8775;
+const APP_BUILD="2026.09.18-auto10";const CORE_PORT=8775;
 let buildCheckBusy=false;
 async function fetchTimeout(url,opts={},ms=2500){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opts,signal:c.signal})}finally{clearTimeout(t)}}
 async function checkBuild(){if(buildCheckBusy)return;buildCheckBusy=true;try{const r=await fetchTimeout("./index.html?buildcheck="+Date.now(),{cache:"no-store"},3000);const t=await r.text();const m=t.match(/const APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD){location.reload()}}catch(e){}finally{buildCheckBusy=false}}
@@ -249,12 +249,13 @@ function subCard(p,c){
 }
 function projectTreeCard(p){
   const children=subFor(p.id), r=state.runs[p.id], open=!!r?.active||treeIsOpen(p.id), info=state.info[p.id];
+  const displayStatus=r?.active?"EN_COURS":p.status;
   const statusPanel=info==="status"?'<div class="mini-panel"><strong>Où on en est</strong><div class="small" style="margin-top:5px">'+esc(projectStatusPhrase(p))+'</div></div>':"";
   const next=nextSub(p.id);
   const nextPanel=info==="next"?'<div class="mini-panel"><strong>Étape suivante</strong><div class="small" style="margin-top:5px">'+esc(nextPhrase(p))+'</div>'+(next?'<button class="primary wide" style="margin-top:9px" onclick="goNextStep(\''+p.id+'\')">GO ÉTAPE SUIVANTE</button>':'')+'</div>':"";
   const childrenHtml=open?'<div style="margin-top:12px;padding-left:9px;border-left:2px solid rgba(41,168,255,.35)">'+children.map(c=>subCard(p,c)).join("")+'</div>':"";
   return '<div class="card">'+
-    '<div onclick="toggleTree(\''+p.id+'\')" style="cursor:pointer"><div class="row"><div><h2 style="margin:0">'+esc(p.name)+'</h2><div class="small muted">'+children.length+' sous-projet'+(children.length>1?'s':'')+' • '+(open?'replier':'déployer')+'</div></div><span class="badge '+scl(p.status)+'">'+esc(slabel(p.status))+'</span></div>'+
+    '<div onclick="toggleTree(\''+p.id+'\')" style="cursor:pointer"><div class="row"><div><h2 style="margin:0">'+esc(p.name)+'</h2><div class="small muted">'+children.length+' sous-projet'+(children.length>1?'s':'')+' • '+(open?'replier':'déployer')+'</div></div><span class="badge '+scl(displayStatus)+'">'+esc(slabel(displayStatus))+'</span></div>'+
     '<div class="progress" style="margin-top:10px"><div style="width:'+p.progress+'%"></div></div><div class="small muted">Avancée globale : '+p.progress+'%</div></div>'+
     '<div class="tree-actions"><button class="secondary" onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'status\')">STATUS</button><button class="secondary" onclick="event.stopPropagation();toggleInfo(\''+p.id+'\',\'next\')">ÉTAPE SUIVANTE</button></div>'+
     statusPanel+nextPanel+runPanel(p)+childrenHtml+
