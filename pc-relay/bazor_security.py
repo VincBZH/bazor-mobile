@@ -86,28 +86,19 @@ class BazorSecurity:
 
     def pairing_console_text(self):
         now = time.time()
-        if self._pair_hash and now < self._pair_expires and not self._pair_code:
-            mins = max(0, int((self._pair_expires - now) / 60))
-            return (
-                "\n" + "=" * 68 + "\n"
-                + "  BAZOR SECURITY - APPAIRAGE EN COURS\n"
-                + "  Le code precedent reste VALIDE apres redemarrage du Core.\n"
-                + f"  Encore environ {mins} minute(s).\n"
-                + "  Pour un nouveau code: demande-le depuis BAZOR Mobile/Console Hub.\n"
-                + "=" * 68
-            )
-        if not self._pair_hash or now >= self._pair_expires:
+        active = bool(self._pair_code and self._pair_hash and now < self._pair_expires)
+        if not active:
             if self.state.get("devices"):
-                return "[SECURITY] Telephone deja appaire - aucun code d'appairage actif."
-            self.rotate_pair_code(force=True)
-        mins = max(0, int((self._pair_expires - time.time()) / 60))
+                return "[SECURITY] Telephone deja appaire - QR/code masques."
+            return "[SECURITY] Appairage disponible - cliquez sur APPAIRER TELEPHONE pour afficher QR/code."
+        mins = max(0, int((self._pair_expires - now) / 60))
         return (
             "\n"
             + "=" * 68 + "\n"
             + "  BAZOR SECURITY - CODE D'APPAIRAGE MOBILE\n"
             + "  >>> " + str(self._pair_code) + " <<<\n"
             + f"  Valable environ {mins} minute(s) - ne pas partager\n"
-            + "  Le code reste valide meme si le Core redemarre.\n"
+            + "  Affiche uniquement apres une demande explicite d'appairage.\n"
             + "=" * 68
         )
 
