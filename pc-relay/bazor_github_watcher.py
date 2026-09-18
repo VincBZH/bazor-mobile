@@ -11,6 +11,7 @@ DIAG_MARK="[BAZOR-DIAG-DONE]"
 MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
 TASK_MARK="[BAZOR-TASK-DONE]"
 QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
+CERTIFY_MARK="[BAZOR-CERTIFY-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
@@ -695,6 +696,21 @@ def _run_studio_qualification():
     summary=report.get("summary") or {}; failures=[x for x in report.get("results",[]) if not x.get("ok")]
     return {"ok":bool(summary.get("operational")),"returncode":cp.returncode,"summary":summary,"failures":failures,"report_file":latest,"stdout":cp.stdout[-5000:],"stderr":cp.stderr[-3000:]}
 
+def _run_studio_certified_test():
+    script=os.path.join(ROOT,"console-hub","bazor_studio_certified_launcher.py")
+    if not os.path.exists(script):
+        return {"ok":False,"returncode":98,"stdout":"","stderr":"certified_launcher_missing"}
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    try:
+        cp=subprocess.run(
+            [sys.executable,script,"--test-only"],
+            cwd=ROOT,capture_output=True,text=True,encoding="utf-8",errors="replace",
+            timeout=240,creationflags=flags
+        )
+        return {"ok":cp.returncode==0,"returncode":cp.returncode,"stdout":cp.stdout[-8000:],"stderr":cp.stderr[-3000:]}
+    except Exception as exc:
+        return {"ok":False,"returncode":97,"stdout":"","stderr":type(exc).__name__+": "+str(exc)}
+
 def answer_text(result):
     for section in ("mammouth","ollama"):
         o=result.get(section) or {}
@@ -731,6 +747,19 @@ while True:
                     reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body),task_smoke=("task-smoke" in body or "task smoke" in body))
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
+                    continue
+                if title.startswith("[bazor-certify:studio]"):
+                    if CERTIFY_MARK in comments:
+                        continue
+                    print(f"[CERTIFY] #{issue['number']} Studio certified launcher")
+                    result=_run_studio_certified_test()
+                    reply=CERTIFY_MARK+"\n\n**BAZOR Studio — test du lanceur certifié**\n\nStatut: "+("PASS" if result.get("ok") else "FAIL")+"\nCode: "+str(result.get("returncode"))+"\n\n"+str(result.get("stdout") or "")[-7000:]
+                    if result.get("stderr"):
+                        reply+="\n\nstderr:\n"+str(result.get("stderr"))[-2500:]
+                    try:
+                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
+                    except Exception:
+                        pass
                     continue
                 if title.startswith("[bazor-qualify:studio]"):
                     if QUALIFY_MARK in comments: continue
