@@ -5,6 +5,7 @@ CORE="http://127.0.0.1:8775/api/v1/chat"
 CORE_HEALTH="http://127.0.0.1:8775/api/v1/security/status"
 CORE_FAILS=0
 PENDING_CORE_RESTART=False
+PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
@@ -42,9 +43,19 @@ def maybe_restart_core(reason="update"):
     pairing,guard=_security_restart_guard()
     if pairing>0 or guard>0:
         PENDING_CORE_RESTART=True
+        try:
+            os.makedirs(os.path.dirname(PENDING_RESTART_FILE),exist_ok=True)
+            open(PENDING_RESTART_FILE,"w",encoding="utf-8").write(reason)
+        except Exception:
+            pass
         print(f"[CORE RESTART DIFFERE] {reason} - appairage actif/protege ({max(pairing,guard)} s).")
         return False
     PENDING_CORE_RESTART=False
+    try:
+        if os.path.exists(PENDING_RESTART_FILE):
+            os.remove(PENDING_RESTART_FILE)
+    except Exception:
+        pass
     _restart_core()
     return True
 
@@ -56,6 +67,8 @@ def ensure_core_alive():
                 if CORE_FAILS:
                     print("[OK CORE] BAZOR Core 8775 repond de nouveau.")
                 CORE_FAILS=0
+                if PENDING_CORE_RESTART or os.path.exists(PENDING_RESTART_FILE):
+                    maybe_restart_core("mise a jour differee")
                 return True
     except Exception:
         pass
