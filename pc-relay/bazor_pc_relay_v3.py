@@ -640,7 +640,7 @@ def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None, current_progre
     }
 
 
-def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, repair=False, previous="", provider="auto", apply_actions=True, request_id=None):
+def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, repair=False, previous="", provider="auto", apply_actions=True, request_id=None, mammouth_profile=None):
     projects = load_projects()
     project = next((p for p in projects if p.get("id") == project_id), None)
     project_name = project.get("name") if project else str(project_id or "Projet BAZOR")
@@ -706,7 +706,8 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
 
     if provider == "mammouth":
         kind = classify_task(prompt)
-        profile = mammouth_client.choose_profile(kind)
+        requested_profile = str(mammouth_profile or "").strip().lower()
+        profile = requested_profile if requested_profile in mammouth_client.MODEL_PROFILES else mammouth_client.choose_profile(kind)
         route = {"target":"mammouth","kind":kind,"profile":profile}
         result = mammouth_chat(prompt, kind, profile)
     elif provider == "ollama":
@@ -1166,6 +1167,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "previous": body.get("previous") or "",
                 "provider": body.get("provider") or "auto",
                 "apply_actions": bool(body.get("apply_actions", True)),
+                "mammouth_profile": body.get("mammouth_profile"),
             }
             if body.get("async") or request_id:
                 result = start_mobile_task(request_id, **kwargs)
