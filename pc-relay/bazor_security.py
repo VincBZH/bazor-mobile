@@ -1,4 +1,5 @@
 import base64
+import ctypes
 import hashlib
 import json
 import os
@@ -78,7 +79,30 @@ class BazorSecurity:
                 return "[SECURITY] Telephone deja appaire - aucun code d'appairage actif."
             self.rotate_pair_code(force=True)
         mins = max(0, int((self._pair_expires - time.time()) / 60))
-        return f"[SECURITY] Code appairage mobile: {self._pair_code} (expire ~{mins} min)"
+        return (
+            "\n"
+            + "=" * 68 + "\n"
+            + "  BAZOR SECURITY - CODE D'APPAIRAGE MOBILE\n"
+            + "  >>> " + str(self._pair_code) + " <<<\n"
+            + f"  Valable environ {mins} minute(s) - ne pas partager\n"
+            + "=" * 68
+        )
+
+    def print_pairing_console(self):
+        text = self.pairing_console_text()
+        if os.name == "nt":
+            try:
+                kernel32 = ctypes.windll.kernel32
+                handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+                # Fond jaune vif + texte noir pour rendre le code tres visible.
+                kernel32.SetConsoleTextAttribute(handle, 0xE0)
+                print(text, flush=True)
+                kernel32.SetConsoleTextAttribute(handle, 0x07)
+                return
+            except Exception:
+                pass
+        # Repli ANSI: jaune vif.
+        print("\033[93m" + text + "\033[0m", flush=True)
 
     def request_pairing_display(self, ip=None):
         """Rotate/print a fresh code on the PC only. Never return the code to the requester."""
@@ -89,7 +113,7 @@ class BazorSecurity:
                 return {"ok": True, "printed": False, "retry_in": int(20 - (now - self._last_pair_display))}
             self._last_pair_display = now
             self.rotate_pair_code(force=True)
-            print(self.pairing_console_text(), flush=True)
+            self.print_pairing_console()
             self._event("PAIRING_CODE_DISPLAYED", {"ip": ip})
             return {"ok": True, "printed": True, "expires_in": max(0, int(self._pair_expires - now))}
 
