@@ -208,6 +208,14 @@ jobs:
               assert p.read_text(encoding="utf-8")=="x = 2\n"
               assert all(t["ok"] for t in result["tests"]), result
 
+              # Régression Windows : CRLF ne doit pas être rejeté comme trailing whitespace.
+              crlf=root/"crlf.py"
+              crlf.write_bytes(b"y = 1\r\n")
+              result_crlf=eng.apply("demo",[{"op":"replace","root":"test","path":"crlf.py","find":"y = 1","replace":"y = 2","expected_count":1}],"ci-crlf")
+              assert result_crlf["ok"] and result_crlf["applied"], result_crlf
+              assert result_crlf["preflight"]["ok"], result_crlf
+              assert crlf.read_bytes()==b"y = 2\r\n", crlf.read_bytes()
+
               # Une candidate invalide doit échouer AVANT d'écrire dans la cible.
               bad=[{"op":"replace","root":"test","path":"demo.py","find":"x = 2","replace":"def broken(:\n","expected_count":1}]
               failed=eng.apply("demo",bad,"ci-bad")
