@@ -161,6 +161,25 @@ Les premières revues de test #31/#32/#33 ont produit des réponses trop génér
 Conséquence : le tableau dynamique conserve le profil demandé **et** le moteur/modèle réellement retourné. Une seconde lecture vague ne vaut jamais preuve. Le travail Studio reste jugé uniquement sur les fichiers réellement lus et les critères DONE du registre.
 
 
+## Exécution autonome sûre
+
+Le watcher GitHub accepte désormais une file `[bazor-task:ID]` limitée aux IDs déjà présents dans le registre. Le texte libre d’une issue ne devient pas une commande d’écriture. Pour une tâche prédéfinie :
+
+1. le watcher retrouve uniquement la définition du registre ;
+2. il refuse la tâche si ses dépendances ne sont pas terminées ;
+3. il demande les secondes lectures Mammouth prévues par `preferred_models` ;
+4. il lance ensuite l’exécution finale en mode AUTO avec l’action et les critères DONE du registre ;
+5. l’Action Engine effectue le préflight Git sandbox avant toute écriture ;
+6. si aucune modification n’est prouvée, une seule relance corrective est autorisée ;
+7. le statut final est limité à DONE, VERIFIE, ANALYSE_SEULE ou BLOCKED ;
+8. le résultat, les avis IA, le moteur réel, les fichiers, les tests et la preuve de préflight sont recopiés dans l’état mobile central.
+
+Cette file ne transmet aucune commande shell depuis GitHub et ne permet pas d’inventer une tâche hors registre.
+
+## Sélection du contexte local
+
+Le contexte donné aux IA n’est plus choisi uniquement selon la date de modification des fichiers. Le moteur donne maintenant un score supérieur aux chemins correspondant aux mots de la tâche exacte. Une tâche H3 privilégie donc les workflows/fichiers H3 ; une tâche launcher/démarrage privilégie les lanceurs correspondants. Les dossiers runtime, logs, sauvegardes et sandboxes sont exclus du scan.
+
 ## Autres projets BAZOR
 
 Le registre central contient également AI Room, Wii Relay, BAZOR Watch, MODO Viewer, BAZOR Tools, Security et Festival.
