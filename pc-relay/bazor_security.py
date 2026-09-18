@@ -23,17 +23,12 @@ class BazorSecurity:
         self._last_pair_display = 0
         self._last_pair_success = 0
         self.state = self._load()
-        pairing = self.state.get("pairing") or {}
-        if float(pairing.get("expires", 0) or 0) > time.time() and pairing.get("hash"):
-            self._pair_hash = str(pairing.get("hash"))
-            self._pair_expires = float(pairing.get("expires"))
-        # Le code brut n'est volontairement pas persiste. Apres un redemarrage,
-        # un hash seul est inutilisable par l'utilisateur : on genere donc UNE
-        # nouvelle cle visible localement, au lieu de conserver un code fantome.
-        if self._pair_hash and not self._pair_code:
-            self.rotate_pair_code(force=True)
-        elif not self._pair_hash:
-            self.rotate_pair_code(force=True)
+        # Aucun code d'appairage n'est généré au démarrage.
+        # Un QR/code n'existe qu'après une demande explicite via le bouton Appairage.
+        # Un ancien hash sans code brut est volontairement invalidé.
+        if self.state.get("pairing"):
+            self.state["pairing"] = {}
+            self._save()
 
     def _load(self):
         if self.state_file.exists():
