@@ -58,7 +58,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto14",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto15",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 let SEC_DEVICE=null,SEC_STATUS=null;
@@ -117,6 +117,16 @@ async function signedFetch(path,opts={},ms=5000){
   if(r.status===401){securityBadge.textContent="🔒 BLOQUÉ";securityBadge.className="badge blocked";throw new Error("Authentification refusée")}
   return data;
 }
+async function requestPairCode(){
+  if(!CORE)await detectCore();
+  if(!CORE){toast("Core indisponible — BAZOR tente de le relancer");return false}
+  try{
+    const r=await fetchTimeout(CORE+"/api/v1/security/pairing-request?device_id="+encodeURIComponent(deviceId()),{cache:"no-store"},2500);
+    const d=await r.json();
+    if(d.ok){toast(d.printed?"Nouveau code affiché sur le PC ✓":"Code déjà affiché récemment");return true}
+  }catch(e){}
+  toast("Impossible de demander le code pour l'instant");return false
+}
 async function pairPhone(code){
   if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
   const r=await fetchTimeout(CORE+"/api/v1/security/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:String(code||"").trim().toUpperCase(),device_id:deviceId(),device_name:"BAZOR Mobile Android"})},5000);
@@ -129,7 +139,7 @@ async function openSecurity(){
   document.getElementById("securityModal")?.remove();
   const e=document.createElement("div");e.id="securityModal";e.className="modal";
   if(!SEC_DEVICE||securityBadge.textContent.includes("APPAIRER")){
-    e.innerHTML='<div class="row between"><h3>BAZOR Security Tool</h3><button onclick="this.closest(\'#securityModal\').remove()">Fermer</button></div><div class="infobox">Regarde la fenêtre <b>BAZOR CORE</b> sur le PC. Elle affiche un code d’appairage temporaire.</div><label>Code du PC</label><input id="pairCode" class="security-code wide" placeholder="XXXX-XXXX-XXXX" maxlength="14" style="background:#15191f;color:white;border:1px solid var(--line);border-radius:10px;padding:10px"><button class="primary wide" style="margin-top:9px" onclick="pairPhone(pairCode.value).then(()=>{toast(\'Téléphone authentifié ✓\');openSecurity()}).catch(x=>toast(x.message))">APPAIRER CE TÉLÉPHONE</button><div class="mini muted" style="margin-top:8px">Le VPN n’est pas utilisé comme preuve d’identité. C’est l’appareil appairé qui compte.</div>';
+    e.innerHTML='<div class="row between"><h3>BAZOR Security Tool</h3><button onclick="this.closest(\'#securityModal\').remove()">Fermer</button></div><div class="infobox">Le code est affiché <b>uniquement sur le PC</b>. BAZOR ne l’envoie jamais au téléphone.</div><button class="wide" style="margin-top:8px" onclick="requestPairCode()">AFFICHER UN NOUVEAU CODE SUR LE PC</button><label>Code du PC</label><input id="pairCode" class="security-code wide" placeholder="XXXX-XXXX-XXXX" maxlength="14" style="background:#15191f;color:white;border:1px solid var(--line);border-radius:10px;padding:10px"><button class="primary wide" style="margin-top:9px" onclick="pairPhone(pairCode.value).then(()=>{toast(\'Téléphone authentifié ✓\');openSecurity()}).catch(x=>toast(x.message))">APPAIRER CE TÉLÉPHONE</button><div class="mini muted" style="margin-top:8px">VPN accepté : l’adresse IP n’est pas ta preuve d’identité. C’est l’appareil appairé qui compte.</div>';requestPairCode();
   }else{
     let alerts=[],approvals=[],dev=null;
     try{dev=(await signedFetch("/api/v1/security/device",{method:"GET"},3000)).device}catch(_){}
@@ -303,7 +313,7 @@ pcStatus.onclick=async()=>{await detectCore();await securityStatus();render()}
 securityBadge.onclick=openSecurity;
 loadSecurityDevice();
 const toastEl=document.getElementById("toast");
-(async()=>{await detectCore();await securityStatus();await loadRegistry();if(SEC_DEVICE)await pullState();render();setInterval(async()=>{await detectCore();render()},20000);setInterval(async()=>{try{const r=await fetch("./index.html?b="+Date.now(),{cache:"no-store"}),t=await r.text(),m=t.match(/APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD)location.reload()}catch(e){}},15000)})();
+(async()=>{await detectCore();await securityStatus();await loadRegistry();if(SEC_DEVICE)await pullState();render();setInterval(async()=>{await detectCore();if(CORE)await securityStatus();render()},CORE?20000:5000);setInterval(async()=>{try{const r=await fetch("./index.html?b="+Date.now(),{cache:"no-store"}),t=await r.text(),m=t.match(/APP_BUILD="([^"]+)"/);if(m&&m[1]!==APP_BUILD)location.reload()}catch(e){}},15000)})();
 </script>
 </body>
 </html>
