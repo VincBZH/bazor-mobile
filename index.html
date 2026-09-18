@@ -59,7 +59,7 @@ h2,h3{margin:0 0 7px}
 <nav><div class="tabs"><button data-tab="home" class="active">⌂<br>Accueil</button><button data-tab="capture">✎<br>Capture</button><button data-tab="inbox">☰<br>Inbox</button><button data-tab="ollama">◉<br>IA</button><button data-tab="journal">≡<br>Journal</button></div></nav>
 
 <script>
-const APP_BUILD="2026.09.18-auto27",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
+const APP_BUILD="2026.09.18-auto28",CORE_PORT=8775,KEY="bazor.command.center.mobile.v2";
 let CORE=null,REGISTRY={projects:[]},syncTimer=null,actionBusy={},state={projects:[],subprojects:{},runs:{},info:{},expanded:{},inbox:[],journal:[]};
 const SECURITY_KEY="bazor.security.device.v1";
 const BIOMETRIC_KEY="bazor.biometric.cred.v1";
@@ -146,7 +146,7 @@ async function signedFetch(path,opts={},ms=5000){
   if(!SEC_DEVICE?.secret)throw new Error("Téléphone non appairé");
   const retrySafe=!!opts.bazorRetrySafe||String(opts.method||"GET").toUpperCase()==="GET";
   const cleanOpts=Object.assign({},opts);delete cleanOpts.bazorRetrySafe;
-  const tries=retrySafe?4:1;
+  const tries=retrySafe?8:1;
   let lastErr=null;
   for(let attempt=1;attempt<=tries;attempt++){
     try{
@@ -167,7 +167,7 @@ async function signedFetch(path,opts={},ms=5000){
       // Une micro-coupure ne doit pas faire tomber visuellement la liaison.
       // On garde le Core courant pendant les retries et on ne bascule en
       // reconnexion qu’après plusieurs échecs réels.
-      if(attempt>=3){
+      if(attempt>=5){
         pcStatus.textContent="RÉSEAU INSTABLE…";pcStatus.className="badge todo";
         providerStatus.textContent="Nouvelle tentative automatique";
       }
@@ -299,7 +299,7 @@ async function detectCoreOnce(){
   coreMisses++;
   // Tolérance aux micro-coupures Wi-Fi : ne déclarer le téléphone hors ligne
   // qu’après plusieurs contrôles consécutifs ratés ou une absence prolongée.
-  if(lastCoreOk && Date.now()-lastCoreOk<90000 && coreMisses<4){
+  if(lastCoreOk && Date.now()-lastCoreOk<180000 && coreMisses<8){
     pcStatus.textContent="PC + CORE OK";pcStatus.className="badge ok";
     providerStatus.textContent="Liaison conservée • micro-coupure absorbée";
   }else{
