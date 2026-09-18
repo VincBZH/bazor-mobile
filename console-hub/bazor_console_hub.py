@@ -126,6 +126,31 @@ def mobile_working():
     except Exception:
         return False
 
+def load_hub_state():
+    try:
+        if STATE_FILE.exists():
+            data=json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            if isinstance(data,dict):
+                return data
+    except Exception:
+        pass
+    return {"migration_version":0}
+
+def save_hub_state(data):
+    try:
+        STATE_FILE.parent.mkdir(parents=True,exist_ok=True)
+        STATE_FILE.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding="utf-8")
+    except Exception:
+        pass
+
+def pairing_busy():
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8775/api/v1/security/status",timeout=0.8) as r:
+            data=json.loads(r.read().decode("utf-8"))
+        return bool(data.get("pairing_active")) or int(data.get("pairing_guard_seconds",0) or 0)>0
+    except Exception:
+        return False
+
 class Hub:
     def __init__(self, centralize=False):
         self.centralize_requested = centralize
@@ -139,6 +164,7 @@ class Hub:
         self.rows = {}
         self.selected_id = None
         self.security_code = ""
+        self.hub_state = load_hub_state()
         self.lock_socket = socket.socket()
         try:
             self.lock_socket.bind(("127.0.0.1", LOCK_PORT))
@@ -370,28 +396,69 @@ class Hub:
         messagebox.showinfo("BAZOR", f"{n} doublon(s) BAZOR fermé(s).")
         self.root.after(700, self.refresh)
 
-    def centralize(self):
-        # Mode sûr : on ADOPTE les services sains déjà actifs.
-        # On ne redémarre jamais Core/Web/Watcher juste pour les centraliser.
+    def _wait_port(self, port, wanted=True, seconds=6):
+        if not port:
+            time.sleep(0.4)
+            return True
+        end=time.time()+seconds
+        while time.time()<end:
+            if port_open(port) == wanted:
+                return True
+            time.sleep(0.25)
+        return False
+
+    def _migrate_service_hidden(self, svc):
+        # Stop/restart one service at a time, never the whole stack at once.
         self.proc_cache = powershell_processes()
-        started = []
-        duplicates = []
-        for svc in SERVICES[:3]:
-            procs = self.matching(svc)
-            if len(procs) == 0:
-                if self.start_service(svc):
-                    started.append(svc["name"])
-            elif len(procs) > 1:
-                duplicates.append(svc["name"])
-        msg = "Services existants conservés."
-        if started:
-            msg += "\nDémarrés en arrière-plan : " + ", ".join(started)
-        if duplicates:
-            msg += "\nDoublons détectés (non fermés automatiquement) : " + ", ".join(duplicates)
-        self.summary.config(text="Centralisation sûre effectuée")
-        self.root.after(900, self.refresh)
-        if started or duplicates:
-            messagebox.showinfo("BAZOR Console Hub", msg)
+        procs = self.matching(svc)
+        if not procs:
+            return self.start_service(svc)
+        self.stop_service(svc)
+        self._wait_port(svc.get("port"), False, 4)
+        ok=self.start_service(svc)
+        if svc.get("port"):
+            self._wait_port(svc.get("port"), True, 8)
+        return ok
+
+    def centralize(self):
+        # Première exécution: migrer les anciennes consoles visibles vers des processus cachés,
+        # mais ne jamais couper Core pendant une tâche ou un appairage.
+        first = int(self.hub_state.get("migration_version",0) or 0) < 2
+        notes=[]
+        self.proc_cache = powershell_processes()
+
+        if first:
+            core = SERVICES[0]
+            if self.matching(core):
+                if mobile_working() or pairing_busy():
+                    notes.append("Core conservé temporairement : tâche/appairage en cours.")
+                else:
+                    self._migrate_service_hidden(core)
+                    notes.append("Core migré vers le Hub.")
+            else:
+                self.start_service(core)
+                notes.append("Core démarré par le Hub.")
+
+            # Web + Watcher peuvent être migrés sans casser une tâche IA locale.
+            for svc in SERVICES[1:3]:
+                self._migrate_service_hidden(svc)
+                notes.append(svc["name"]+" migré vers le Hub.")
+
+            self.hub_state["migration_version"]=2
+            self.hub_state["migration_at"]=time.time()
+            save_hub_state(self.hub_state)
+        else:
+            # Exécutions suivantes: aucun redémarrage inutile. Démarrer seulement ce qui manque.
+            for svc in SERVICES[:3]:
+                self.proc_cache=powershell_processes()
+                if not self.matching(svc):
+                    self.start_service(svc)
+                    notes.append(svc["name"]+" était arrêté : redémarré.")
+
+        self.summary.config(text="Centralisation stable")
+        self.root.after(1200,self.refresh)
+        if notes:
+            messagebox.showinfo("BAZOR Console Hub","\n".join(notes))
 
     def open_log(self):
         svc = self.selected_service()
