@@ -1,0 +1,52 @@
+name: BAZOR Console Hub CI
+
+on:
+  push:
+    paths:
+      - "console-hub/**"
+      - "pc-relay/bazor_security.py"
+      - "pc-relay/bazor_pc_relay_v3.py"
+      - "pc-relay/bazor_github_watcher.py"
+      - "bazor_registry.json"
+      - ".github/workflows/bazor-console-hub-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile Python
+        run: |
+          python -m py_compile             console-hub/bazor_console_hub.py             console-hub/bazor_hub_expert_review.py             pc-relay/bazor_security.py             pc-relay/bazor_pc_relay_v3.py             pc-relay/bazor_github_watcher.py             pc-relay/mammouth_client.py
+      - name: Validate central registry
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("bazor_registry.json")
+          data=json.loads(p.read_text(encoding="utf-8"))
+          assert isinstance(data.get("projects"), list) and data["projects"], "projects missing"
+          ids=[x["id"] for x in data["projects"]]
+          assert len(ids)==len(set(ids)), "duplicate project ids"
+          for proj in data["projects"]:
+              subs=[x["id"] for x in proj.get("subprojects",[])]
+              assert len(subs)==len(set(subs)), f"duplicate subproject ids in {proj['id']}"
+          assert any(p["id"]=="bazor-security" for p in data["projects"])
+          print("Registry OK:",len(data["projects"]),"projects")
+          PY
+      - name: Security invariants
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          sec=Path("pc-relay/bazor_security.py").read_text(encoding="utf-8")
+          hub=Path("console-hub/bazor_console_hub.py").read_text(encoding="utf-8")
+          assert "self._pair_hash" in sec, "pairing hash persistence missing"
+          assert "secret" in sec and "device-proof" in sec, "device proof missing"
+          assert "SERVICES = [" in hub, "managed service allow-list missing"
+          assert 'if not svc.get("managed")' in hub, "external process close guard missing"
+          print("Security invariants OK")
+          PY
