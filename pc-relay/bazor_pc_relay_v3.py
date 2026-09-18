@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import mammouth_client
 from bazor_security import BazorSecurity
+from bazor_action_engine import ActionEngine
 
 UDP_PORT = 8766
 API_PORT = int(os.environ.get("BAZOR_MOBILE_PORT", "8775"))
@@ -129,6 +130,7 @@ def journal(event, details):
 
 
 SECURITY = BazorSecurity(DATA_DIR, journal)
+ACTION_ENGINE = ActionEngine(DATA_DIR, journal)
 UPDATE_HELPER = BASE_DIR.parent / "console-hub" / "bazor_interface_update_restart.py"
 
 
@@ -561,7 +563,7 @@ def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None, current_progre
     }
 
 
-def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, repair=False, previous="", provider="auto"):
+def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, repair=False, previous="", provider="auto", apply_actions=True, request_id=None):
     projects = load_projects()
     project = next((p for p in projects if p.get("id") == project_id), None)
     project_name = project.get("name") if project else str(project_id or "Projet BAZOR")
@@ -570,16 +572,23 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
     except Exception:
         current_progress = 0
 
-    local_context, local_report = project_local_context(project_id)
+    local_context, local_report = ACTION_ENGINE.context_for_project(project_id)
+    if not local_context:
+        local_context, fallback_report = project_local_context(project_id)
+        if local_context:
+            local_report = fallback_report
+
+    roots = ACTION_ENGINE.available_roots(project_id)
     repair_note = ""
     if repair:
         repair_note = (
             "\nMODE CORRECTION: le passage precedent a signale un blocage. "
-            "Diagnostique la cause a partir des vrais fichiers, corrige ton approche, puis recontrole. "
-            "Ne pretends pas avoir modifie un fichier si tu ne l'as pas effectivement modifie.\n"
-            "RESULTAT PRECEDENT:\n" + str(previous or "")[:10000] + "\n"
+            "Diagnostique la cause a partir des vrais fichiers, propose une correction minimale et recontrole. "
+            "Si une modification de fichier est necessaire et sure, fournis-la dans BAZOR_ACTIONS.\n"
+            "RESULTAT PRECEDENT:\n" + str(previous or "")[:12000] + "\n"
         )
 
+    roots_text = ", ".join(x.get("alias","") for x in roots) or "aucune"
     prompt = (
         f"Projet BAZOR: {project_name}\n"
         f"Sous-projet: {subproject_name}\n"
@@ -587,19 +596,38 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
         f"Progression sous-projet actuelle: {current_progress}%.\n"
         + repair_note +
         "Travaille uniquement a partir du contexte local reel ci-dessous. "
-        "Aucun shell et aucune execution de fichier. "
         "N'invente ni fichier, ni API, ni fonctionnalite. "
-        "Si tu detectes un bug, explique la correction precise et la verification a refaire. "
-        "N'augmente PROGRESS que si le contexte apporte un resultat verifiable; sinon conserve la valeur actuelle. "
-        "Termine obligatoirement par quatre lignes:\n"
+        "Tu n'as PAS le droit de demander ou produire une commande shell arbitraire. "
+        "Pour faire avancer reellement le projet, tu peux demander au BAZOR Action Engine de modifier des fichiers texte autorises. "
+        "Les seules operations possibles sont replace et create, sous les racines autorisees. "
+        f"Racines autorisees pour ce projet: {roots_text}. "
+        "Pour replace, recopie un extrait FIND exact du fichier et garde expected_count=1 sauf necessite prouvee. "
+        "Pour create, cree uniquement un fichier texte necessaire au projet. "
+        "N'utilise jamais delete, move, shell, powershell, cmd, bash, curl ou une commande externe. "
+        "Si aucune modification sure n'est possible, n'emets aucune action et explique pourquoi. "
+        "Si tu proposes des modifications, ajoute a la fin EXACTEMENT:\n"
+        "BAZOR_ACTIONS:\n"
+        "{\"actions\":[{\"op\":\"replace\",\"root\":\"alias\",\"path\":\"chemin/relatif.py\",\"find\":\"texte exact\",\"replace\":\"nouveau texte\",\"expected_count\":1}]}\n"
+        "ou pour un nouveau fichier: {\"actions\":[{\"op\":\"create\",\"root\":\"alias\",\"path\":\"chemin/relatif.txt\",\"content\":\"contenu\"}]}\n"
+        "Termine obligatoirement par quatre lignes AVANT BAZOR_ACTIONS si present:\n"
         "STATUS: OK|BLOQUE|AMELIORER\n"
         "PROGRESS: <0-100>\n"
         "SUMMARY: <une phrase courte indiquant ou on en est>\n"
         "NEXT: <prochaine etape concrete>\n"
-        + ("\nCONTEXTE LOCAL REEL EN LECTURE SEULE:\n" + local_context if local_context else "\nCONTEXTE LOCAL REEL: indisponible.\n")
+        + ("\nCONTEXTE LOCAL REEL:\n" + local_context if local_context else "\nCONTEXTE LOCAL REEL: indisponible.\n")
     )
 
-    route, result = run_routed(prompt, mode="auto_plus")
+    if provider == "mammouth":
+        kind = classify_task(prompt)
+        profile = mammouth_client.choose_profile(kind)
+        route = {"target":"mammouth","kind":kind,"profile":profile}
+        result = mammouth_chat(prompt, kind, profile)
+    elif provider == "ollama":
+        route = route_task(prompt, mode="auto")
+        result = ollama_chat(prompt, route.get("model"))
+    else:
+        route, result = run_routed(prompt, mode="auto_plus")
+
     answer = result.get("answer", "") or result.get("message", "")
     upper = answer.upper()
     status = "OK" if result.get("ok") else "BLOQUE"
@@ -608,11 +636,27 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
     elif "STATUS: AMEL" in upper:
         status = "AMELIORER"
 
+    actions = ACTION_ENGINE.parse_actions(answer)
+    action_result = {
+        "ok": True, "applied": False, "reason": "no_actions",
+        "actions": [], "tests": [], "files": []
+    }
+    if actions and apply_actions and result.get("ok"):
+        action_result = ACTION_ENGINE.apply(project_id, actions, request_id=request_id)
+        if action_result.get("applied"):
+            status = "OK" if status != "BLOQUE" else "AMELIORER"
+        else:
+            status = "BLOQUE"
+
     progress = current_progress
     m = re.search(r"(?im)^\s*PROGRESS\s*:\s*(\d{1,3})\s*%?\s*$", answer)
     if m:
         proposed = max(0, min(100, int(m.group(1))))
-        if proposed <= current_progress or (local_report.get("available") and status == "OK"):
+        # Une hausse de progression n'est acceptee que si une action a ete
+        # effectivement appliquee et validee. Sinon on garde la valeur actuelle.
+        if proposed <= current_progress:
+            progress = proposed
+        elif action_result.get("applied") and all(t.get("ok") for t in action_result.get("tests", [])):
             progress = proposed
 
     def line_value(label, fallback):
@@ -621,9 +665,14 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
 
     summary = line_value("SUMMARY", "Analyse terminee." if status == "OK" else "Blocage detecte.")
     next_step = line_value("NEXT", task)
+    if action_result.get("applied"):
+        changed = len(action_result.get("files") or [])
+        summary = f"{summary} • {changed} fichier(s) modifie(s) et valides."
+    elif actions and not action_result.get("ok"):
+        summary = "Modification refusee ou test echoue; rollback effectue si necessaire."
 
     payload = {
-        "ok": bool(result.get("ok")),
+        "ok": bool(result.get("ok")) and (not actions or bool(action_result.get("ok"))),
         "status": status,
         "progress": progress,
         "summary": summary,
@@ -635,6 +684,11 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
         "local_context": local_report,
         "repair": bool(repair),
         "provider_requested": provider,
+        "execution": {
+            "mode": "file_changes" if action_result.get("applied") else "analysis_only",
+            "actions_requested": len(actions),
+            "action_result": action_result,
+        },
     }
     journal("MOBILE_SUBTASK", {
         "project": project_id,
@@ -644,6 +698,8 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
         "repair": bool(repair),
         "engine": payload["engine"],
         "model": payload["model"],
+        "execution_mode": payload["execution"]["mode"],
+        "files_changed": len(action_result.get("files") or []),
     })
     return payload
 
@@ -992,6 +1048,8 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "repair": bool(body.get("repair")),
                 "previous": body.get("previous") or "",
                 "provider": body.get("provider") or "auto",
+                "apply_actions": bool(body.get("apply_actions", True)),
+                "request_id": body.get("request_id"),
             }
             if body.get("async") or body.get("request_id"):
                 result = start_mobile_task(body.get("request_id"), **kwargs)
