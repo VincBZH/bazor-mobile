@@ -29,7 +29,8 @@ def _single_instance():
 
 
 def _git(*args):
-    return subprocess.run(["git","-C",ROOT,*args],capture_output=True,text=True,encoding="utf-8",errors="replace")
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    return subprocess.run(["git","-C",ROOT,*args],capture_output=True,text=True,encoding="utf-8",errors="replace",creationflags=flags)
 
 def _restart_core():
     core_script=os.path.join(ROOT,"pc-relay","bazor_pc_relay_v3.py")
@@ -152,7 +153,8 @@ def safe_update():
     except Exception as e:
         print("[BLOQUE UPDATE]",type(e).__name__,str(e))
 def gh(args):
-    p=subprocess.run(["gh"]+args,capture_output=True,text=True,encoding="utf-8",errors="replace")
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    p=subprocess.run(["gh"]+args,capture_output=True,text=True,encoding="utf-8",errors="replace",creationflags=flags)
     if p.returncode: raise RuntimeError(p.stderr.strip() or p.stdout.strip())
     return p.stdout
 
