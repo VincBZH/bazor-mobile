@@ -76,6 +76,17 @@ jobs:
           assert 'if not svc.get("managed")' in hub, "external process close guard missing"
           print("Security invariants OK")
           PY
+      - name: Mammouth multi-JSON parser regression
+        run: |
+          python - <<'PY'
+          import importlib.util
+          spec=importlib.util.spec_from_file_location("mammouth_client","pc-relay/mammouth_client.py")
+          m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+          sample='{"meta":"x"}\n{"choices":[{"message":{"content":"OK"}}],"model":"qwen3.8-flash"}'
+          d=m._parse_api_json(sample)
+          assert d["choices"][0]["message"]["content"]=="OK"
+          print("Mammouth multi-JSON parser OK")
+          PY
       - name: Mammouth task profile regression
         run: |
           python - <<'PY'
