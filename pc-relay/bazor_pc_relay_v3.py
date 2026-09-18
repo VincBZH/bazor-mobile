@@ -16,12 +16,14 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import mammouth_client
+from bazor_security import BazorSecurity
 
 UDP_PORT = 8766
 API_PORT = int(os.environ.get("BAZOR_MOBILE_PORT", "8775"))
 MAGIC = b"BAZOR_DISCOVER_V1"
 OLLAMA_URL = "http://127.0.0.1:11434"
 hostname = platform.node() or "BAZOR-PC"
+SECURITY = None
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "BAZOR_DATA"
@@ -120,6 +122,9 @@ def journal(event, details):
     row = {"time": now_iso(), "event": event, **details}
     with JOURNAL_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+SECURITY = BazorSecurity(DATA_DIR, journal)
 
 
 def load_projects():
@@ -663,6 +668,26 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._json({"ok": False, "error": "local_network_only"}, 403)
         return False
 
+    def _loopback(self):
+        try:
+            return ipaddress.ip_address(self.client_address[0]).is_loopback
+        except Exception:
+            return False
+
+    def _security_ok(self):
+        if self._loopback():
+            return True
+        if not SECURITY.public_status().get("require_auth", True):
+            return True
+        device_id = self.headers.get("X-BAZOR-DEVICE", "")
+        nonce = self.headers.get("X-BAZOR-NONCE", "")
+        proof = self.headers.get("X-BAZOR-PROOF", "")
+        ok, reason = SECURITY.verify(device_id, nonce, proof, self.client_address[0])
+        if not ok:
+            self._json({"ok": False, "error": "device_auth_required", "reason": reason}, 401)
+            return False
+        return True
+
     def _body(self):
         length = min(int(self.headers.get("Content-Length", "0") or "0"), 12 * 1024 * 1024)
         return json.loads(self.rfile.read(length).decode("utf-8") or "{}")
@@ -677,6 +702,37 @@ class ApiHandler(BaseHTTPRequestHandler):
         qs = urllib.parse.parse_qs(parsed.query)
         path = parsed.path
 
+        if path == "/api/v1/security/status":
+            data = SECURITY.public_status()
+            data["device_id"] = (qs.get("device_id") or [None])[0]
+            self._json(data)
+            return
+
+        if path == "/api/v1/security/challenge":
+            device_id = (qs.get("device_id") or [""])[0]
+            result = SECURITY.challenge(device_id, self.client_address[0])
+            self._json(result, 200 if result.get("ok") else 401)
+            return
+
+        if path == "/api/v1/security/device":
+            if not self._security_ok():
+                return
+            device_id = self.headers.get("X-BAZOR-DEVICE", "")
+            self._json({"ok": True, "device": SECURITY.device_summary(device_id)})
+            return
+
+        if path == "/api/v1/security/alerts":
+            if not self._security_ok():
+                return
+            self._json({"ok": True, "alerts": SECURITY.alerts((qs.get("limit") or [40])[0])})
+            return
+
+        if path == "/api/v1/security/approvals":
+            if not self._security_ok():
+                return
+            self._json({"ok": True, "approvals": SECURITY.pending_approvals()})
+            return
+
         if path in ("/", "/api", "/api/v1", "/api/v1/health"):
             online, models = ollama_tags()
             self._json({
@@ -687,9 +743,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "time": now_iso(),
                 "ollama": {"online": online, "models": models},
                 "mammouth": {"configured": mammouth_client.configured(), "budget": mammouth_client.budget_status()},
-                "capabilities": ["routing", "auto_plus", "eco_credits", "mammouth", "file_upload", "file_context", "pdf", "docx", "generated_files", "go_auto", "mobile_subtask", "project_registry", "mobile_state_sync", "mammouth_provider"],
-                "security": {"scope": "local-network", "ollama_exposed": False, "shell_commands": False, "mammouth_key_exposed": False}
+                "capabilities": ["routing", "auto_plus", "eco_credits", "mammouth", "file_upload", "file_context", "pdf", "docx", "generated_files", "go_auto", "mobile_subtask", "project_registry", "mobile_state_sync", "mammouth_provider", "device_pairing", "device_proof", "security_alerts", "mobile_approvals"],
+                "security": {"scope": "local-network", "ollama_exposed": False, "shell_commands": False, "mammouth_key_exposed": False, "device_auth": SECURITY.public_status()}
             })
+            return
+
+        if path in ("/api/v1/models", "/api/v1/budget", "/api/v1/files", "/api/v1/files/content", "/api/v1/projects", "/api/v1/mobile-state") and not self._security_ok():
             return
 
         if path == "/api/v1/models":
@@ -741,6 +800,19 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._json({"ok": False, "error": "invalid_json"}, 400)
             return
         path = urllib.parse.urlparse(self.path).path
+
+        if path == "/api/v1/security/pair":
+            result = SECURITY.pair(body.get("code"), body.get("device_id"), body.get("device_name"), self.client_address[0])
+            self._json(result, 200 if result.get("ok") else 401)
+            return
+
+        if not self._security_ok():
+            return
+
+        if path == "/api/v1/security/approval/decide":
+            result = SECURITY.decide_approval(body.get("id"), body.get("decision"), self.headers.get("X-BAZOR-DEVICE", ""))
+            self._json(result, 200 if result.get("ok") else 404)
+            return
 
         if path == "/api/v1/files/upload":
             result = store_file(body.get("name"), body.get("room") or "ROOM PRINCIPALE", body.get("mime"), body.get("data"))
@@ -862,6 +934,7 @@ print("AUTO ECO : local d'abord; Mammouth seulement si Ollama indisponible")
 print("AUTO+    : local d'abord; Mammouth pour tâches complexes / secours")
 print("Fichiers : TXT/Code/DOCX/PDF local; aucune exécution automatique")
 print("Sécurité : clé Mammouth jamais envoyée au mobile, aucune commande shell")
+print(SECURITY.pairing_console_text())
 print("=" * 68)
 threading.Thread(target=run_udp_discovery, daemon=True).start()
 run_api()
