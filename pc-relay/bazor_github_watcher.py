@@ -5,10 +5,10 @@ CORE="http://127.0.0.1:8775/api/v1/chat"
 CORE_HEALTH="http://127.0.0.1:8775/api/v1/security/status"
 CORE_FAILS=0
 PENDING_CORE_RESTART=False
-PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
+PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
 
 def _git(*args):
