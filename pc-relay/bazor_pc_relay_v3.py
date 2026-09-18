@@ -380,7 +380,9 @@ def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None):
         f"Tu travailles pour BAZOR sur le projet {project['name']}.\n"
         f"Tâche: {task}\n"
         "Travaille en autonomie sans exécuter de commande système. "
-        "Donne un résultat concret, les fichiers ou patchs à produire, puis termine par STATUS: OK, BLOQUE ou AMELIORER."
+        "Donne un résultat concret, les fichiers ou patchs à produire. "
+        "Termine obligatoirement par trois lignes: STATUS: OK, BLOQUE ou AMELIORER ; PROGRESS: nombre entier de 0 à 100 ; NEXT: prochaine action concrète. "
+        "La progression doit estimer l'avancement réel du projet après cette action, pas seulement cette tâche."
         + ("\nFichiers:\n" + file_context if file_context else "")
     )
     route, result = run_routed(prompt, mode="auto_plus")
@@ -391,6 +393,18 @@ def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None):
         status = "BLOQUE"
     elif "STATUS: AMEL" in upper:
         status = "AMELIORER"
+
+    # La barre de progression n'est mise à jour que si l'IA fournit
+    # explicitement une estimation structurée 0..100.
+    m_progress = re.search(r"(?im)^\s*PROGRESS\s*:\s*(\d{1,3})\s*%?\s*$", answer)
+    if m_progress:
+        project["progress"] = max(0, min(100, int(m_progress.group(1))))
+        project["progress_source"] = "go_auto_estimate"
+
+    m_next = re.search(r"(?im)^\s*NEXT\s*:\s*(.+?)\s*$", answer)
+    if m_next and m_next.group(1).strip():
+        project["next"] = m_next.group(1).strip()[:500]
+
     project["status"] = status
     project["last_run"] = now_iso()
     project["last_engine"] = result.get("provider") or route.get("target")
