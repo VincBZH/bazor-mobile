@@ -127,6 +127,7 @@ def journal(event, details):
 
 
 SECURITY = BazorSecurity(DATA_DIR, journal)
+UPDATE_HELPER = BASE_DIR.parent / "console-hub" / "bazor_interface_update_restart.py"
 
 
 def load_projects():
@@ -820,6 +821,24 @@ class ApiHandler(BaseHTTPRequestHandler):
             result = SECURITY.decide_approval(body.get("id"), body.get("decision"), self.headers.get("X-BAZOR-DEVICE", ""))
             self._json(result, 200 if result.get("ok") else 404)
             return
+        if path == "/api/v1/system/update-restart":
+            if not UPDATE_HELPER.exists():
+                self._json({"ok": False, "error": "update_helper_missing"}, 500)
+                return
+            try:
+                flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                subprocess.Popen(
+                    [sys.executable, str(UPDATE_HELPER)],
+                    cwd=str(BASE_DIR.parent),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=flags,
+                )
+                self._json({"ok": True, "status": "update_restart_started", "message": "Mise à jour et relance BAZOR déclenchées."})
+            except Exception as exc:
+                self._json({"ok": False, "error": type(exc).__name__, "detail": str(exc)[:180]}, 500)
+            return
+
 
         if path == "/api/v1/files/upload":
             result = store_file(body.get("name"), body.get("room") or "ROOM PRINCIPALE", body.get("mime"), body.get("data"))
