@@ -82,6 +82,20 @@ def ensure_core_alive():
         maybe_restart_core("mise a jour differee")
     return False
 
+def _run_hub_expert_review():
+    script=os.path.join(ROOT,"console-hub","bazor_hub_expert_review.py")
+    log_path=os.path.join(ROOT,"pc-relay","BAZOR_DATA","HUB_LOGS","expert_review_runner.log")
+    if not os.path.exists(script):
+        return
+    try:
+        os.makedirs(os.path.dirname(log_path),exist_ok=True)
+        log=open(log_path,"a",encoding="utf-8",buffering=1)
+        flags=getattr(subprocess,"CREATE_NO_WINDOW",0)
+        subprocess.Popen([sys.executable,script],cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,creationflags=flags)
+        print("[HUB REVIEW] Tests + revue Mammouth lances en arriere-plan.")
+    except Exception as e:
+        print("[BLOQUE HUB REVIEW]",type(e).__name__,str(e))
+
 def safe_update():
     global LAST_HEAD
     try:
@@ -104,6 +118,12 @@ def safe_update():
             # Actions locales PREDEFINIES uniquement : aucun ordre shell ne vient de GitHub.
             if any(x in changed for x in ("pc-relay/bazor_pc_relay_v3.py","pc-relay/mammouth_client.py","pc-relay/bazor_security.py")):
                 maybe_restart_core("mise a jour de code")
+
+            if any(
+                x.startswith("console-hub/") or x in ("LANCER_BAZOR_CONSOLE_HUB.cmd","LANCER_BAZOR_MOBILE_TOUT_EN_UN.cmd")
+                for x in changed
+            ):
+                _run_hub_expert_review()
 
             if "pc-relay/bazor_github_watcher.py" in changed:
                 print("[SELF UPDATE] Rechargement du watcher avec la nouvelle version...")
