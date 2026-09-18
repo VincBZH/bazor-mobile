@@ -7,6 +7,7 @@ import os
 import platform
 import re
 import socket
+import sys
 import threading
 import urllib.parse
 import urllib.request
@@ -909,8 +910,17 @@ class ApiHandler(BaseHTTPRequestHandler):
         self._json({"ok": False, "error": "not_found"}, 404)
 
 
+class BazorHTTPServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
+            print(f"[RESEAU] Client {client_address[0]} a coupe la connexion - Core toujours actif.")
+            return
+        super().handle_error(request, client_address)
+
+
 def run_api():
-    server = ThreadingHTTPServer(("0.0.0.0", API_PORT), ApiHandler)
+    server = BazorHTTPServer(("0.0.0.0", API_PORT), ApiHandler)
     print(f"API      : http://0.0.0.0:{API_PORT}/api/v1/health")
     server.serve_forever()
 
