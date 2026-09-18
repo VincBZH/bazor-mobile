@@ -2,6 +2,8 @@ import json, subprocess, time, urllib.request, os, sys
 
 REPO="VincBZH/bazor-mobile"
 CORE="http://127.0.0.1:8775/api/v1/chat"
+CORE_HEALTH="http://127.0.0.1:8775/api/v1/security/status"
+CORE_FAILS=0
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
@@ -26,6 +28,25 @@ def _restart_core():
     except Exception as e:
         print("[BLOQUE CORE RESTART]",type(e).__name__,str(e))
 
+def ensure_core_alive():
+    global CORE_FAILS
+    try:
+        with urllib.request.urlopen(CORE_HEALTH,timeout=2.0) as r:
+            if 200 <= r.status < 300:
+                if CORE_FAILS:
+                    print("[OK CORE] BAZOR Core 8775 repond de nouveau.")
+                CORE_FAILS=0
+                return True
+    except Exception:
+        pass
+    CORE_FAILS += 1
+    print(f"[CORE CHECK] Core 8775 ne repond pas ({CORE_FAILS}/3)")
+    if CORE_FAILS >= 3:
+        print("[CORE RECOVERY] Relance automatique du Core...")
+        _restart_core()
+        CORE_FAILS=0
+    return False
+
 def safe_update():
     global LAST_HEAD
     try:
@@ -46,7 +67,7 @@ def safe_update():
             LAST_HEAD=remote
 
             # Actions locales PREDEFINIES uniquement : aucun ordre shell ne vient de GitHub.
-            if any(x in changed for x in ("pc-relay/bazor_pc_relay_v3.py","pc-relay/mammouth_client.py")):
+            if any(x in changed for x in ("pc-relay/bazor_pc_relay_v3.py","pc-relay/mammouth_client.py","pc-relay/bazor_security.py")):
                 _restart_core()
 
             if "pc-relay/bazor_github_watcher.py" in changed:
@@ -82,6 +103,7 @@ print()
 
 while True:
     safe_update()
+    ensure_core_alive()
     try:
         issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
         for issue in issues:
