@@ -18,6 +18,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = DATA / "console_hub_state.json"
 MOBILE_STATE = DATA / "mobile_state.json"
 LOCK_PORT = 8790
+UPDATE_HELPER = ROOT / "console-hub" / "bazor_interface_update_restart.py"
 
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -214,6 +215,7 @@ class Hub:
         bar = tk.Frame(self.root, padx=10, pady=8)
         bar.pack(fill="x")
         for text, cmd in [
+            ("↻ MAJ + RELANCE BAZOR", self.update_restart_bazor),
             ("CENTRALISER / ADOPTER", self.centralize),
             ("ACTUALISER", self.refresh),
             ("VOIR LOG", self.open_log),
@@ -482,6 +484,23 @@ class Hub:
         self.root.after(1200,self.refresh)
         if notes:
             messagebox.showinfo("BAZOR Console Hub","\n".join(notes))
+
+    def update_restart_bazor(self):
+        if not UPDATE_HELPER.exists():
+            messagebox.showerror("BAZOR", "Outil de mise à jour absent.")
+            return
+        try:
+            flags=CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+            subprocess.Popen(
+                [sys.executable, str(UPDATE_HELPER)],
+                cwd=str(ROOT),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=flags
+            )
+            self.summary.config(text="Mise à jour + relance demandées…")
+        except Exception as exc:
+            messagebox.showerror("BAZOR", f"Relance impossible : {type(exc).__name__}")
 
     def open_log(self):
         svc = self.selected_service()
