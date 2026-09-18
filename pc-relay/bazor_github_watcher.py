@@ -10,6 +10,7 @@ MARK="[BAZOR-WATCHER-DONE]"
 DIAG_MARK="[BAZOR-DIAG-DONE]"
 MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
 TASK_MARK="[BAZOR-TASK-DONE]"
+QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
@@ -680,6 +681,20 @@ def _run_registry_task(task_id):
         "answer":str(result.get("answer") or "")[:7000],
     }
 
+def _run_studio_qualification():
+    script=os.path.join(ROOT,"pc-relay","bazor_studio_qualifier.py")
+    if not os.path.exists(script): return {"ok":False,"error":"qualifier_missing","detail":script}
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    try:
+        cp=subprocess.run([sys.executable,script,"--compact"],cwd=ROOT,capture_output=True,text=True,encoding="utf-8",errors="replace",timeout=900,creationflags=flags)
+    except Exception as exc:
+        return {"ok":False,"error":type(exc).__name__,"detail":str(exc)[:1200]}
+    latest=os.path.join(ROOT,"pc-relay","BAZOR_DATA","STUDIO_QUALIFICATION","latest.json")
+    try: report=json.load(open(latest,"r",encoding="utf-8"))
+    except Exception as exc: return {"ok":False,"error":"report_unreadable","detail":str(exc)[:1000],"stdout":cp.stdout[-4000:],"stderr":cp.stderr[-4000:]}
+    summary=report.get("summary") or {}; failures=[x for x in report.get("results",[]) if not x.get("ok")]
+    return {"ok":bool(summary.get("operational")),"returncode":cp.returncode,"summary":summary,"failures":failures,"report_file":latest,"stdout":cp.stdout[-5000:],"stderr":cp.stderr[-3000:]}
+
 def answer_text(result):
     for section in ("mammouth","ollama"):
         o=result.get(section) or {}
@@ -716,6 +731,24 @@ while True:
                     reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body),task_smoke=("task-smoke" in body or "task smoke" in body))
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
+                    continue
+                if title.startswith("[bazor-qualify:studio]"):
+                    if QUALIFY_MARK in comments: continue
+                    print(f"[QUALIFY] #{issue['number']} Studio qualification")
+                    try:
+                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","[BAZOR-QUALIFY-START]\n\nQualification complète AI Simple Studio démarrée sur le PC local. Aucun fichier Studio n’est modifié par ce test."])
+                    except Exception: pass
+                    result=_run_studio_qualification(); s=result.get("summary") or {}; fails=result.get("failures") or []
+                    lines=[QUALIFY_MARK,"","**BAZOR Studio — qualification locale**","",f"Résultat: {'OPÉRATIONNEL' if result.get('ok') else 'NON OPÉRATIONNEL'}",f"Tests: {s.get('passed',0)}/{s.get('total',0)} • {s.get('percent',0)}%",f"Échecs: P0={s.get('p0_failed',0)} • P1={s.get('p1_failed',0)} • P2={s.get('p2_failed',0)}",""]
+                    if fails:
+                        lines.append("**Échecs détectés**")
+                        for x in fails[:35]: lines.append(f"- {x.get('severity')} {x.get('id')} — {x.get('name')}: {str(x.get('detail') or '')[:700]}")
+                    else: lines.append("Aucun échec détecté.")
+                    lines += ["","Rapport local: "+str(result.get("report_file") or "?")]
+                    if result.get("stderr"): lines += ["","stderr (fin):",str(result.get("stderr"))[-2000:]]
+                    try: gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","\n".join(lines)[:12000]])
+                    except Exception: pass
+                    print(f"[OK QUALIFY] #{issue['number']} operational={result.get('ok')} failures={len(fails)}")
                     continue
                 if title.startswith("[bazor-task:"):
                     if TASK_MARK in comments: continue
