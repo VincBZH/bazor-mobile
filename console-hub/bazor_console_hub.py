@@ -1,5 +1,6 @@
 import json
 import os
+import queue
 import re
 import socket
 import subprocess
@@ -197,10 +198,12 @@ class Hub:
             raise SystemExit(0)
         self.refresh_inflight = False
         self.centralize_inflight = False
+        self.ui_queue = queue.Queue()
         self.build_ui()
         threading.Thread(target=kill_legacy_bazor_wrappers, daemon=True).start()
         if centralize:
             self.root.after(700, self.centralize)
+        self.root.after(100, self._drain_ui_queue)
         self.root.after(300, self.refresh)
         self.root.after(1400, self.refresh_logs)
 
@@ -257,6 +260,26 @@ class Hub:
         tk.Label(right, text="JOURNAL CENTRAL BAZOR", font=("Segoe UI", 10, "bold")).pack(anchor="w")
         self.all_text = tk.Text(right, bg="#0e1116", fg="#d7dde7", insertbackground="white", wrap="none", font=("Consolas", 9))
         self.all_text.pack(fill="both", expand=True)
+
+    def _drain_ui_queue(self):
+        try:
+            while True:
+                item = self.ui_queue.get_nowait()
+                kind = item[0]
+                if kind == "refresh_ok":
+                    self._apply_refresh(item[1], item[2])
+                elif kind == "refresh_error":
+                    self._refresh_failed(item[1])
+                elif kind == "central_ok":
+                    self._centralize_done(item[1])
+                elif kind == "central_error":
+                    self._centralize_failed(item[1])
+        except queue.Empty:
+            pass
+        try:
+            self.root.after(100, self._drain_ui_queue)
+        except Exception:
+            pass
 
     def log_path(self, sid):
         return LOG_DIR / f"{sid}.log"
@@ -322,12 +345,9 @@ class Hub:
                 pid = ",".join(str(p.get("ProcessId")) for p in procs[:3]) or "—"
                 snapshot.append((svc["id"], state, svc["project"], svc["name"], pid, detail))
             self.proc_cache = cache
-            self.root.after(0, lambda: self._apply_refresh(snapshot, counts))
+            self.ui_queue.put(("refresh_ok", snapshot, counts))
         except Exception as exc:
-            try:
-                self.root.after(0, lambda: self._refresh_failed(exc))
-            except Exception:
-                self.refresh_inflight = False
+            self.ui_queue.put(("refresh_error", type(exc).__name__))
 
     def _apply_refresh(self, snapshot, counts):
         try:
@@ -347,10 +367,10 @@ class Hub:
             except Exception:
                 pass
 
-    def _refresh_failed(self, exc):
+    def _refresh_failed(self, error_name):
         self.refresh_inflight = False
         try:
-            self.summary.config(text=f"Analyse temporairement indisponible : {type(exc).__name__}")
+            self.summary.config(text=f"Analyse temporairement indisponible : {error_name}")
             self.root.after(2500, self.refresh)
         except Exception:
             pass
@@ -530,9 +550,9 @@ class Hub:
                         self.start_service(svc)
                         notes.append(svc["name"]+" était arrêté : redémarré.")
 
-            self.root.after(0, lambda: self._centralize_done(notes))
+            self.ui_queue.put(("central_ok", notes))
         except Exception as exc:
-            self.root.after(0, lambda: self._centralize_failed(exc))
+            self.ui_queue.put(("central_error", type(exc).__name__))
 
     def _centralize_done(self, notes):
         self.centralize_inflight = False
@@ -541,9 +561,9 @@ class Hub:
         if notes:
             messagebox.showinfo("BAZOR Console Hub","\n".join(notes))
 
-    def _centralize_failed(self, exc):
+    def _centralize_failed(self, error_name):
         self.centralize_inflight = False
-        self.summary.config(text=f"Centralisation bloquée : {type(exc).__name__}")
+        self.summary.config(text=f"Centralisation bloquée : {error_name}")
         self.refresh()
 
     def update_restart_bazor(self):
