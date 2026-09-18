@@ -7,6 +7,7 @@ CORE_FAILS=0
 PENDING_CORE_RESTART=False
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
+DIAG_MARK="[BAZOR-DIAG-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
@@ -152,6 +153,158 @@ def safe_update():
             LAST_HEAD=local
     except Exception as e:
         print("[BLOQUE UPDATE]",type(e).__name__,str(e))
+
+def _read_json(path):
+    try:
+        with open(path,"r",encoding="utf-8-sig",errors="replace") as f:
+            data=json.load(f)
+        return data if isinstance(data,dict) else {}
+    except Exception:
+        return {}
+
+def _tail_text(path,max_lines=400):
+    try:
+        with open(path,"r",encoding="utf-8",errors="replace") as f:
+            lines=f.read().splitlines()
+        return "\n".join(lines[-max_lines:])
+    except Exception:
+        return ""
+
+def _url_ok(url,timeout=2.0):
+    try:
+        with urllib.request.urlopen(url,timeout=timeout) as r:
+            return 200 <= getattr(r,"status",200) < 500
+    except Exception:
+        return False
+
+def _force_usb_localhost(open_phone=True):
+    script=os.path.join(ROOT,"console-hub","bazor_usb_android_bridge.ps1")
+    if os.name!="nt" or not os.path.exists(script):
+        return {"ok":False,"reason":"usb_bridge_unavailable"}
+    args=["powershell","-NoProfile","-ExecutionPolicy","Bypass","-File",script,"-Root",ROOT]
+    if open_phone:
+        args.append("-OpenPhone")
+    try:
+        p=subprocess.run(
+            args,capture_output=True,text=True,encoding="utf-8",errors="replace",
+            timeout=55,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0)
+        )
+    except Exception as e:
+        return {"ok":False,"reason":type(e).__name__}
+    status=_read_json(os.path.join(ROOT,"pc-relay","BAZOR_DATA","usb_android_status.json"))
+    return {
+        "ok":bool(status.get("ok")),
+        "connected":bool(status.get("connected")),
+        "core_reverse":bool(status.get("core_reverse")),
+        "web_reverse":bool(status.get("web_reverse")),
+        "reason":status.get("reason"),
+        "returncode":p.returncode,
+    }
+
+def _latest_task_diag():
+    path=os.path.join(ROOT,"pc-relay","BAZOR_DATA","journal.jsonl")
+    try:
+        with open(path,"r",encoding="utf-8",errors="replace") as f:
+            lines=f.read().splitlines()[-1200:]
+    except Exception:
+        return {}
+    rows=[]
+    for line in lines:
+        try:
+            row=json.loads(line)
+            if row.get("event") in (
+                "MOBILE_TASK_JOB_START","MOBILE_TASK_CONTEXT","MOBILE_TASK_JOB_DONE",
+                "MOBILE_SUBTASK","SECURITY_ALERT"
+            ):
+                rows.append(row)
+        except Exception:
+            pass
+    if not rows:
+        return {}
+    starts=[x for x in rows if x.get("event")=="MOBILE_TASK_JOB_START"]
+    if not starts:
+        return {"events_seen":len(rows)}
+    start=starts[-1]
+    rid=start.get("request_id")
+    relevant=[x for x in rows if x.get("request_id")==rid or (
+        x.get("event")=="MOBILE_TASK_CONTEXT"
+        and x.get("project")==start.get("project")
+        and x.get("subproject")==start.get("subproject")
+    )]
+    out={
+        "request_id":rid,
+        "project":start.get("project"),
+        "subproject":start.get("subproject"),
+        "started":start.get("time"),
+    }
+    for row in relevant:
+        ev=row.get("event")
+        if ev=="MOBILE_TASK_CONTEXT":
+            out["context_ms"]=row.get("context_ms")
+            out["scan_ms"]=row.get("scan_ms")
+            out["scanned_files"]=row.get("scanned_files")
+            out["scan_limited"]=row.get("scan_limited")
+            out["context_files"]=row.get("context_files")
+        elif ev=="MOBILE_TASK_JOB_DONE":
+            out["done"]=row.get("time")
+            out["duration_ms"]=row.get("duration_ms")
+            out["state"]=row.get("state")
+            out["status"]=row.get("status")
+            out["error"]=row.get("error")
+            out["detail"]=str(row.get("detail") or "")[:140]
+        elif ev=="MOBILE_SUBTASK":
+            out["engine"]=row.get("engine")
+            out["model"]=row.get("model")
+            out["execution_mode"]=row.get("execution_mode")
+            out["files_changed"]=row.get("files_changed")
+    return out
+
+def diagnostic_summary(force_usb=False):
+    usb_result=None
+    if force_usb:
+        usb_result=_force_usb_localhost(open_phone=True)
+        time.sleep(1.5)
+
+    data_dir=os.path.join(ROOT,"pc-relay","BAZOR_DATA")
+    usb=_read_json(os.path.join(data_dir,"usb_android_status.json"))
+    core_tail=_tail_text(os.path.join(HUB_LOG_DIR,"core.log"),500)
+    web_tail=_tail_text(os.path.join(HUB_LOG_DIR,"web.log"),500)
+    watcher_tail=_tail_text(os.path.join(HUB_LOG_DIR,"watcher.log"),500)
+    selfheal_tail=_tail_text(os.path.join(HUB_LOG_DIR,"mobile_selfheal.log"),250)
+
+    def count(text,needle):
+        return text.lower().count(needle.lower())
+
+    task=_latest_task_diag()
+    lines=[
+        "**Diagnostic BAZOR local (résumé sans secrets)**",
+        f"- Core 8775 local: {'OK' if _url_ok('http://127.0.0.1:8775/api/v1/security/status') else 'HS'}",
+        f"- Gateway 8776 local: {'OK' if _url_ok('http://127.0.0.1:8776/api/v1/security/status') else 'HS'}",
+        "- USB ADB: connected={0} reverse8775={1} reverse8776={2} reason={3}".format(
+            bool(usb.get("connected")),bool(usb.get("core_reverse")),bool(usb.get("web_reverse")),usb.get("reason") or "none"
+        ),
+    ]
+    if usb_result is not None:
+        lines.append("- Forçage USB localhost: "+json.dumps(usb_result,ensure_ascii=False,separators=(",",":")))
+    if task:
+        lines.append("- Dernière tâche GO: "+json.dumps(task,ensure_ascii=False,separators=(",",":")))
+    lines += [
+        "- core.log (500 lignes): traceback={0} reset={1} brokenpipe={2} reseau={3}".format(
+            count(core_tail,"traceback"),count(core_tail,"connectionreset"),count(core_tail,"brokenpipe"),count(core_tail,"[reseau]")
+        ),
+        "- web.log (500 lignes): http502={0} gateway_unreachable={1} traceback={2}".format(
+            count(web_tail,'" 502 ')+count(web_tail," 502 "),count(web_tail,"core_gateway_unreachable"),count(web_tail,"traceback")
+        ),
+        "- watcher.log (500 lignes): core_check={0} recovery={1} update={2}".format(
+            count(watcher_tail,"[core check]"),count(watcher_tail,"[core recovery]"),count(watcher_tail,"[ok update]")
+        ),
+        "- selfheal.log: core_false={0} web_false={1} usb_false={2}".format(
+            count(selfheal_tail,"core=false"),count(selfheal_tail,"web=false"),count(selfheal_tail,"usb=false")
+        ),
+        "- Transport recommandé pour ce test: http://127.0.0.1:8776/ via ADB reverse (USB), pas l'adresse Wi-Fi."
+    ]
+    return "\n".join(lines)
+
 def gh(args):
     flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
     p=subprocess.run(["gh"]+args,capture_output=True,text=True,encoding="utf-8",errors="replace",creationflags=flags)
@@ -178,7 +331,7 @@ print("=== BAZOR GITHUB WATCHER V1 ===")
 print("Repo :",REPO)
 print("Core :",CORE)
 print("Polling : 10 s")
-print("Aucun shell distant : seules les issues [bazor-queue] sont envoyees a /api/v1/chat.")
+print("Aucun shell distant : [bazor-queue] -> IA locale; [bazor-diag] -> diagnostic local predefini et filtre.")
 print()
 
 while True:
@@ -188,8 +341,17 @@ while True:
         try:
             issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
             for issue in issues:
-                if not issue["title"].lower().startswith("[bazor-queue]"): continue
+                title=issue["title"].lower()
                 comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
+                if title.startswith("[bazor-diag]"):
+                    if DIAG_MARK in comments: continue
+                    print(f"[DIAG] #{issue['number']} {issue['title']}")
+                    body=(issue.get("body") or "").lower()
+                    reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body))
+                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
+                    print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
+                    continue
+                if not title.startswith("[bazor-queue]"): continue
                 if MARK in comments: continue
                 print(f"[QUEUE] #{issue['number']} {issue['title']}")
                 prompt=(issue.get("body") or "").strip()
