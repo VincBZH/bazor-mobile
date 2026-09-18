@@ -251,8 +251,8 @@ async function updateRestartBazor(){
 
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 function toast(t){toastEl.textContent=t;toastEl.style.display="block";setTimeout(()=>toastEl.style.display="none",1800)}
-function statusClass(s){return s==="OK"?"ok":s==="BLOQUE"?"blocked":s==="EN_COURS"?"running":"todo"}
-function statusLabel(s){return s==="A_FAIRE"?"À FAIRE":s==="A_EVALUER"?"À ÉVALUER":s==="EN_COURS"?"EN COURS":s||"À ÉVALUER"}
+function statusClass(s){return ["OK","DONE","VERIFIE"].includes(s)?"ok":["BLOQUE","BLOCKED"].includes(s)?"blocked":["EN_COURS","RUNNING"].includes(s)?"running":"todo"}
+function statusLabel(s){return s==="A_FAIRE"?"À FAIRE":s==="A_EVALUER"?"À ÉVALUER":s==="EN_COURS"||s==="RUNNING"?"EN COURS":s==="DONE"?"TERMINÉ":s==="VERIFIE"?"VÉRIFIÉ":s==="ANALYSE_SEULE"?"ANALYSE SEULE":s==="TODO"?"À FAIRE":s==="BLOCKED"?"BLOQUÉ":s||"À ÉVALUER"}
 function log(what,tag="OK"){state.journal.unshift({id:uid(),what,tag,when:Date.now()});state.journal=state.journal.slice(0,250)}
 
 async function fetchTimeout(url,opts={},ms=3000){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opts,signal:c.signal})}finally{clearTimeout(t)}}
@@ -397,13 +397,22 @@ function projectGoCompatible(id){return rp(id)?.go_compatible!==false}
 function projectGoReason(id){return rp(id)?.go_reason||"Projet non relié à une racine locale exécutable."}
 function children(id){return rp(id)?.subprojects||[]}
 function sp(pid,sid){return state.subprojects?.[pid]?.[sid]||{status:"A_EVALUER",progress:null,summary:"Pas encore évalué",next:"À définir"}}
+function taskDefs(pid){return (rp(pid)?.tasks||[]).slice().sort((a,b)=>(a.order||99)-(b.order||99))}
+function taskState(pid,tid){state.taskStates=state.taskStates||{};state.taskStates[pid]=state.taskStates[pid]||{};return state.taskStates[pid][tid]||(state.taskStates[pid][tid]={status:"TODO",summary:"",updated:null,evidence:null,last_model:null,last_engine:null})}
+function taskDepsDone(pid,t){return (t.dependencies||[]).every(id=>["DONE","VERIFIE"].includes(taskState(pid,id).status))}
+function nextTask(pid){return taskDefs(pid).find(t=>!["DONE","VERIFIE"].includes(taskState(pid,t.id).status))||null}
 function nextSub(pid){return children(pid).find(c=>{const x=sp(pid,c.id);return x.status!=="OK"||x.progress===null||x.progress<100})||null}
-function overall(p){const vals=children(p.id).map(c=>sp(p.id,c.id).progress).filter(v=>typeof v==="number");return vals.length===children(p.id).length&&vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):(p.progress||0)}
+function overall(p){
+  const td=taskDefs(p.id);
+  if(td.length){const done=td.filter(t=>["DONE","VERIFIE"].includes(taskState(p.id,t.id).status)).length;return Math.round(done*100/td.length)}
+  const vals=children(p.id).map(c=>sp(p.id,c.id).progress).filter(v=>typeof v==="number");return vals.length===children(p.id).length&&vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):(p.progress||0)
+}
 function phrase(p){
   const r=state.runs[p.id];
   if(r?.active){const c=children(p.id).find(x=>x.id===r.subId);return "En cours : "+(c?.name||p.name)+" • "+(r.stage||"travail")}
   if(r?.blocked)return "Bloqué : "+(r.stage||"contrôle nécessaire");
   if(!projectGoCompatible(p.id))return "GO non relié : "+projectGoReason(p.id);
+  const t=nextTask(p.id);if(t)return "Priorité "+(t.priority||"")+" : "+t.title;
   const n=nextSub(p.id);if(!n)return "Tout est contrôlé.";
   const x=sp(p.id,n.id);return "À suivre : "+n.name+" • "+(x.next||n.next);
 }
@@ -451,10 +460,10 @@ function renderHome(){
 }
 function toggleProject(id){state.expanded[id]=!state.expanded[id];localSave()}
 function toggleInfo(id,t){state.info[id]=state.info[id]===t?null:t;localSave()}
-async function taskCall(pid,c,repair=false,previous=""){
+async function taskCall(pid,c,repair=false,previous="",taskText=null,requestTag=null){
   if(!CORE)await detectCore();if(!CORE)throw new Error("Core non joignable");
-  const x=sp(pid,c.id),requestId="mob-"+pid+"-"+c.id+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
-  const payload={project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(x.next||c.next),current_progress:x.progress??0,repair,previous,provider:providerMode.value,request_id:requestId,async:true,apply_actions:true};
+  const x=sp(pid,c.id),tag=requestTag||c.id,requestId="mob-"+pid+"-"+tag+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  const payload={project_id:pid,subproject_name:c.name,task:"Réponds uniquement en français. "+(taskText||x.next||c.next),current_progress:x.progress??0,repair,previous,provider:providerMode.value,request_id:requestId,async:true,apply_actions:true};
   let start=await signedFetch("/api/v1/task",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),bazorRetrySafe:true},8000);
   if(start.job_state==="done"||start.job_state==="error")return start.result||start;
   const deadline=Date.now()+6*60*1000;
