@@ -1,4 +1,4 @@
-import json, subprocess, time, urllib.request, os
+import json, subprocess, time, urllib.request, os, sys
 
 REPO="VincBZH/bazor-mobile"
 CORE="http://127.0.0.1:8775/api/v1/chat"
@@ -7,24 +7,51 @@ MARK="[BAZOR-WATCHER-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 LAST_HEAD=None
 
+def _git(*args):
+    return subprocess.run(["git","-C",ROOT,*args],capture_output=True,text=True,encoding="utf-8",errors="replace")
+
+def _restart_core():
+    core_script=os.path.join(ROOT,"pc-relay","bazor_pc_relay_v3.py")
+    try:
+        if os.name=="nt":
+            ps=r"""Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'bazor_pc_relay_v3\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"""
+            subprocess.run(["powershell","-NoProfile","-Command",ps],capture_output=True,text=True,timeout=12)
+            flags=getattr(subprocess,"CREATE_NEW_CONSOLE",0)
+        else:
+            flags=0
+        env=os.environ.copy()
+        env["BAZOR_MOBILE_PORT"]="8775"
+        subprocess.Popen([sys.executable,core_script],cwd=os.path.dirname(core_script),env=env,creationflags=flags)
+        print("[OK CORE RESTART] BAZOR Core 8775 relance avec la nouvelle version.")
+    except Exception as e:
+        print("[BLOQUE CORE RESTART]",type(e).__name__,str(e))
+
 def safe_update():
     global LAST_HEAD
     try:
-        # Ne depend pas de sous-commandes gh non portables : Git fait le controle MAJ.
-        p=subprocess.run(["git","-C",ROOT,"fetch","origin","main"],capture_output=True,text=True,encoding="utf-8",errors="replace")
+        p=_git("fetch","origin","main")
         if p.returncode:
             print("[BLOQUE UPDATE] git fetch :", (p.stderr or p.stdout).strip())
             return
-        local=subprocess.run(["git","-C",ROOT,"rev-parse","HEAD"],capture_output=True,text=True,encoding="utf-8",errors="replace").stdout.strip()
-        remote=subprocess.run(["git","-C",ROOT,"rev-parse","origin/main"],capture_output=True,text=True,encoding="utf-8",errors="replace").stdout.strip()
+        local=_git("rev-parse","HEAD").stdout.strip()
+        remote=_git("rev-parse","origin/main").stdout.strip()
         if remote and remote != local:
+            changed=_git("diff","--name-only",local,remote).stdout.splitlines()
             print("[UPDATE] Nouvelle version BAZOR detectee :",remote[:7])
-            p=subprocess.run(["git","-C",ROOT,"merge","--ff-only","origin/main"],capture_output=True,text=True,encoding="utf-8",errors="replace")
+            p=_git("merge","--ff-only","origin/main")
             if p.returncode:
                 print("[BLOQUE UPDATE]",(p.stderr or p.stdout).strip())
-            else:
-                print("[OK UPDATE] BAZOR mis a jour :",remote[:7])
-                LAST_HEAD=remote
+                return
+            print("[OK UPDATE] BAZOR mis a jour :",remote[:7])
+            LAST_HEAD=remote
+
+            # Actions locales PREDEFINIES uniquement : aucun ordre shell ne vient de GitHub.
+            if any(x in changed for x in ("pc-relay/bazor_pc_relay_v3.py","pc-relay/mammouth_client.py")):
+                _restart_core()
+
+            if "pc-relay/bazor_github_watcher.py" in changed:
+                print("[SELF UPDATE] Rechargement du watcher avec la nouvelle version...")
+                os.execv(sys.executable,[sys.executable,os.path.abspath(__file__)])
         else:
             LAST_HEAD=local
     except Exception as e:
