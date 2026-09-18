@@ -115,6 +115,45 @@ def _record_usage(model, usage, estimated_cost):
         state["estimated_spent_usd"] = float(state.get("estimated_spent_usd", 0.0) or 0.0) + float(estimated_cost)
     _usage_file().write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
+def _parse_api_json(body):
+    """Tolère les réponses Mammouth contenant plusieurs objets JSON concaténés.
+    Certains proxys/API ajoutent un objet ou une ligne JSON après la réponse principale.
+    On préfère l'objet OpenAI-compatible contenant choices, puis un éventuel error.
+    """
+    text = str(body or "").strip()
+    if not text:
+        raise ValueError("mammouth_empty_body")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        objects = []
+        pos = 0
+        while pos < len(text):
+            while pos < len(text) and text[pos].isspace():
+                pos += 1
+            if pos >= len(text):
+                break
+            try:
+                obj, end = decoder.raw_decode(text, pos)
+                objects.append(obj)
+                pos = end
+                continue
+            except json.JSONDecodeError:
+                nxt = [x for x in (text.find("{", pos + 1), text.find("[", pos + 1)) if x >= 0]
+                if not nxt:
+                    break
+                pos = min(nxt)
+        for obj in objects:
+            if isinstance(obj, dict) and "choices" in obj:
+                return obj
+        for obj in objects:
+            if isinstance(obj, dict) and "error" in obj:
+                return obj
+        if objects:
+            return objects[-1]
+        raise
+
 
 def chat(text, task_kind="general", profile=None, max_tokens=3000):
     key = os.getenv("MAMMOUTH_API_KEY", "").strip()
@@ -189,7 +228,7 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
                 "detail": detail[:600],
                 "budget": budget_status(),
             }
-        data = json.loads(body)
+        data = _parse_api_json(body)
         choice = (data.get("choices") or [{}])[0]
         message = choice.get("message") or {}
         actual_model = data.get("model") or model
