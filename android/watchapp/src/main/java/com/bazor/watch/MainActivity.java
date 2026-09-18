@@ -24,6 +24,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelUuid;
 import android.provider.Settings;
 import android.view.View;
 import android.view.ViewGroup;
@@ -53,6 +54,7 @@ public class MainActivity extends Activity {
     private TextView linkMetrics;
     private TextView details;
     private TextView securityResult;
+    private TextView profileResult;
     private TextView audioResult;
     private LinearLayout candidatesBox;
     private Button watchToggle;
@@ -86,7 +88,7 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-            "Montre • micro-coupures • sécurité • audio local", 13,
+            "Montre • signal BLE • sécurité • profils audio", 13,
             Color.rgb(154, 181, 207), false);
         subtitle.setPadding(0, 0, 0, dp(14));
         root.addView(subtitle);
@@ -137,6 +139,18 @@ public class MainActivity extends Activity {
         LinearLayout secCard = card();
         secCard.addView(securityResult);
         root.addView(secCard);
+
+        root.addView(section("PROFILS BLUETOOTH / AUDIO"));
+        TextView profileInfo = text(
+            "Analyse les profils Bluetooth annoncés par la montre et les routes audio Android, sans ouvrir le micro.",
+            12, Color.rgb(154, 181, 207), false);
+        root.addView(profileInfo);
+        Button profiles = button("ANALYSER LES PROFILS", v -> analyzeProfiles());
+        root.addView(profiles);
+        profileResult = text("Pas encore analysé.", 12, Color.rgb(182, 207, 230), false);
+        LinearLayout profileCard = card();
+        profileCard.addView(profileResult);
+        root.addView(profileCard);
 
         root.addView(section("TEST MICRO / SON"));
         TextView audioInfo = text(
@@ -329,7 +343,7 @@ public class MainActivity extends Activity {
         int color = Color.rgb(255, 210, 80);
         String label = "RECHERCHE…";
         if ("OK".equals(status)) { label = "DÉTECTÉE"; color = Color.rgb(69, 212, 131); }
-        else if ("LOST".equals(status)) { label = "MICRO-COUPURE"; color = Color.rgb(255, 107, 107); }
+        else if ("LOST".equals(status)) { label = "SIGNAL BLE ABSENT"; color = Color.rgb(255, 107, 107); }
         else if ("BT_OFF".equals(status)) { label = "BLUETOOTH COUPÉ"; color = Color.rgb(255, 107, 107); }
         else if ("PERMISSION".equals(status)) { label = "AUTORISATION REQUISE"; color = Color.rgb(255, 107, 107); }
         else if ("SCAN_ERROR".equals(status)) { label = "SCAN À RELANCER"; color = Color.rgb(255, 107, 107); }
@@ -346,7 +360,7 @@ public class MainActivity extends Activity {
         linkMetrics.setText(
             "RSSI " + (rssi > -120 ? rssi + " dBm" : "—") +
             " • vue " + seen +
-            " • coupures " + outages +
+            " • pertes signal " + outages +
             " • reprises " + recoveries +
             (fast ? " • relance rapide" : ""));
 
@@ -509,8 +523,9 @@ public class MainActivity extends Activity {
                 bondText(mac) +
                 "\nServices : " + services + " • caractéristiques : " + chars +
                 "\nLecture : " + readable + " • écriture possible : " + writable + " • notifications : " + notify +
-                "\nPermissions exigeant chiffrement : " + encrypted +
-                "\nPermissions exigeant protection MITM : " + mitm +
+                "\nPermissions GATT marquées chiffrement : " + encrypted +
+                "\nPermissions GATT marquées MITM : " + mitm +
+                "\nImportant : 0 ici ne prouve PAS que la liaison radio est non chiffrée ; ces compteurs décrivent seulement les permissions déclarées par les caractéristiques." +
                 "\nAucune valeur GATT n’a été lue ou écrite.";
 
             finishGatt(gatt, report);
@@ -526,6 +541,89 @@ public class MainActivity extends Activity {
     private void closeGatt(BluetoothGatt gatt) {
         try { gatt.close(); } catch (Exception ignored) {}
         if (gatt == activeGatt) activeGatt = null;
+    }
+
+    private void analyzeProfiles() {
+        String mac = prefs.getString("targetMac", "");
+        if (mac == null || mac.isEmpty()) {
+            profileResult.setText("Choisis d’abord la montre.");
+            return;
+        }
+        if (!blePermissionsGranted()) {
+            profileResult.setText("Autorisation Bluetooth requise.");
+            ensureBlePermissionsAndStart();
+            return;
+        }
+
+        try {
+            BluetoothDevice d = adapter.getRemoteDevice(mac);
+            StringBuilder out = new StringBuilder();
+            out.append(bondText(mac)).append("\n");
+
+            ParcelUuid[] uuids = d.getUuids();
+            boolean hfp = false, hsp = false, a2dpSink = false, a2dpSource = false;
+            if (uuids != null && uuids.length > 0) {
+                out.append("Profils/UUID connus : ").append(uuids.length).append("\n");
+                for (ParcelUuid p : uuids) {
+                    String u = p.getUuid().toString().toLowerCase(Locale.ROOT);
+                    String label = uuidLabel(u);
+                    if (u.startsWith("0000111e-")) hfp = true;
+                    if (u.startsWith("00001108-")) hsp = true;
+                    if (u.startsWith("0000110b-")) a2dpSink = true;
+                    if (u.startsWith("0000110a-")) a2dpSource = true;
+                    if (!label.isEmpty()) out.append("• ").append(label).append("\n");
+                }
+            } else {
+                out.append("Profils classiques : non disponibles dans le cache Android.\n");
+            }
+
+            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+            AudioDeviceInfo btIn = findBluetoothInput(am);
+            AudioDeviceInfo btOut = findBluetoothCommunicationOutput(am);
+
+            out.append("Micro Bluetooth visible par Android : ")
+                .append(btIn == null ? "NON" : "OUI • " + deviceLabel(btIn)).append("\n");
+            out.append("Sortie communication Bluetooth : ")
+                .append(btOut == null ? "NON" : "OUI • " + deviceLabel(btOut)).append("\n");
+
+            if (hfp || hsp) {
+                out.append("Téléphonie/micro potentiel : profil ")
+                    .append(hfp ? "HFP" : "HSP")
+                    .append(" annoncé, mais Android ne l’expose pas forcément tant qu’un appel/flux voix n’est pas actif.\n");
+            } else {
+                out.append("Téléphonie/micro potentiel : aucun profil HFP/HSP actuellement annoncé dans le cache.\n");
+            }
+
+            if (a2dpSink || a2dpSource) {
+                out.append("Audio média : ")
+                    .append(a2dpSink ? "réception A2DP " : "")
+                    .append(a2dpSource ? "émission A2DP" : "")
+                    .append(".\n");
+            } else {
+                out.append("Audio média : aucun profil A2DP identifié dans le cache.\n");
+            }
+
+            out.append("Conclusion : le BLE de données et l’audio Bluetooth sont deux chemins distincts.");
+            profileResult.setText(out.toString());
+        } catch (Exception e) {
+            profileResult.setText("Analyse des profils impossible : " +
+                (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+        }
+    }
+
+    private String uuidLabel(String u) {
+        if (u.startsWith("0000111e-")) return "HFP Hands-Free (voix/appels)";
+        if (u.startsWith("0000111f-")) return "HFP Audio Gateway";
+        if (u.startsWith("00001108-")) return "Headset HSP";
+        if (u.startsWith("0000110b-")) return "A2DP Audio Sink";
+        if (u.startsWith("0000110a-")) return "A2DP Audio Source";
+        if (u.startsWith("0000110c-")) return "AVRCP Target";
+        if (u.startsWith("0000110e-")) return "AVRCP";
+        if (u.startsWith("00001800-")) return "GAP BLE";
+        if (u.startsWith("00001801-")) return "GATT BLE";
+        if (u.startsWith("0000180a-")) return "Device Information";
+        if (u.startsWith("0000180f-")) return "Battery Service";
+        return "";
     }
 
     private void testMicrophone() {
