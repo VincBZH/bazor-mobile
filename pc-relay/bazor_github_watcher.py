@@ -10,6 +10,7 @@ MARK="[BAZOR-WATCHER-DONE]"
 DIAG_MARK="[BAZOR-DIAG-DONE]"
 MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
 TASK_MARK="[BAZOR-TASK-DONE]"
+QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
@@ -679,6 +680,20 @@ def _run_registry_task(task_id):
         "reviews":reviews,"execution":execution,
         "answer":str(result.get("answer") or "")[:7000],
     }
+
+def _run_studio_qualification():
+    script=os.path.join(ROOT,"pc-relay","bazor_studio_qualifier.py")
+    if not os.path.exists(script): return {"ok":False,"error":"qualifier_missing","detail":script}
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    try:
+        cp=subprocess.run([sys.executable,script,"--compact"],cwd=ROOT,capture_output=True,text=True,encoding="utf-8",errors="replace",timeout=900,creationflags=flags)
+    except Exception as exc:
+        return {"ok":False,"error":type(exc).__name__,"detail":str(exc)[:1200]}
+    latest=os.path.join(ROOT,"pc-relay","BAZOR_DATA","STUDIO_QUALIFICATION","latest.json")
+    try: report=json.load(open(latest,"r",encoding="utf-8"))
+    except Exception as exc: return {"ok":False,"error":"report_unreadable","detail":str(exc)[:1000],"stdout":cp.stdout[-4000:],"stderr":cp.stderr[-4000:]}
+    summary=report.get("summary") or {}; failures=[x for x in report.get("results",[]) if not x.get("ok")]
+    return {"ok":bool(summary.get("operational")),"returncode":cp.returncode,"summary":summary,"failures":failures,"report_file":latest,"stdout":cp.stdout[-5000:],"stderr":cp.stderr[-3000:]}
 
 def answer_text(result):
     for section in ("mammouth","ollama"):
