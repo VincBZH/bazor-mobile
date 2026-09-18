@@ -192,6 +192,8 @@ jobs:
           assert "bazor_pc_relay_v3" in cmd
           assert "pause" in cmd.lower(), "CMD must stay open on failure"
           assert "BAZOR_STUDIO_NO_PAUSE" in cmd, "automated no-pause gate missing"
+          assert "^|" not in cmd, "CMD must not leak caret-pipe into PowerShell"
+          assert "foreach($cand in $cands)" in cmd, "safe Python candidate loop missing"
           assert "BAZOR_STUDIO_TEST_ONLY" in launcher, "safe env test gate missing"
           assert "[bazor-certify:studio]" in watcher
           assert "_run_studio_certified_test" in watcher

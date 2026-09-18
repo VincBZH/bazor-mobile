@@ -20,15 +20,14 @@ if not exist "%SCRIPT%" (
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$script='%SCRIPT%';" ^
-  "$py=$null;" ^
-  "$p=Get-CimInstance Win32_Process ^| Where-Object { ([string]$_.CommandLine) -match 'bazor_pc_relay_v3\.py' -and $_.ExecutablePath } ^| Select-Object -First 1;" ^
-  "if($p){$py=$p.ExecutablePath};" ^
-  "if(-not $py){$cmd=Get-Command py.exe -ErrorAction SilentlyContinue;if($cmd){$py=$cmd.Source;$args=@('-3',$script)}else{$args=@($script)}}else{$args=@($script)};" ^
-  "if(-not $py){$cands=@($env:LOCALAPPDATA+'\Programs\Python\Python313\python.exe',$env:LOCALAPPDATA+'\Programs\Python\Python312\python.exe',$env:LOCALAPPDATA+'\Programs\Python\Python311\python.exe','C:\Python313\python.exe','C:\Python312\python.exe','C:\Python311\python.exe');$py=$cands ^| Where-Object { Test-Path $_ } ^| Select-Object -First 1;$args=@($script)};" ^
+  "$script='%SCRIPT%';$py=$null;$launchArgs=@($script);" ^
+  "$procs=Get-CimInstance Win32_Process -ErrorAction SilentlyContinue;" ^
+  "foreach($p in $procs){if(([string]$p.CommandLine) -match 'bazor_pc_relay_v3\.py' -and $p.ExecutablePath){$py=$p.ExecutablePath;break}};" ^
+  "if(-not $py){$cmd=Get-Command py.exe -ErrorAction SilentlyContinue;if($cmd){$py=$cmd.Source;$launchArgs=@('-3',$script)}};" ^
+  "if(-not $py){$cands=@($env:LOCALAPPDATA+'\Programs\Python\Python313\python.exe',$env:LOCALAPPDATA+'\Programs\Python\Python312\python.exe',$env:LOCALAPPDATA+'\Programs\Python\Python311\python.exe','C:\Python313\python.exe','C:\Python312\python.exe','C:\Python311\python.exe');foreach($cand in $cands){if(Test-Path $cand){$py=$cand;$launchArgs=@($script);break}}};" ^
   "if(-not $py){Write-Host '[BLOQUE] Python BAZOR introuvable.' -ForegroundColor Red;exit 11};" ^
   "Write-Host ('Python: '+$py);" ^
-  "& $py @args;exit $LASTEXITCODE"
+  "& $py @launchArgs;exit $LASTEXITCODE"
 
 set "RC=%ERRORLEVEL%"
 echo.
