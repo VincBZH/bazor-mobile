@@ -6,22 +6,19 @@ if errorlevel 1 (
   exit /b
 )
 chcp 65001 >nul
-title BAZOR - LANCEUR CENTRAL
+title BAZOR - ONE CLICK
 set "ROOT=%USERPROFILE%\bazor-mobile"
 cd /d "%ROOT%"
 
 where python >nul 2>nul || (echo [BLOQUE] Python introuvable.& pause& exit /b 1)
 where git >nul 2>nul || (echo [BLOQUE] Git introuvable.& pause& exit /b 1)
 
-echo [INFO] Mise a jour BAZOR...
-git pull
+git pull >nul 2>&1
 
-echo [INFO] Pare-feu reseau local...
 netsh advfirewall firewall delete rule name="BAZOR Mobile Core 8775" >nul 2>nul
 netsh advfirewall firewall add rule name="BAZOR Mobile Core 8775" dir=in action=allow protocol=TCP localport=8775 profile=any remoteip=localsubnet >nul 2>nul
 netsh advfirewall firewall delete rule name="BAZOR Mobile Web 8776" >nul 2>nul
 netsh advfirewall firewall add rule name="BAZOR Mobile Web 8776" dir=in action=allow protocol=TCP localport=8776 profile=any remoteip=localsubnet >nul 2>nul
 
-echo [INFO] Lancement du tableau central BAZOR Console Hub...
 call "%ROOT%\LANCER_BAZOR_CONSOLE_HUB.cmd"
 exit /b 0
