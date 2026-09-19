@@ -43,8 +43,10 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class MainActivity extends Activity {
     private static final int REQ_BLE = 5101;
@@ -53,6 +55,7 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private SharedPreferences prefs;
+    private BluetoothManager bluetoothManager;
     private BluetoothAdapter adapter;
 
     private TextView linkState;
@@ -76,8 +79,8 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         prefs = getSharedPreferences(BleWatchService.PREFS, MODE_PRIVATE);
-        BluetoothManager bm = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
-        adapter = bm != null ? bm.getAdapter() : null;
+        bluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
+        adapter = bluetoothManager != null ? bluetoothManager.getAdapter() : null;
 
         buildUi();
         ensureBlePermissionsAndStart();
@@ -194,9 +197,9 @@ public class MainActivity extends Activity {
         audioCard.addView(audioResult);
         root.addView(audioCard);
 
-        root.addView(section("APPAREILS BLE PROCHES"));
+        root.addView(section("APPAREILS BLE PROCHES / CONNUS"));
         TextView hint = text(
-            "Choisis la montre. Les adresses restent masquées hors du bouton Appairage / détails.",
+            "Montre déjà liée à Da Fit ? BAZOR affiche aussi les appareils GATT connectés, appairés Android et routes audio Bluetooth. Choisis ta montre une seule fois.",
             12, Color.rgb(154, 181, 207), false);
         root.addView(hint);
 
@@ -205,7 +208,7 @@ public class MainActivity extends Activity {
         root.addView(candidatesBox);
 
         TextView privacy = text(
-            "Confidentialité : BAZOR Watch n’a aucune permission Internet. Les diagnostics Bluetooth et audio restent sur le téléphone.",
+            "Confidentialité : les diagnostics Bluetooth et audio restent sur le téléphone. Internet sert uniquement à vérifier les mises à jour GitHub.",
             11, Color.rgb(102, 139, 171), false);
         privacy.setPadding(0, dp(18), 0, 0);
         root.addView(privacy);
@@ -465,6 +468,7 @@ public class MainActivity extends Activity {
         int color = Color.rgb(255, 210, 80);
         String label = "RECHERCHE…";
         if ("OK".equals(status)) { label = "DÉTECTÉE"; color = Color.rgb(69, 212, 131); }
+        else if ("CONNECTED".equals(status)) { label = "CONNECTÉE VIA ANDROID"; color = Color.rgb(69, 212, 131); }
         else if ("LOST".equals(status)) { label = "SIGNAL BLE ABSENT"; color = Color.rgb(255, 107, 107); }
         else if ("BT_OFF".equals(status)) { label = "BLUETOOTH COUPÉ"; color = Color.rgb(255, 107, 107); }
         else if ("PERMISSION".equals(status)) { label = "AUTORISATION REQUISE"; color = Color.rgb(255, 107, 107); }
@@ -479,9 +483,10 @@ public class MainActivity extends Activity {
 
         String seen = lastSeen <= 0 ? "jamais" :
             Math.max(0, (System.currentTimeMillis() - lastSeen) / 1000L) + " s";
+        String presence = "CONNECTED".equals(status) ? "liaison Android active" : "vue " + seen;
         linkMetrics.setText(
             "RSSI " + (rssi > -120 ? rssi + " dBm" : "—") +
-            " • vue " + seen +
+            " • " + presence +
             " • pertes signal " + outages +
             " • reprises " + recoveries +
             (fast ? " • relance rapide" : ""));
@@ -503,34 +508,150 @@ public class MainActivity extends Activity {
 
     private void renderCandidates(String targetMac) {
         candidatesBox.removeAllViews();
+        LinkedHashMap<String, DeviceRow> rows = new LinkedHashMap<>();
+
         String raw = prefs.getString("candidates", "[]");
         try {
             JSONArray arr = new JSONArray(raw);
-            if (arr.length() == 0) {
-                candidatesBox.addView(text("Aucun appareil vu pour le moment.", 12,
-                    Color.rgb(154, 181, 207), false));
-                return;
-            }
-
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.optJSONObject(i);
                 if (o == null) continue;
-                String mac = o.optString("mac", "");
-                String name = o.optString("name", "");
-                int rssi = o.optInt("rssi", -127);
-                boolean selected = mac.equalsIgnoreCase(targetMac == null ? "" : targetMac);
-
-                Button b = button(
-                    (selected ? "✓ " : "⌚ ") +
-                    (name.isEmpty() ? "Appareil BLE" : name) +
-                    "\n" + maskMac(mac) + " • " + rssi + " dBm",
-                    v -> selectTarget(mac, name));
-                if (selected) b.setBackgroundColor(Color.rgb(15, 102, 117));
-                candidatesBox.addView(b);
+                mergeDevice(rows,
+                    o.optString("mac", ""),
+                    o.optString("name", ""),
+                    o.optInt("rssi", -127),
+                    true, false, false);
             }
-        } catch (Exception e) {
-            candidatesBox.addView(text("Liste BLE indisponible.", 12, Color.rgb(255, 107, 107), false));
+        } catch (Exception ignored) {}
+
+        addSystemKnownDevices(rows);
+
+        if (rows.isEmpty()) {
+            candidatesBox.addView(text(
+                "Aucun appareil BLE visible ou connu pour le moment. Da Fit peut conserver une liaison privée non exposée par Android.",
+                12, Color.rgb(154, 181, 207), false));
+            return;
         }
+
+        for (DeviceRow row : rows.values()) {
+            boolean selected = row.mac.equalsIgnoreCase(targetMac == null ? "" : targetMac);
+            StringBuilder source = new StringBuilder();
+            if (row.connectedGatt) source.append("connecté GATT");
+            if (row.bonded) {
+                if (source.length() > 0) source.append(" • ");
+                source.append("appairé Android");
+            }
+            if (row.audio) {
+                if (source.length() > 0) source.append(" • ");
+                source.append("audio BT");
+            }
+            if (row.seenByScan) {
+                if (source.length() > 0) source.append(" • ");
+                source.append("scan BLE");
+            }
+
+            String signal = row.seenByScan && row.rssi > -120 ? " • " + row.rssi + " dBm" : "";
+            Button b = button(
+                (selected ? "✓ " : "⌚ ") +
+                (row.name.isEmpty() ? "Appareil Bluetooth" : row.name) +
+                "\n" + maskMac(row.mac) + signal +
+                (source.length() == 0 ? "" : "\n" + source),
+                v -> selectTarget(row.mac, row.name));
+            if (selected) b.setBackgroundColor(Color.rgb(15, 102, 117));
+            else if (row.connectedGatt) b.setBackgroundColor(Color.rgb(20, 88, 74));
+            candidatesBox.addView(b);
+        }
+    }
+
+    private void addSystemKnownDevices(LinkedHashMap<String, DeviceRow> rows) {
+        if (adapter == null || !blePermissionsGranted()) return;
+
+        if (bluetoothManager != null) {
+            try {
+                List<BluetoothDevice> connected = bluetoothManager.getConnectedDevices(BluetoothProfile.GATT);
+                if (connected != null) {
+                    for (BluetoothDevice d : connected) {
+                        mergeBluetoothDevice(rows, d, true, false);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        try {
+            for (BluetoothDevice d : adapter.getBondedDevices()) {
+                mergeBluetoothDevice(rows, d, false, true);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+            if (am != null) {
+                addAudioDevices(rows, am.getDevices(AudioManager.GET_DEVICES_INPUTS));
+                addAudioDevices(rows, am.getDevices(AudioManager.GET_DEVICES_OUTPUTS));
+                if (Build.VERSION.SDK_INT >= 31) {
+                    for (AudioDeviceInfo d : am.getAvailableCommunicationDevices()) {
+                        addAudioDevice(rows, d);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void mergeBluetoothDevice(LinkedHashMap<String, DeviceRow> rows, BluetoothDevice device,
+                                      boolean connectedGatt, boolean bonded) {
+        if (device == null) return;
+        try {
+            String mac = device.getAddress();
+            String name = device.getName();
+            mergeDevice(rows, mac, name == null ? "" : name, -127, false, connectedGatt, bonded);
+        } catch (SecurityException ignored) {}
+    }
+
+    private void addAudioDevices(LinkedHashMap<String, DeviceRow> rows, AudioDeviceInfo[] devices) {
+        if (devices == null) return;
+        for (AudioDeviceInfo d : devices) addAudioDevice(rows, d);
+    }
+
+    private void addAudioDevice(LinkedHashMap<String, DeviceRow> rows, AudioDeviceInfo d) {
+        if (d == null || !isBluetoothType(d.getType()) || Build.VERSION.SDK_INT < 28) return;
+        try {
+            String mac = d.getAddress();
+            if (!BluetoothAdapter.checkBluetoothAddress(mac)) return;
+            String name = d.getProductName() == null ? "" : d.getProductName().toString();
+            DeviceRow row = mergeDevice(rows, mac, name, -127, false, false, false);
+            if (row != null) row.audio = true;
+        } catch (Exception ignored) {}
+    }
+
+    private DeviceRow mergeDevice(LinkedHashMap<String, DeviceRow> rows, String mac, String name, int rssi,
+                                  boolean seenByScan, boolean connectedGatt, boolean bonded) {
+        if (mac == null || !BluetoothAdapter.checkBluetoothAddress(mac)) return null;
+        String key = mac.toUpperCase(Locale.ROOT);
+        DeviceRow row = rows.get(key);
+        if (row == null) {
+            row = new DeviceRow(key);
+            rows.put(key, row);
+        }
+        if (name != null && !name.trim().isEmpty()) row.name = name.trim();
+        if (seenByScan) {
+            row.seenByScan = true;
+            row.rssi = rssi;
+        }
+        row.connectedGatt = row.connectedGatt || connectedGatt;
+        row.bonded = row.bonded || bonded;
+        return row;
+    }
+
+    private static class DeviceRow {
+        final String mac;
+        String name = "";
+        int rssi = -127;
+        boolean seenByScan;
+        boolean connectedGatt;
+        boolean bonded;
+        boolean audio;
+
+        DeviceRow(String mac) { this.mac = mac; }
     }
 
     private void selectTarget(String mac, String name) {
