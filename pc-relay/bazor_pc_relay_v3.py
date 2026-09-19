@@ -40,6 +40,23 @@ MOBILE_STATE_FILE = DATA_DIR / "mobile_state.json"
 for folder in (DATA_DIR, FILES_DIR, GENERATED_DIR):
     folder.mkdir(parents=True, exist_ok=True)
 
+def _runtime_code_signature():
+    h=hashlib.sha256()
+    for p in (
+        Path(__file__).resolve(),
+        BASE_DIR / "bazor_action_engine.py",
+        BASE_DIR / "bazor_security.py",
+        BASE_DIR / "mammouth_client.py",
+    ):
+        try:
+            h.update(str(p.name).encode("utf-8"))
+            h.update(p.read_bytes())
+        except Exception:
+            h.update(("missing:"+str(p)).encode("utf-8"))
+    return h.hexdigest()
+
+CORE_RUNTIME_SIGNATURE=_runtime_code_signature()
+
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_CONTEXT_CHARS_PER_FILE = 24000
 MAX_CONTEXT_CHARS_TOTAL = 48000
@@ -1085,6 +1102,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "ok": True,
                 "service": "BAZOR API",
                 "version": "3.0",
+                "runtime_signature": CORE_RUNTIME_SIGNATURE,
                 "pc": hostname,
                 "time": now_iso(),
                 "ollama": {"online": online, "models": models},
