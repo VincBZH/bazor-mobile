@@ -1574,6 +1574,11 @@ while True:
                         if review_lines:
                             reply+="\n\nSecondes lectures:\n"+review_lines
                         reply+="\n\nMoteur final: "+str(result.get("engine") or "?")+" / "+str(result.get("model") or "?")
+                        if result.get("task_status")=="BLOCKED":
+                            if result.get("error") or result.get("detail"):
+                                reply+="\nErreur: "+str(result.get("error") or "?")+"\nDétail: "+str(result.get("detail") or "")[:1800]
+                            if result.get("runtime_checks"):
+                                reply+="\nRuntime checks: "+json.dumps(result.get("runtime_checks"),ensure_ascii=False,separators=(",",":"))[:5000]
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
                         print(f"[OK TASK] #{issue['number']} {task_id} -> {result.get('task_status')}")
                         if result.get("task_status") in ("DONE","VERIFIE"):
