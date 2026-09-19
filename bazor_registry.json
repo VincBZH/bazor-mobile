@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.19.5",
+  "version": "2026.09.19.6",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -174,7 +174,18 @@
           "proof_required": "all_gates_and_runtime_proof"
         }
       ],
-      "operational_target": "AI ROOM est DELIVERED uniquement si protocole, patch local, CI, runtime HTTP/UI, Ollama, Mammouth, fallbacks, preuves et handoff sont validés; aucune simple présence de fichiers ne vaut livraison."
+      "operational_target": "AI ROOM est DELIVERED uniquement si protocole, patch local, CI, runtime HTTP/UI, Ollama, Mammouth, fallbacks, preuves et handoff sont validés; aucune simple présence de fichiers ne vaut livraison.",
+      "autonomy_policy": {
+        "priority": "MAX_AUTOMATION",
+        "human_intervention": "ONLY_IF_NEEDS_HUMAN",
+        "autochain_all_registry_tasks": true,
+        "default_failure_route": "DEFAULT_RECOVERY",
+        "transient_retry_max": 1,
+        "identical_error_stop_after": 2,
+        "alternate_provider_on_repeat": true,
+        "queue_if_no_provider": true,
+        "never_wait_for_manual_confirmation_between_whitelisted_tasks": true
+      }
     },
     {
       "id": "simple-studio",
