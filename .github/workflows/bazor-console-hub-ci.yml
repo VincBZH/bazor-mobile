@@ -208,12 +208,14 @@ jobs:
               "    # live comment differs\n"
               "    current=graph\n"
               "    return current\n\n"
+              "TEXT_INPUTS=('text','prompt')\n\n"
               "def _next():\n"
-              "    return 1\n"
+              "    return TEXT_INPUTS[0]\n"
           ).encode("utf-8")
           candidate,changed,state=h.candidate_bytes(live_variant)
           assert changed and state=="patched"
           assert b"fallback_widget_fields" in candidate
+          assert b"TEXT_INPUTS=('text','prompt')" in candidate
           assert b"def _next():" in candidate
           compile(candidate.decode("utf-8"),"<candidate>","exec")
           api=conv(ui)
