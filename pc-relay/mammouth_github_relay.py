@@ -25,7 +25,8 @@ MAX_PROMPT_CHARS = 30000
 MAX_REPLY_CHARS = 55000
 OLLAMA_URL = os.getenv("BAZOR_OLLAMA_URL", "http://127.0.0.1:11434")
 STUDIO_ROOT = Path(os.getenv("BAZOR_STUDIO_ROOT", r"C:\AI\SimpleStudioV2"))
-STUDIO_CONTEXT_MAX_CHARS = 24000
+STUDIO_CONTEXT_MAX_CHARS = 14000
+OLLAMA_REVIEW_TIMEOUT_SECONDS = max(120, int(os.getenv("BAZOR_OLLAMA_REVIEW_TIMEOUT_SECONDS", "300")))
 STUDIO_CONTEXT_EXTS = {".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".json", ".md", ".txt", ".ps1", ".cmd", ".bat", ".yml", ".yaml"}
 STUDIO_CONTEXT_SKIP = {"logs", "log", "models", "checkpoints", "output", "outputs", "cache", "temp", "tmp", "venv", ".venv", "__pycache__", "node_modules", ".git"}
 STUDIO_KEYWORDS = (
@@ -330,7 +331,7 @@ def ollama_review(prompt):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=240) as response:
+        with urllib.request.urlopen(req, timeout=OLLAMA_REVIEW_TIMEOUT_SECONDS) as response:
             data = json.loads(response.read().decode("utf-8", errors="replace"))
         answer = str(((data.get("message") or {}).get("content") or "")).strip()
         return {"ok": bool(answer), "provider": "ollama", "model": model, "answer": answer, "error": None if answer else "empty_answer"}
@@ -344,7 +345,7 @@ def is_to_trio(comment):
 
 
 def build_trio_prompt(comment_body, request_id, local_context, local_report):
-    body = str(comment_body or "")[:9000]
+    body = str(comment_body or "")[:6000]
     context = str(local_context or "")[:STUDIO_CONTEXT_MAX_CHARS]
     files = ", ".join(local_report.get("files") or []) or "aucun fichier local lisible"
     return f"""Tu participes à une revue BAZOR à trois cerveaux pour AI Simple Studio.
@@ -388,6 +389,12 @@ def process_trio_comment(comment):
         max_tokens=5000,
     )
 
+    # Ne jamais afficher OK si le fournisseur n'a pas réellement renvoyé de texte.
+    ollama_answer = str(ollama.get("answer") or "").strip()
+    mammouth_answer = str(mammouth.get("answer") or "").strip()
+    ollama_ok = bool(ollama.get("ok") and ollama_answer)
+    mammouth_ok = bool(mammouth.get("ok") and mammouth_answer)
+
     files = ", ".join(local_report.get("files") or []) or "aucun"
     reply = (
         "[FROM_BAZOR_TRIO]\n"
@@ -395,14 +402,14 @@ def process_trio_comment(comment):
         f"SOURCE_COMMENT_ID: {cid}\n"
         f"STUDIO_CONTEXT: {'OK' if local_report.get('available') else 'UNAVAILABLE'}\n"
         f"STUDIO_FILES: {files}\n"
-        f"OLLAMA_STATUS: {'OK' if ollama.get('ok') else 'BLOCKED'}\n"
+        f"OLLAMA_STATUS: {'OK' if ollama_ok else 'BLOCKED'}\n"
         f"OLLAMA_MODEL: {ollama.get('model') or 'none'}\n"
-        f"MAMMOUTH_STATUS: {'OK' if mammouth.get('ok') else 'BLOCKED'}\n"
+        f"MAMMOUTH_STATUS: {'OK' if mammouth_ok else 'BLOCKED'}\n"
         f"MAMMOUTH_MODEL: {mammouth.get('model') or 'none'}\n\n"
         "=== AVIS OLLAMA LOCAL ===\n"
-        + (ollama.get("answer") or ("BLOQUE: " + str(ollama.get("error") or "indisponible")))
+        + (ollama_answer or ("BLOQUE: " + str(ollama.get("error") or "indisponible")))
         + "\n\n=== AVIS MAMMOUTH EN LIGNE ===\n"
-        + (mammouth.get("answer") or ("BLOQUE: " + str(mammouth.get("message") or mammouth.get("error") or "indisponible")))
+        + (mammouth_answer or ("BLOQUE: " + str(mammouth.get("message") or mammouth.get("error") or "indisponible")))
         + "\n\n=== HANDOFF GPT ===\n"
         "GPT doit comparer les deux avis, arbitrer les divergences et produire/appliquer le patch final vérifiable.\n"
         "[/FROM_BAZOR_TRIO]"
@@ -410,7 +417,7 @@ def process_trio_comment(comment):
     post_comment(reply)
     log(
         "Retour trio publie id=%s ollama=%s mammouth=%s" %
-        (cid, bool(ollama.get("ok")), bool(mammouth.get("ok")))
+        (cid, ollama_ok, mammouth_ok)
     )
 
 
@@ -464,6 +471,8 @@ def selftest():
         raise AssertionError("post_comment must use stdin_json for large Trio replies")
     if is_to_trio({"body": "[FROM_BAZOR_TRIO]\nREQUEST_ID: TEST"}):
         raise AssertionError("trio response must not be reprocessed")
+    if STUDIO_CONTEXT_MAX_CHARS > 16000:
+        raise AssertionError("trio local context too large for local 7B review")
     for text, expected in tests:
         got = classify_profile(text)
         if got != expected:
