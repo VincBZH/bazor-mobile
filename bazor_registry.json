@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.19.2",
+  "version": "2026.09.19.3",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -869,5 +869,16 @@
   ],
   "knowledge_base": "BAZOR_ENCYCLOPEDIA.md",
   "encyclopedia_updated_at": "2026-09-19",
-  "encyclopedia_sync_required": true
+  "encyclopedia_sync_required": true,
+  "version_history": [
+    {
+      "component": "BAZOR Studio V4 Trio Chain",
+      "version": "2026.09.19.3",
+      "generated_at": "2026-09-19",
+      "artifact": null,
+      "changes": "Ollama local -> Mammouth Claude/Gemini -> GPT-5.6 Sol arbiter -> optional local repair -> re-review",
+      "tests": "Action Engine preflight/tests/rollback remain required at runtime",
+      "status": "PATCH"
+    }
+  ]
 }
