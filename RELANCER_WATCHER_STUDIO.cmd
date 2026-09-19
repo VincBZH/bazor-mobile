@@ -44,6 +44,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$s=Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'bazor_watcher_supervisor\.py' }; $w=Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'bazor_github_watcher\.py' }; if($s -and $w){exit 0}else{exit 1}"
-if errorlevel 1 exit /b 8
+if errorlevel 1 (
+  echo [%DATE% %TIME%] WATCHER_START_FAILED>>"%ROOT%\pc-relay\BAZOR_DATA\HUB_LOGS\studio_watcher_boot.log"
+  powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'bazor_watcher_supervisor\.py|bazor_github_watcher\.py' } | Select-Object ProcessId,CommandLine | Out-File -FilePath '%ROOT%\pc-relay\BAZOR_DATA\HUB_LOGS\studio_watcher_processes.txt' -Encoding utf8"
+  exit /b 8
+)
+
+for /f %%H in ('git rev-parse HEAD 2^>nul') do set "HEADSHA=%%H"
+echo [%DATE% %TIME%] WATCHER_START_OK head=%HEADSHA%>>"%ROOT%\pc-relay\BAZOR_DATA\HUB_LOGS\studio_watcher_boot.log"
 
 exit /b 0
