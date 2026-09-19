@@ -57,6 +57,8 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private BluetoothManager bluetoothManager;
     private BluetoothAdapter adapter;
+    private BluetoothProfile a2dpProxy;
+    private BluetoothProfile headsetProxy;
 
     private TextView linkState;
     private TextView watchName;
@@ -81,6 +83,7 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences(BleWatchService.PREFS, MODE_PRIVATE);
         bluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
         adapter = bluetoothManager != null ? bluetoothManager.getAdapter() : null;
+        requestClassicProfileProxies();
 
         buildUi();
         ensureBlePermissionsAndStart();
@@ -537,6 +540,17 @@ public class MainActivity extends Activity {
             boolean selected = row.mac.equalsIgnoreCase(targetMac == null ? "" : targetMac);
             StringBuilder source = new StringBuilder();
             if (row.connectedGatt) source.append("connecté GATT");
+            if (row.connectedClassic) {
+                if (source.length() > 0) source.append(" • ");
+                source.append("connecté Android");
+                if (row.a2dp || row.headset) {
+                    source.append(" (");
+                    if (row.a2dp) source.append("A2DP");
+                    if (row.a2dp && row.headset) source.append("+");
+                    if (row.headset) source.append("HFP");
+                    source.append(")");
+                }
+            }
             if (row.bonded) {
                 if (source.length() > 0) source.append(" • ");
                 source.append("appairé Android");
@@ -558,9 +572,31 @@ public class MainActivity extends Activity {
                 (source.length() == 0 ? "" : "\n" + source),
                 v -> selectTarget(row.mac, row.name));
             if (selected) b.setBackgroundColor(Color.rgb(15, 102, 117));
-            else if (row.connectedGatt) b.setBackgroundColor(Color.rgb(20, 88, 74));
+            else if (row.connectedGatt || row.connectedClassic) b.setBackgroundColor(Color.rgb(20, 88, 74));
             candidatesBox.addView(b);
         }
+    }
+
+    private final BluetoothProfile.ServiceListener classicProfileListener = new BluetoothProfile.ServiceListener() {
+        @Override public void onServiceConnected(int profile, BluetoothProfile proxy) {
+            if (profile == BluetoothProfile.A2DP) a2dpProxy = proxy;
+            else if (profile == BluetoothProfile.HEADSET) headsetProxy = proxy;
+            handler.post(MainActivity.this::refresh);
+        }
+
+        @Override public void onServiceDisconnected(int profile) {
+            if (profile == BluetoothProfile.A2DP) a2dpProxy = null;
+            else if (profile == BluetoothProfile.HEADSET) headsetProxy = null;
+            handler.post(MainActivity.this::refresh);
+        }
+    };
+
+    private void requestClassicProfileProxies() {
+        if (adapter == null || !blePermissionsGranted()) return;
+        try { adapter.getProfileProxy(this, classicProfileListener, BluetoothProfile.A2DP); }
+        catch (Exception ignored) {}
+        try { adapter.getProfileProxy(this, classicProfileListener, BluetoothProfile.HEADSET); }
+        catch (Exception ignored) {}
     }
 
     private void addSystemKnownDevices(LinkedHashMap<String, DeviceRow> rows) {
@@ -576,6 +612,9 @@ public class MainActivity extends Activity {
                 }
             } catch (Exception ignored) {}
         }
+
+        addClassicConnectedDevices(rows, a2dpProxy, true, false);
+        addClassicConnectedDevices(rows, headsetProxy, false, true);
 
         try {
             for (BluetoothDevice d : adapter.getBondedDevices()) {
@@ -594,6 +633,29 @@ public class MainActivity extends Activity {
                     }
                 }
             }
+        } catch (Exception ignored) {}
+    }
+
+    private void addClassicConnectedDevices(LinkedHashMap<String, DeviceRow> rows,
+                                            BluetoothProfile proxy,
+                                            boolean a2dp, boolean headset) {
+        if (proxy == null || !blePermissionsGranted()) return;
+        try {
+            List<BluetoothDevice> devices = proxy.getConnectedDevices();
+            if (devices == null) return;
+            for (BluetoothDevice d : devices) {
+                if (d == null) continue;
+                String mac = d.getAddress();
+                String name = d.getName();
+                DeviceRow row = mergeDevice(rows, mac, name == null ? "" : name,
+                    -127, false, false, false);
+                if (row != null) {
+                    row.connectedClassic = true;
+                    row.a2dp = row.a2dp || a2dp;
+                    row.headset = row.headset || headset;
+                }
+            }
+        } catch (SecurityException ignored) {
         } catch (Exception ignored) {}
     }
 
@@ -648,6 +710,9 @@ public class MainActivity extends Activity {
         int rssi = -127;
         boolean seenByScan;
         boolean connectedGatt;
+        boolean connectedClassic;
+        boolean a2dp;
+        boolean headset;
         boolean bonded;
         boolean audio;
 
@@ -1053,6 +1118,12 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        if (adapter != null) {
+            try { if (a2dpProxy != null) adapter.closeProfileProxy(BluetoothProfile.A2DP, a2dpProxy); } catch (Exception ignored) {}
+            try { if (headsetProxy != null) adapter.closeProfileProxy(BluetoothProfile.HEADSET, headsetProxy); } catch (Exception ignored) {}
+        }
+        a2dpProxy = null;
+        headsetProxy = null;
         if (activeGatt != null) {
             try { activeGatt.disconnect(); } catch (Exception ignored) {}
             try { activeGatt.close(); } catch (Exception ignored) {}

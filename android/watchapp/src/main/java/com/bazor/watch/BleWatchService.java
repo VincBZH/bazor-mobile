@@ -49,6 +49,8 @@ public class BleWatchService extends Service {
     private SharedPreferences prefs;
     private BluetoothManager bluetoothManager;
     private BluetoothAdapter adapter;
+    private BluetoothProfile a2dpProxy;
+    private BluetoothProfile headsetProxy;
     private BluetoothLeScanner scanner;
     private boolean scanning = false;
     private boolean lowLatency = false;
@@ -74,6 +76,7 @@ public class BleWatchService extends Service {
 
         bluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
         adapter = bluetoothManager != null ? bluetoothManager.getAdapter() : null;
+        requestClassicProfileProxies();
 
         createChannel();
         startForeground(NOTIF_ID, notification("Veille Bluetooth active"));
@@ -175,7 +178,7 @@ public class BleWatchService extends Service {
         }
 
         long now = System.currentTimeMillis();
-        if (isGattConnected(target)) {
+        if (isSystemConnected(target)) {
             SharedPreferences.Editor e = prefs.edit()
                 .putString("status", "CONNECTED")
                 .putLong("lastSystemConnectedMs", now)
@@ -224,17 +227,60 @@ public class BleWatchService extends Service {
         }
     }
 
-    private boolean isGattConnected(String target) {
-        if (bluetoothManager == null || !hasConnectPermission() ||
-            target == null || !BluetoothAdapter.checkBluetoothAddress(target)) return false;
+    private final BluetoothProfile.ServiceListener classicProfileListener = new BluetoothProfile.ServiceListener() {
+        @Override public void onServiceConnected(int profile, BluetoothProfile proxy) {
+            if (profile == BluetoothProfile.A2DP) a2dpProxy = proxy;
+            else if (profile == BluetoothProfile.HEADSET) headsetProxy = proxy;
+            handler.post(BleWatchService.this::evaluateLink);
+        }
+
+        @Override public void onServiceDisconnected(int profile) {
+            if (profile == BluetoothProfile.A2DP) a2dpProxy = null;
+            else if (profile == BluetoothProfile.HEADSET) headsetProxy = null;
+            handler.post(BleWatchService.this::evaluateLink);
+        }
+    };
+
+    private void requestClassicProfileProxies() {
+        if (adapter == null || !hasConnectPermission()) return;
+        try { adapter.getProfileProxy(this, classicProfileListener, BluetoothProfile.A2DP); }
+        catch (Exception ignored) {}
+        try { adapter.getProfileProxy(this, classicProfileListener, BluetoothProfile.HEADSET); }
+        catch (Exception ignored) {}
+    }
+
+    private boolean isSystemConnected(String target) {
+        if (!hasConnectPermission() || target == null ||
+            !BluetoothAdapter.checkBluetoothAddress(target)) return false;
+
+        if (bluetoothManager != null) {
+            try {
+                List<BluetoothDevice> connected = bluetoothManager.getConnectedDevices(BluetoothProfile.GATT);
+                if (containsTarget(connected, target)) return true;
+            } catch (SecurityException ignored) {
+            } catch (Exception ignored) {}
+        }
+
         try {
-            List<BluetoothDevice> connected = bluetoothManager.getConnectedDevices(BluetoothProfile.GATT);
-            if (connected == null) return false;
-            for (BluetoothDevice d : connected) {
-                if (d != null && target.equalsIgnoreCase(d.getAddress())) return true;
-            }
+            if (a2dpProxy != null && containsTarget(a2dpProxy.getConnectedDevices(), target)) return true;
         } catch (SecurityException ignored) {
         } catch (Exception ignored) {}
+
+        try {
+            if (headsetProxy != null && containsTarget(headsetProxy.getConnectedDevices(), target)) return true;
+        } catch (SecurityException ignored) {
+        } catch (Exception ignored) {}
+
+        return false;
+    }
+
+    private boolean containsTarget(List<BluetoothDevice> devices, String target) {
+        if (devices == null) return false;
+        for (BluetoothDevice d : devices) {
+            try {
+                if (d != null && target.equalsIgnoreCase(d.getAddress())) return true;
+            } catch (SecurityException ignored) {}
+        }
         return false;
     }
 
@@ -386,6 +432,12 @@ public class BleWatchService extends Service {
     @Override public void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         stopScan();
+        if (adapter != null) {
+            try { if (a2dpProxy != null) adapter.closeProfileProxy(BluetoothProfile.A2DP, a2dpProxy); } catch (Exception ignored) {}
+            try { if (headsetProxy != null) adapter.closeProfileProxy(BluetoothProfile.HEADSET, headsetProxy); } catch (Exception ignored) {}
+        }
+        a2dpProxy = null;
+        headsetProxy = null;
         prefs.edit().putBoolean("serviceRunning", false).apply();
         super.onDestroy();
     }
