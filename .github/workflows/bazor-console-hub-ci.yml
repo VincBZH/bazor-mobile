@@ -139,6 +139,15 @@ jobs:
           assert "issue.get(\"body\")" not in task_loop.split('if title.startswith("[bazor-mammouth")')[0]
           print("Predefined task queue safety OK")
           PY
+      - name: Studio GO tag regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
+          assert 're.finditer(r"\\[FROM_GPT\\]\\[GO[^\\]]*\\]"' in watcher
+          assert 'GO-LOCAL-RUNTIME-PROOF-RETRY' not in watcher, "watcher must not hardcode every GO suffix"
+          print("Studio generic GO trigger OK")
+          PY
       - name: Mammouth task profile regression
         run: |
           python - <<'PY'
