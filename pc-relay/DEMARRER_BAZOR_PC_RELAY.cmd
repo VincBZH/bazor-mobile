@@ -39,7 +39,7 @@ if errorlevel 1 (
 )
 
 echo [3/5] Verification du code BAZOR...
-python -c "import py_compile,sys,tempfile,os; [py_compile.compile(p,cfile=os.path.join(tempfile.gettempdir(),'BAZOR_VALIDATE_'+str(os.getpid())+'_'+str(i)+'.pyc'),doraise=True) for i,p in enumerate(sys.argv[1:],1)]" "%~dp0mammouth_client.py" "%~dp0mammouth_github_relay.py" "%~dp0bazor_pc_relay_v3.py"
+python -c "import py_compile,sys,tempfile,os; [py_compile.compile(p,cfile=os.path.join(tempfile.gettempdir(),'BAZOR_VALIDATE_'+str(os.getpid())+'_'+str(i)+'.pyc'),doraise=True) for i,p in enumerate(sys.argv[1:],1)]" "%~dp0bazor_security.py" "%~dp0mammouth_client.py" "%~dp0mammouth_github_relay.py" "%~dp0bazor_pc_relay_v3.py"
 if errorlevel 1 (
   echo.
   echo [BLOQUE] Le controle Python a detecte un probleme.
