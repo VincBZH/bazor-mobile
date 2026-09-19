@@ -213,7 +213,7 @@ jobs:
           ).encode("utf-8")
           candidate,changed,state=h.candidate_bytes(live_variant)
           assert changed and state=="patched"
-          assert b"ComfyUI UI workflow format" in candidate
+          assert b"fallback_widget_fields" in candidate
           assert b"def _next():" in candidate
           compile(candidate.decode("utf-8"),"<candidate>","exec")
           api=conv(ui)
