@@ -32,51 +32,62 @@ async function refresh(){let s=await j('/api/status'),p=s.state?.project||{};sta
 go.onclick=async()=>{let body={task_class:kind.value},m=mode.value;if(m!=='auto')body.manual=m;let r=await j('/api/route',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});route.textContent=r.selected?'Moteur choisi : '+r.selected:'Aucun moteur prouvé disponible'};refresh().catch(e=>state.textContent='ERREUR UI');setInterval(()=>refresh().catch(()=>{}),10000)
 </script></body></html>'''
 
-CONTROL_HTML=r'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BAZOR AI ROOM — CONTROL</title>
+CONTROL_HTML=r'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BAZOR AI ROOM V3 — CONTROL</title>
 <style>
-:root{font-family:Inter,Segoe UI,Arial,sans-serif;background:#050910;color:#eef7ff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#11294c 0,#07101d 45%,#04070c 100%);min-height:100vh}.wrap{max-width:980px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center}.title{font-size:26px;font-weight:800}.sub{color:#8fa9c7;margin-top:5px}.live{padding:10px 14px;border:1px solid #2a5c8f;border-radius:999px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}.card{background:#0a1627;border:1px solid #1a416a;border-radius:16px;padding:16px}.label{color:#91a7c0;font-size:12px;text-transform:uppercase}.value{font-size:20px;font-weight:800;margin-top:7px;word-break:break-word}.ok{color:#76f1a5}.wait{color:#ffd56c}.bad{color:#ff8383}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}button{border:0;border-radius:16px;padding:20px;font-size:19px;font-weight:900;cursor:pointer}.go{background:#0b6fc2;color:white}.angry{background:#8f1e2d;color:white}.log{white-space:pre-wrap;background:#06101c;border:1px solid #193c61;border-radius:14px;padding:14px;min-height:120px;margin-top:16px;color:#cfe8ff}.small{font-size:12px;color:#8ea4bc;margin-top:10px}@media(max-width:760px){.grid,.buttons{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}</style></head><body><div class="wrap">
-<div class="top"><div><div class="title">BAZOR AI ROOM — PANNEAU DE CONTRÔLE</div><div class="sub">Ici tu vois si ça travaille vraiment, la dernière preuve, et tu peux forcer la suite.</div></div><div id="live" class="live wait">CHARGEMENT…</div></div>
+:root{font-family:Inter,Segoe UI,Arial,sans-serif;background:#050910;color:#edf6ff}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#07111f,#03070d);min-height:100vh}.wrap{max-width:1080px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center}.title{font-size:28px;font-weight:900}.sub{color:#8fa8c4;margin-top:5px}.badge{padding:11px 15px;border-radius:999px;border:1px solid #315d8d;font-weight:900}.ok{color:#76f1a5}.wait{color:#ffd56c}.bad{color:#ff8383}.run{color:#71c8ff}.hero{margin-top:18px;padding:20px;border:1px solid #244d79;border-radius:18px;background:#0a1627}.heroStatus{font-size:34px;font-weight:1000}.heroSub{margin-top:6px;color:#9eb5cf}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}.card{background:#091522;border:1px solid #1d4066;border-radius:15px;padding:15px}.label{font-size:11px;color:#89a2be;text-transform:uppercase;letter-spacing:.08em}.value{font-size:18px;font-weight:800;margin-top:6px;word-break:break-word}.buttons{display:grid;grid-template-columns:2fr 2fr 1fr 1fr;gap:12px;margin-top:16px}button{border:0;border-radius:14px;padding:17px 12px;font-weight:900;font-size:16px;cursor:pointer}.go{background:#116fbd;color:white}.auto{background:#a12635;color:white}.secondary{background:#18304b;color:#eef7ff}.stop{background:#4b2730;color:#ffdfe5}.timeline{margin-top:16px;background:#08111d;border:1px solid #1d3d61;border-radius:16px;padding:15px}.gate{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #112941}.gate:last-child{border:0}.dot{font-size:16px}.small{font-size:12px;color:#839ab4}.airow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.ai{padding:12px;border-radius:12px;background:#07111d;border:1px solid #183b61}.ai b{display:block}.tech{margin-top:14px}.tech summary{cursor:pointer;color:#9db5d0}.log{white-space:pre-wrap;background:#03070d;border:1px solid #193c61;border-radius:12px;padding:12px;margin-top:9px;max-height:360px;overflow:auto;color:#cce7ff}@media(max-width:800px){.grid,.airow,.buttons{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.heroStatus{font-size:28px}}</style></head>
+<body><div class="wrap">
+<div class="top"><div><div class="title">BAZOR AI ROOM <span style="font-size:13px;color:#76cfff">V3 BETA CONTROL</span></div><div class="sub">Voir immédiatement si ça travaille vraiment, qui travaille, sur quoi, et avec quelle preuve.</div></div><div id="live" class="badge wait">CHARGEMENT…</div></div>
+
+<div class="hero"><div class="label">ÉTAT RÉEL</div><div id="heroStatus" class="heroStatus">—</div><div id="heroSub" class="heroSub">—</div></div>
+
 <div class="grid">
-<div class="card"><div class="label">Watcher</div><div id="watcher" class="value">—</div></div>
-<div class="card"><div class="label">Tâche courante</div><div id="task" class="value">—</div></div>
-<div class="card"><div class="label">Mode</div><div id="mode" class="value">—</div></div>
-<div class="card"><div class="label">Dernière action</div><div id="action" class="value">—</div></div>
+<div class="card"><div class="label">Tâche en cours</div><div id="task" class="value">—</div></div>
+<div class="card"><div class="label">Étape / porte</div><div id="gate" class="value">—</div></div>
+<div class="card"><div class="label">Suite automatique</div><div id="next" class="value">—</div></div>
+<div class="card"><div class="label">Dernier moteur</div><div id="engine" class="value">—</div></div>
 <div class="card"><div class="label">Dernier résultat</div><div id="result" class="value">—</div></div>
 <div class="card"><div class="label">Dernière preuve</div><div id="proof" class="value">—</div></div>
 </div>
-<div class="buttons">
-<button class="go" onclick="send('go')">▶ GO — CONTINUE MAINTENANT</button>
-<button class="angry" onclick="send('angry')">😡 JE SUIS EN COLÈRE — AUTO TOTAL</button>
-<button class="go" onclick="send('export_logs')">📦 EXPORT LOGS + CAPTURE</button>
-<button class="go" onclick="send('screenshot')">📸 CAPTURE ÉCRAN</button>
+
+<div class="airow">
+<div class="ai"><b>GPT</b><span id="gpt">À vérifier</span></div>
+<div class="ai"><b>Mammouth</b><span id="mammouth">À vérifier</span></div>
+<div class="ai"><b>Ollama</b><span id="ollama">À vérifier</span></div>
 </div>
-<div id="log" class="log">En attente du premier état…</div>
-<div class="small">Le bouton colère active AUTO TOTAL et demande la poursuite automatique des tâches BAZOR AI ROOM prédéfinies. Aucun shell distant libre n’est exécuté.</div>
-</div><script>
+
+<div class="buttons">
+<button class="go" onclick="send('go')">▶ GO — 1 ÉTAPE MAINTENANT</button>
+<button class="auto" onclick="send('angry')">😡 AUTO TOTAL — JUSQU'AU BOUT</button>
+<button class="secondary" onclick="send('export_logs')">📦 LOGS</button>
+<button class="secondary" onclick="send('screenshot')">📸 CAPTURE</button>
+<button class="stop" onclick="send('stop_auto')">■ STOP AUTO</button>
+</div>
+
+<div class="timeline"><div class="label">GRAFCET / progression réelle</div><div id="timeline"></div></div>
+<details class="tech"><summary>Détails techniques</summary><div id="log" class="log">—</div></details>
+</div>
+<script>
 async function api(u,o){let r=await fetch(u,o);let t=await r.text();try{return JSON.parse(t)}catch(e){return {ok:false,error:t}}}
 function esc(v){return String(v??'—')}
+function setAi(id,v){let el=document.getElementById(id),a=v?.available;if(a===true){el.textContent='DISPONIBLE';el.className='ok'}else if(a===false){el.textContent='INDISPONIBLE';el.className='bad'}else{el.textContent='À VÉRIFIER';el.className='wait'}}
 async function refresh(){
-  let s=await api('/api/control/status');
-  let c=s.control||{}, now=Math.floor(Date.now()/1000), seen=Number(c.watcher_last_seen_epoch||0), age=seen?now-seen:999999;
-  let active=!!c.working || age<25;
-  live.textContent=c.working?'● TRAVAIL EN COURS':(age<25?'● WATCHER ACTIF':'● PAS DE PREUVE RÉCENTE');
-  live.className='live '+(c.working||age<25?'ok':'bad');
-  watcher.textContent=seen?(age+' s depuis heartbeat'):'Aucun heartbeat';
-  watcher.className='value '+(age<25?'ok':'bad');
-  task.textContent=esc(c.current_task||c.last_task);
-  mode.textContent=(c.auto_mode?'AUTO TOTAL':'MANUEL')+(c.angry_mode?' • 😡 PRIORITÉ MAX':'');
-  mode.className='value '+(c.auto_mode?'ok':'wait');
-  action.textContent=esc(c.last_action||c.request_action);
-  result.textContent=esc(c.last_result_status||c.last_result_summary);
-  result.className='value '+(c.last_result_status==='VERIFIE'||c.last_result_status==='DONE'?'ok':(c.last_result_status==='BLOCKED'?'bad':'wait'));
-  proof.textContent=esc(c.last_proof||'—');
-  log.textContent=JSON.stringify(c,null,2);
+ let [s,st]=await Promise.all([api('/api/control/status'),api('/api/status')]);let c=s.control||{},now=Math.floor(Date.now()/1000),seen=Number(c.watcher_last_seen_epoch||0),age=seen?now-seen:999999;
+ let busy=!!c.working, fresh=age<25, blocked=c.last_result_status==='BLOCKED';
+ live.textContent=busy?'● TRAVAIL EN COURS':(fresh?'● WATCHER ACTIF':'● WATCHER SANS PREUVE');
+ live.className='badge '+(busy?'run':(fresh?'ok':'bad'));
+ heroStatus.textContent=busy?'ÇA BOSSE VRAIMENT':(blocked?'BLOQUÉ — DIAGNOSTIC DISPONIBLE':(c.auto_mode?'AUTO TOTAL ACTIF':'EN ATTENTE'));
+ heroStatus.className='heroStatus '+(busy?'run':(blocked?'bad':(c.auto_mode?'ok':'wait')));
+ heroSub.textContent=busy?('Exécution '+esc(c.current_task||c.last_task)+' • '+esc(c.last_action)):(fresh?(age+' s depuis le dernier heartbeat'):'Aucun heartbeat récent');
+ task.textContent=esc(c.current_task||c.last_task);gate.textContent=esc(c.current_gate);next.textContent=esc(c.next_task||'calcul en cours');
+ engine.textContent=esc((c.last_engine||'—')+(c.last_model?' / '+c.last_model:''));
+ result.textContent=esc(c.last_result_status||'—');result.className='value '+(blocked?'bad':((c.last_result_status==='VERIFIE'||c.last_result_status==='V3_BETA_READY')?'ok':'wait'));
+ proof.textContent=esc(c.last_proof||'—');
+ setAi('gpt',st.engines?.gpt);setAi('mammouth',st.engines?.mammouth);setAi('ollama',st.engines?.ollama);
+ let gs=c.grafcet||[];timeline.innerHTML=gs.map(x=>'<div class="gate"><span class="dot '+(x.ok?'ok':'bad')+'">●</span><div><b>'+esc(x.gate)+'</b><div class="small">'+esc(x.detail)+'</div></div></div>').join('')||'<div class="small">Aucune porte exécutée.</div>';
+ log.textContent=JSON.stringify(c,null,2);
 }
-async function send(action){
-  let r=await api('/api/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
-  await refresh();
-}
-refresh();setInterval(refresh,2000);
+async function send(action){await api('/api/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});await refresh()}
+refresh();setInterval(refresh,1500);
 </script></body></html>'''
 
 REQUIRED=["message_id","timestamp_local","timestamp_utc","project_id","project_name","project_version","bazor_version","task_id","parent_task_id","source_agent","target_agent","status","progress_percent","summary","files","tests","errors","next_step","handoff_logic"]
@@ -115,7 +126,7 @@ def control_state():
 
 def control_request(action):
     action=str(action or "").strip().lower()
-    if action not in {"go","angry","export_logs","screenshot"}:
+    if action not in {"go","angry","export_logs","screenshot","stop_auto"}:
         return {"ok":False,"error":"invalid_control_action"}
     data=control_state()
     data["request_seq"]=int(data.get("request_seq") or 0)+1
