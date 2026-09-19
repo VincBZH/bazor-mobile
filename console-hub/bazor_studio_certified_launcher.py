@@ -129,11 +129,17 @@ def qualification_cached_ok(max_age_hours=12):
     if not data or age is None:
         return False, "aucun rapport"
     summary = data.get("summary") or {}
+    result_ids={str(x.get("id") or ""):x for x in (data.get("results") or [])}
+    e2e=result_ids.get("STUDIO_E2E_REAL_GENERATION")
+    if not e2e:
+        return False, "rapport ancien: preuve E2E absente"
+    if not e2e.get("ok"):
+        return False, "preuve E2E réelle non validée"
     if not summary.get("operational"):
         return False, f"rapport non opérationnel: {summary}"
     if age > max_age_hours * 3600:
         return False, f"rapport trop ancien: {age/3600:.1f} h"
-    return True, f"{summary.get('passed')}/{summary.get('total')} tests, {summary.get('percent')}%"
+    return True, f"{summary.get('passed')}/{summary.get('total')} tests, {summary.get('percent')}% + E2E"
 
 def run_full_qualification():
     if not QUALIFIER.exists():
