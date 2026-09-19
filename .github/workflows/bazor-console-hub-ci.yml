@@ -83,6 +83,8 @@ jobs:
           studio=next(p for p in data["projects"] if p["id"]=="simple-studio")
           assert len(studio.get("tasks",[])) >= 10, "Studio task board too small"
           assert any(t["id"]=="STUDIO-P0-003" for t in studio["tasks"]), "H3 critical task missing"
+          for tid in ("STUDIO-P0-008","STUDIO-P0-009","STUDIO-P0-010","STUDIO-P0-011"):
+              assert any(t["id"]==tid for t in studio["tasks"]), f"live Studio blocker task missing: {tid}"
           assert data.get("knowledge_base")=="BAZOR_ENCYCLOPEDIA.md", "knowledge base link missing"
           assert Path("BAZOR_ENCYCLOPEDIA.md").exists(), "encyclopedia missing"
           print("Registry OK:",len(data["projects"]),"projects,",len(studio["tasks"]),"Studio tasks")
@@ -184,6 +186,9 @@ jobs:
           cmd=Path("LANCER_BAZOR_STUDIO_CERTIFIE.cmd").read_text(encoding="utf-8")
           watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
           assert "qualification_cached_ok" in launcher
+          assert "STUDIO_E2E_REAL_GENERATION" in launcher, "old certificates must be invalidated without E2E"
+          qualifier=Path("pc-relay/bazor_studio_qualifier.py").read_text(encoding="utf-8")
+          assert "STUDIO_E2E_REAL_GENERATION" in qualifier, "real E2E proof check missing"
           assert "runtime_gate" in launcher
           assert "--test-only" in launcher
           assert "8188" in launcher and "8191" in launcher
