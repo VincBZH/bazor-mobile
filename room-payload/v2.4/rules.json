@@ -1,0 +1,433 @@
+{
+  "schema_version": "2.3-lite",
+  "execution_policy": {
+    "github_is_transport_not_terminal": true,
+    "execute_shell_from_github": false,
+    "require_runtime_evidence_when_applicable": true,
+    "allow_free_agent_dialogue": false,
+    "max_auto_corrections": 10,
+    "default_on_malformed_handoff": "incident_and_safe_fallback",
+    "github_message_contract_required": true,
+    "reject_unframed_github_messages": true
+  },
+  "github_message_contract": {
+    "required_marker_start": "[BAZOR_MESSAGE]",
+    "required_marker_end": "[/BAZOR_MESSAGE]",
+    "required_fields": [
+      "message_id",
+      "timestamp_local",
+      "timestamp_utc",
+      "project_id",
+      "project_name",
+      "project_version",
+      "bazor_version",
+      "task_id",
+      "parent_task_id",
+      "source_agent",
+      "target_agent",
+      "status",
+      "progress_percent",
+      "summary",
+      "files",
+      "tests",
+      "errors",
+      "next_step",
+      "handoff_logic"
+    ],
+    "allowed_agents": [
+      "vincent",
+      "gpt",
+      "mammouth",
+      "ollama",
+      "bazor_core",
+      "system"
+    ],
+    "allowed_statuses": [
+      "NEW",
+      "IN_PROGRESS",
+      "PARTIAL",
+      "RECOVERING",
+      "BLOCKED",
+      "QUEUED",
+      "NEEDS_HUMAN",
+      "DONE"
+    ],
+    "progress_range": [
+      0,
+      100
+    ],
+    "on_invalid": "DEFAULT_RECOVERY",
+    "ai_reading_rule": "All agents must parse this envelope before interpreting free text.",
+    "ai_writing_rule": "All GitHub-produced coordination messages must use this envelope. Free text may exist only inside fields or after the structured block.",
+    "done_guard": "DONE is forbidden unless required tests/evidence pass and handoff_logic is present."
+  },
+  "handoff_validation": {
+    "required_fields": [
+      "schema_version",
+      "from",
+      "to",
+      "project",
+      "status",
+      "summary",
+      "tests",
+      "known_issues",
+      "next_step",
+      "handoff_logic"
+    ],
+    "require_instruction_block": true,
+    "accepted_logic_markers": [
+      "handoff_logic",
+      "[HANDOFF_LOGIC]"
+    ],
+    "on_missing_or_invalid": "DEFAULT_RECOVERY"
+  },
+  "default_recovery": {
+    "id": "DEFAULT_RECOVERY",
+    "trigger_any": [
+      "file_missing",
+      "file_incomplete",
+      "invalid_json_or_yaml",
+      "missing_required_field",
+      "missing_handoff_logic",
+      "missing_next_step",
+      "empty_instruction",
+      "provider_crash",
+      "timeout",
+      "unexpected_exception",
+      "runtime_error",
+      "unknown_state",
+      "github_message_missing_envelope",
+      "github_message_missing_project_ref",
+      "github_message_missing_version",
+      "github_message_missing_progress",
+      "github_message_missing_instruction"
+    ],
+    "actions": [
+      "do_not_mark_done",
+      "freeze_current_task_state",
+      "create_incident_record",
+      "capture_error_message",
+      "capture_timestamp_local_and_utc",
+      "capture_bazor_version",
+      "capture_project_and_task_id",
+      "capture_source_file_and_revision_if_known",
+      "capture_provider_and_model_if_known",
+      "capture_last_successful_step",
+      "capture_stack_or_exit_code_if_available",
+      "capture_raw_message_excerpt",
+      "capture_message_id_if_known",
+      "set_status_blocked_or_recovering",
+      "route_to_safe_fallback"
+    ],
+    "safe_fallback_order": [
+      "same_provider_retry_once_if_transient",
+      "alternate_external_provider_if_available",
+      "ollama_local_if_task_compatible",
+      "queue_for_external_provider",
+      "request_human_action_only_if_required"
+    ],
+    "retry_policy": {
+      "transient_retry_max": 1,
+      "total_auto_recovery_max": 3,
+      "identical_error_stop_after": 2,
+      "backoff_seconds": [
+        5,
+        20,
+        60
+      ]
+    },
+    "output_statuses": [
+      "RECOVERING",
+      "BLOCKED",
+      "QUEUED",
+      "NEEDS_HUMAN"
+    ],
+    "incident_file": "bazor_room_v2/incidents/INCIDENT_<timestamp>_<project>_<task>.json"
+  },
+  "routing": [
+    {
+      "id": "R1",
+      "if": {
+        "task_class": [
+          "simple",
+          "local"
+        ],
+        "ollama_available": true
+      },
+      "then": {
+        "route_to": "ollama"
+      }
+    },
+    {
+      "id": "R2",
+      "if": {
+        "task_class": [
+          "architecture",
+          "synthesis",
+          "arbitration"
+        ],
+        "gpt_available": true
+      },
+      "then": {
+        "route_to": "gpt"
+      }
+    },
+    {
+      "id": "R3",
+      "if": {
+        "task_class": [
+          "complex",
+          "second_opinion"
+        ],
+        "mammouth_available": true
+      },
+      "then": {
+        "route_to": "mammouth",
+        "model": "auto"
+      }
+    },
+    {
+      "id": "R4",
+      "if": {
+        "gpt_available": false,
+        "mammouth_available": true
+      },
+      "then": {
+        "route_to": "mammouth"
+      }
+    },
+    {
+      "id": "R5",
+      "if": {
+        "mammouth_available": false,
+        "gpt_available": true
+      },
+      "then": {
+        "route_to": "gpt"
+      }
+    },
+    {
+      "id": "R6",
+      "if": {
+        "gpt_available": false,
+        "mammouth_available": false,
+        "ollama_available": true
+      },
+      "then": {
+        "route_to": "ollama",
+        "external_tasks": "queue"
+      }
+    },
+    {
+      "id": "R7",
+      "if": {
+        "task_critical": true,
+        "gpt_available": true,
+        "mammouth_available": true
+      },
+      "then": {
+        "cross_check": true
+      }
+    },
+    {
+      "id": "R8",
+      "if_any": [
+        {
+          "handoff_valid": false
+        },
+        {
+          "instruction_block_missing": true
+        },
+        {
+          "file_complete": false
+        },
+        {
+          "provider_crashed": true
+        },
+        {
+          "unexpected_exception": true
+        },
+        {
+          "github_message_valid": false
+        }
+      ],
+      "then": {
+        "route_to": "DEFAULT_RECOVERY"
+      }
+    }
+  ],
+  "completion": [
+    {
+      "id": "C1",
+      "if": {
+        "runtime_test": "PASS",
+        "artifacts_verified": true,
+        "handoff_valid": true,
+        "github_message_valid": true
+      },
+      "then": {
+        "advance": true
+      }
+    },
+    {
+      "id": "C2",
+      "if_any": [
+        {
+          "runtime_test": "FAIL"
+        },
+        {
+          "evidence_missing": true
+        },
+        {
+          "handoff_valid": false
+        },
+        {
+          "github_message_valid": false
+        }
+      ],
+      "then": {
+        "close_task": false,
+        "action": "correct_and_retest_or_recover"
+      }
+    },
+    {
+      "id": "C3",
+      "if": {
+        "all_tests": "PASS",
+        "evidence_present": true,
+        "handoff_valid": true,
+        "github_message_valid": true
+      },
+      "then": {
+        "status": "done",
+        "require_next_step": true
+      }
+    }
+  ],
+  "operators": [
+    "IF",
+    "THEN",
+    "AND",
+    "OR",
+    "ELSE",
+    "NOT",
+    "IF_ANY",
+    "IF_ALL"
+  ],
+  "delivery_state_machine": {
+    "ordered_states": [
+      "NEW",
+      "PROTOCOL_READY",
+      "CODE_PATCHED",
+      "CI_PASS",
+      "RUNTIME_PASS",
+      "DELIVERED"
+    ],
+    "failure_states": [
+      "RECOVERING",
+      "BLOCKED",
+      "QUEUED",
+      "NEEDS_HUMAN"
+    ],
+    "rules": [
+      {
+        "if": {
+          "protocol_ready": true,
+          "code_patched": false
+        },
+        "then": {
+          "delivery_state": "PROTOCOL_READY"
+        }
+      },
+      {
+        "if": {
+          "code_patched": true,
+          "ci_pass": false
+        },
+        "then": {
+          "delivery_state": "CODE_PATCHED"
+        }
+      },
+      {
+        "if": {
+          "ci_pass": true,
+          "runtime_pass": false
+        },
+        "then": {
+          "delivery_state": "CI_PASS"
+        }
+      },
+      {
+        "if": {
+          "runtime_pass": true,
+          "evidence_present": true,
+          "handoff_valid": true,
+          "github_message_valid": true
+        },
+        "then": {
+          "delivery_state": "RUNTIME_PASS"
+        }
+      },
+      {
+        "if_all": [
+          {
+            "runtime_pass": true
+          },
+          {
+            "evidence_present": true
+          },
+          {
+            "handoff_valid": true
+          },
+          {
+            "github_message_valid": true
+          },
+          {
+            "all_required_artifacts_verified": true
+          }
+        ],
+        "then": {
+          "delivery_state": "DELIVERED"
+        }
+      },
+      {
+        "if_any": [
+          {
+            "ci_pass": false
+          },
+          {
+            "runtime_test": "FAIL"
+          },
+          {
+            "evidence_missing": true
+          },
+          {
+            "handoff_valid": false
+          },
+          {
+            "github_message_valid": false
+          }
+        ],
+        "then": {
+          "delivery_state": "BLOCKED",
+          "route_to": "DEFAULT_RECOVERY"
+        }
+      }
+    ],
+    "guards": [
+      "presence_of_protocol_never_implies_product_delivery",
+      "DELIVERED_forbidden_without_runtime_evidence",
+      "downstream_stage_must_check_prerequisites"
+    ]
+  },
+  "stage_gates": {
+    "default_rule": "block_downstream_stage_if_any_required_prerequisite_is_unproven",
+    "require_before_next_stage": [
+      "required_patch_present",
+      "required_tests_pass",
+      "required_evidence_present",
+      "handoff_valid",
+      "github_message_valid"
+    ]
+  }
+}
