@@ -867,7 +867,7 @@ def _run_airoom_p0_002_deterministic(project, task):
         if status.get("ok"):
             try:
                 sj=json.loads(status.get("body") or "{}")
-                needs_restart=not (sj.get("ok") is True and str(sj.get("version") or "").startswith("2.4"))
+                needs_restart=needs_restart or not (sj.get("ok") is True and str(sj.get("version") or "").startswith("2.4"))
             except Exception:
                 needs_restart=True
 
