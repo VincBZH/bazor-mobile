@@ -129,7 +129,8 @@ jobs:
           assert "[bazor-task:" in watcher
           assert "def _registry_task(" in watcher
           assert "unknown_registry_task" in watcher
-          assert '"provider":"auto","apply_actions":True' in watcher
+          assert 'execution_provider="ollama" if studio_p0_fast else "auto"' in watcher
+          assert '"provider":execution_provider,"apply_actions":True' in watcher
           assert "ACTION_SANDBOX" in Path("pc-relay/bazor_action_engine.py").read_text(encoding="utf-8")
           # La file distante ne prend qu'un ID du registre; le corps de l'issue
           # ne devient ni commande shell ni texte de modification arbitraire.
