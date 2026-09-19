@@ -897,18 +897,60 @@ def _run_airoom_p0_002_deterministic(project, task):
 
         if needs_restart:
             if os.name=="nt":
-                escaped=app_path.replace("\\","\\\\")
-                ps=f"""Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -and $_.CommandLine -match 'BazorAIROOM\\\\app.py' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}"""
-                subprocess.run(["powershell","-NoProfile","-Command",ps],capture_output=True,text=True,timeout=12,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+                # Identifier précisément le propriétaire du port 8765.
+                # Ne tuer que le runtime AI ROOM cible; bloquer si un autre service occupe ce port.
+                ps_owner=r"""
+$ErrorActionPreference='SilentlyContinue'
+$conn=Get-NetTCPConnection -LocalPort 8765 -State Listen | Select-Object -First 1
+if(-not $conn){ exit 0 }
+$p=Get-CimInstance Win32_Process -Filter ("ProcessId="+$conn.OwningProcess)
+if($p -and $p.CommandLine -and ($p.CommandLine -like '*\\BazorAIROOM\\app.py*')){
+  Write-Output ("TARGET_PID="+$p.ProcessId)
+  Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop
+  exit 0
+}
+Write-Output ("UNRELATED_PID="+$conn.OwningProcess)
+if($p){ Write-Output ("UNRELATED_CMD="+$p.CommandLine) }
+exit 42
+"""
+                owner_cp=subprocess.run(
+                    ["powershell","-NoProfile","-Command",ps_owner],
+                    capture_output=True,text=True,timeout=15,
+                    creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0)
+                )
+                if owner_cp.returncode==42:
+                    return {
+                        "ok":False,"task_status":"BLOCKED","error":"port_8765_owned_by_unrelated_process",
+                        "detail":(owner_cp.stdout or owner_cp.stderr or "")[:1200],
+                        "execution":{"mode":"runtime_validation","action_result":ar}
+                    }
                 time.sleep(1)
+
             log_path=os.path.join(room_root,"room.log")
             log=open(log_path,"a",encoding="utf-8",buffering=1)
             flags=(getattr(subprocess,"CREATE_NO_WINDOW",0)|getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0)) if os.name=="nt" else 0
+
+            # Toujours lancer le Python installé qui exécute le watcher, sans shell.
             subprocess.Popen([sys.executable,app_path],cwd=room_root,stdout=log,stderr=subprocess.STDOUT,creationflags=flags)
-            for _ in range(20):
+
+            started=False
+            for _ in range(30):
                 time.sleep(0.5)
-                if get("/health",2).get("ok"):
+                h=get("/health",2)
+                if h.get("ok"):
+                    started=True
                     break
+            if not started:
+                tail=""
+                try:
+                    tail=open(log_path,"r",encoding="utf-8",errors="replace").read()[-2500:]
+                except Exception:
+                    pass
+                return {
+                    "ok":False,"task_status":"BLOCKED","error":"room_runtime_start_failed",
+                    "detail":tail or "Aucun /health 200 après redémarrage ciblé.",
+                    "execution":{"mode":"runtime_validation","action_result":ar}
+                }
 
         checks={}
         for path in ("/","/app.js","/style.css","/api/status","/api/context","/api/projects","/health"):
