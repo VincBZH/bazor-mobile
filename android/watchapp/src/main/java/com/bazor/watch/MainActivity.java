@@ -2,6 +2,10 @@ package com.bazor.watch;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -56,6 +60,8 @@ public class MainActivity extends Activity {
     private static final int REQ_BLE = 5101;
     private static final int REQ_AUDIO = 5102;
     private static final int REQ_CALENDAR = 5103;
+    private static final String C28_TEST_CHANNEL = "bazor_c28_relay_test";
+    private static final int C28_TEST_NOTIFICATION_ID = 7201;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -180,6 +186,9 @@ public class MainActivity extends Activity {
 
         agendaToggle = button("ACTIVER RAPPELS AGENDA", v -> toggleAgenda());
         root.addView(agendaToggle);
+
+        Button c28Test = button("TESTER LE RELAIS C28", v -> sendC28TestNotification());
+        root.addView(c28Test);
 
         agendaResult = text("Agenda non consulté.", 12, Color.rgb(182, 207, 230), false);
         LinearLayout agendaCard = card();
@@ -468,6 +477,78 @@ public class MainActivity extends Activity {
         prefs.edit().putBoolean("agendaEnabled", true).apply();
         if (agendaToggle != null) agendaToggle.setText("DÉSACTIVER RAPPELS AGENDA");
         if (agendaResult != null) agendaResult.setText(loadAgendaSummary(0));
+    }
+
+    private void sendC28TestNotification() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_BLE);
+            if (agendaResult != null) {
+                agendaResult.setText("Autorise les notifications puis relance TESTER LE RELAIS C28.");
+            }
+            return;
+        }
+
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null) {
+            if (agendaResult != null) agendaResult.setText("Service de notifications Android indisponible.");
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                C28_TEST_CHANNEL, "BAZOR vers C28", NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Notifications de test et rappels destinés au relais vers la montre.");
+            channel.enableVibration(true);
+            nm.createNotificationChannel(channel);
+        }
+
+        Intent open = new Intent(this, MainActivity.class);
+        PendingIntent pi = PendingIntent.getActivity(
+            this, C28_TEST_NOTIFICATION_ID, open,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? new Notification.Builder(this, C28_TEST_CHANNEL)
+            : new Notification.Builder(this).setPriority(Notification.PRIORITY_HIGH);
+
+        Notification n = b
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("BAZOR TEST C28")
+            .setContentText("Si ce message apparaît sur la montre, le relais Da Fit fonctionne.")
+            .setStyle(new Notification.BigTextStyle().bigText(
+                "BAZOR TEST C28 — Si ce message apparaît sur la montre, le relais Da Fit fonctionne."))
+            .setCategory(Notification.CATEGORY_MESSAGE)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .build();
+
+        nm.notify(C28_TEST_NOTIFICATION_ID, n);
+
+        boolean skypeRelay = relayToC28(
+            "BAZOR TEST C28",
+            "Si ce message apparaît sur la montre, le relais Skype/Da Fit fonctionne.");
+
+        if (agendaResult != null) {
+            agendaResult.setText(skypeRelay
+                ? "Test envoyé par BAZOR + canal Skype de compatibilité. Dans Da Fit, active Skype dans les applications de notifications si nécessaire."
+                : "Test BAZOR envoyé, mais le relais Skype de compatibilité n’est pas installé.");
+        }
+    }
+
+    private boolean relayToC28(String title, String text) {
+        try {
+            getPackageManager().getPackageInfo("com.skype.raider", 0);
+            Intent relay = new Intent("com.bazor.montre.RELAY_TO_C28");
+            relay.setPackage("com.skype.raider");
+            relay.putExtra("title", title == null ? "BAZOR" : title);
+            relay.putExtra("text", text == null ? "" : text);
+            sendBroadcast(relay);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private void showAgendaDay(int dayOffset) {

@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "android/watchapp/**"
+      - "android/watchrelay/**"
       - ".github/workflows/publish-watch-apk.yml"
   workflow_dispatch:
 
@@ -36,8 +37,8 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
-      - name: Build watch APK
-        run: gradle -p android :watchapp:assembleDebug --no-daemon
+      - name: Build watch APKs
+        run: gradle -p android :watchapp:assembleDebug :watchrelay:assembleDebug --no-daemon
 
       - name: Publish APK and update metadata
         shell: bash
@@ -45,6 +46,7 @@ jobs:
           set -euo pipefail
           mkdir -p downloads
           cp android/watchapp/build/outputs/apk/debug/watchapp-debug.apk downloads/BAZOR-Montre.apk
+          cp android/watchrelay/build/outputs/apk/debug/watchrelay-debug.apk downloads/BAZOR-C28-Relay-Skype.apk
 
           python3 - <<'PY'
           import json, re
@@ -70,7 +72,8 @@ jobs:
       - name: Verify APK exists
         run: |
           test -s downloads/BAZOR-Montre.apk
-          ls -lh downloads/BAZOR-Montre.apk
+          test -s downloads/BAZOR-C28-Relay-Skype.apk
+          ls -lh downloads/BAZOR-Montre.apk downloads/BAZOR-C28-Relay-Skype.apk
           cat watch-update.json
 
       - name: Commit published APK
@@ -79,7 +82,7 @@ jobs:
           set -euo pipefail
           git config user.name "BAZOR Watch Publisher"
           git config user.email "actions@users.noreply.github.com"
-          git add downloads/BAZOR-Montre.apk watch-update.json
+          git add downloads/BAZOR-Montre.apk downloads/BAZOR-C28-Relay-Skype.apk watch-update.json
 
           if git diff --cached --quiet; then
             echo "Nothing to publish."
