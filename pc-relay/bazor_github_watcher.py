@@ -1684,7 +1684,11 @@ def _run_airoom_v3_beta_grafcet():
             except Exception as exc:
                 return {"ok":False,"http":None,"error":type(exc).__name__+": "+str(exc)[:260]}
 
-        # G3 — choisir un port beta sans perturber 8765. Réutiliser un V3 beta déjà sain.
+        # G3 — choisir un port beta sans perturber 8765.
+        # Ne jamais réutiliser une ancienne beta simplement parce qu'elle répond :
+        # le runtime doit exposer EXACTEMENT la version du payload synchronisé.
+        mver=re.search(r'^VERSION="([^"]+)"',source,re.M)
+        target_version=mver.group(1) if mver else "3.0.0-beta.2"
         beta_port=None
         for port in (8768,8769,8780):
             h=probe(port)
@@ -1693,9 +1697,10 @@ def _run_airoom_v3_beta_grafcet():
                     hj=json.loads(h.get("body") or "{}")
                 except Exception:
                     hj={}
-                if str(hj.get("version") or "").startswith("3.0.0-beta"):
+                if str(hj.get("version") or "")==target_version:
                     beta_port=port
                     break
+                # Port occupé par une ancienne build : ne pas la tuer, essayer le suivant.
                 continue
             beta_port=port
             break
@@ -1707,7 +1712,7 @@ def _run_airoom_v3_beta_grafcet():
         already=False
         if h.get("ok"):
             try:
-                already=str(json.loads(h.get("body") or "{}").get("version") or "").startswith("3.0.0-beta")
+                already=str(json.loads(h.get("body") or "{}").get("version") or "")==target_version
             except Exception:
                 already=False
         if not already:
