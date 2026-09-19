@@ -909,7 +909,9 @@ $gp=Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
 $cmd=if($p){$p.CommandLine}else{""}
 $exe=if($p -and $p.ExecutablePath){$p.ExecutablePath}elseif($gp){$gp.Path}else{""}
 $parent=if($p){$p.ParentProcessId}else{0}
-if($cmd -and ($cmd -like '*\\BazorAIROOM\\app.py*')){
+$target=(Join-Path $env:LOCALAPPDATA 'BazorAIROOM\app.py').ToLowerInvariant()
+$cmdNorm=($cmd -replace '/','\').ToLowerInvariant()
+if($cmdNorm -and $cmdNorm.Contains($target)){
   Write-Output ("TARGET_PID="+$conn.OwningProcess)
   Write-Output ("TARGET_CMD="+$cmd)
   Stop-Process -Id $conn.OwningProcess -Force -ErrorAction Stop
