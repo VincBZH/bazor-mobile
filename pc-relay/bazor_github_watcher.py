@@ -1477,16 +1477,15 @@ def _task_retry_allowed(issue_number, task_id, comments):
     # doit permettre un nouvel essai sur ce ticket sans recréer d'issue.
     # On ne contourne pas DONE/VERIFIE (géré plus haut).
     last_done_pos=max(comments.rfind("[BAZOR-TASK-DONE]"),comments.rfind("[BAZOR-TASK-START]"))
-    last_go_pos=max(
-        comments.rfind("[FROM_GPT][GO-AFTER-RUNTIME-GATE]"),
-        comments.rfind("[FROM_GPT][GO-NOW]"),
-        comments.rfind("[FROM_GPT][GO-NOW-"),
-        comments.rfind("[FROM_GPT][GO-AUTO-TEST-"),
-        comments.rfind("[FROM_GPT][GO-LOCAL-RUNTIME-PROOF]"),
-        comments.rfind("[FROM_GPT][GO-LOCAL-RUNTIME-PROOF-"),
+    # Tout tag explicite [FROM_GPT][GO...] ajouté après le dernier résultat
+    # est un déclencheur valide. Cela évite de casser l'autopilot à chaque
+    # nouveau suffixe (GO-NOW-05, GO-LOCAL-RUNTIME-PROOF-RETRY, etc.).
+    go_positions=[m.start() for m in re.finditer(r"\[FROM_GPT\]\[GO[^\]]*\]",comments,re.I)]
+    go_positions += [
         comments.rfind("[FROM_GPT][CONTINUE-NOW]"),
-        comments.rfind("[FROM_GPT][RUN_NOW]")
-    )
+        comments.rfind("[FROM_GPT][RUN_NOW]"),
+    ]
+    last_go_pos=max(go_positions) if go_positions else -1
     if last_go_pos > last_done_pos:
         return True
 
