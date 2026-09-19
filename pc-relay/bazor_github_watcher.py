@@ -919,13 +919,19 @@ def _run_airoom_p0_002_deterministic(project, task):
                 return {"ok":False,"task_status":"BLOCKED","error":"runtime_sync_failed","detail":str(ar.get("detail") or ar.get("error") or "")[:500],
                         "execution":{"mode":"file_changes","action_result":ar}}
 
-        def get(path, timeout=4):
+        runtime_port=8765
+        runtime_mode="stable_8765"
+
+        def get_at(port,path, timeout=4):
             try:
-                with urllib.request.urlopen("http://127.0.0.1:8765"+path,timeout=timeout) as r:
+                with urllib.request.urlopen("http://127.0.0.1:"+str(port)+path,timeout=timeout) as r:
                     raw=r.read()
                     return {"ok":200 <= r.status < 300,"http":r.status,"body":raw.decode("utf-8","replace")}
             except Exception as exc:
                 return {"ok":False,"http":None,"error":type(exc).__name__+": "+str(exc)[:240]}
+
+        def get(path, timeout=4):
+            return get_at(runtime_port,path,timeout)
 
         status=get("/api/status")
         # Un app.py synchronisé n'est pas chargé tant que l'ancien processus reste vivant.
@@ -974,38 +980,60 @@ exit 42
                     creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0)
                 )
                 if owner_cp.returncode==42:
-                    return {
-                        "ok":False,"task_status":"BLOCKED","error":"port_8765_owned_by_unrelated_process",
-                        "detail":(owner_cp.stdout or owner_cp.stderr or "")[:1200],
-                        "execution":{"mode":"runtime_validation","action_result":ar}
-                    }
+                    # 8765 est occupé par un processus non identifié : ne jamais le tuer.
+                    # Pour la V3 beta, valider alors une instance BAZOR sûre sur les ports fallback.
+                    fallback=None
+                    fallback_health=None
+                    for candidate in (8768,8769,8780):
+                        hh=get_at(candidate,"/health",2)
+                        if not hh.get("ok"):
+                            continue
+                        try:
+                            hj=json.loads(hh.get("body") or "{}")
+                        except Exception:
+                            hj={}
+                        ver=str(hj.get("version") or "")
+                        if ver.startswith("3.0.0-beta"):
+                            fallback=candidate
+                            fallback_health=hj
+                            break
+                    if fallback is None:
+                        return {
+                            "ok":False,"task_status":"BLOCKED","error":"port_8765_owned_by_unrelated_process",
+                            "detail":(owner_cp.stdout or owner_cp.stderr or "")[:1200],
+                            "execution":{"mode":"runtime_validation","runtime_port":runtime_port,"runtime_mode":runtime_mode,"action_result":ar}
+                        }
+                    runtime_port=fallback
+                    runtime_mode="safe_beta_fallback"
+                    needs_restart=False
                 time.sleep(1)
 
-            log_path=os.path.join(room_root,"room.log")
-            log=open(log_path,"a",encoding="utf-8",buffering=1)
-            flags=(getattr(subprocess,"CREATE_NO_WINDOW",0)|getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0)) if os.name=="nt" else 0
+            if needs_restart:
+                log_path=os.path.join(room_root,"room.log")
+                log=open(log_path,"a",encoding="utf-8",buffering=1)
+                flags=(getattr(subprocess,"CREATE_NO_WINDOW",0)|getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0)) if os.name=="nt" else 0
 
-            # Toujours lancer le Python installé qui exécute le watcher, sans shell.
-            subprocess.Popen([sys.executable,app_path],cwd=room_root,stdout=log,stderr=subprocess.STDOUT,creationflags=flags)
+                # Toujours lancer le Python installé qui exécute le watcher, sans shell.
+                subprocess.Popen([sys.executable,app_path],cwd=room_root,stdout=log,stderr=subprocess.STDOUT,creationflags=flags)
 
-            started=False
-            for _ in range(30):
-                time.sleep(0.5)
-                h=get("/health",2)
-                if h.get("ok"):
-                    started=True
-                    break
-            if not started:
-                tail=""
-                try:
-                    tail=open(log_path,"r",encoding="utf-8",errors="replace").read()[-2500:]
-                except Exception:
-                    pass
-                return {
-                    "ok":False,"task_status":"BLOCKED","error":"room_runtime_start_failed",
-                    "detail":tail or "Aucun /health 200 après redémarrage ciblé.",
-                    "execution":{"mode":"runtime_validation","action_result":ar}
-                }
+                started=False
+                for _ in range(30):
+                    time.sleep(0.5)
+                    h=get("/health",2)
+                    if h.get("ok"):
+                        started=True
+                        break
+                if not started:
+                    tail=""
+                    try:
+                        tail=open(log_path,"r",encoding="utf-8",errors="replace").read()[-2500:]
+                    except Exception:
+                        pass
+                    return {
+                        "ok":False,"task_status":"BLOCKED","error":"room_runtime_start_failed",
+                        "detail":tail or "Aucun /health 200 après redémarrage ciblé.",
+                        "execution":{"mode":"runtime_validation","action_result":ar}
+                    }
 
         checks={}
         for path in ("/","/app.js","/style.css","/api/status","/api/context","/api/projects","/health"):
@@ -1031,7 +1059,7 @@ exit 42
         return {
             "ok":all_ok,
             "task_status":"VERIFIE" if all_ok else "BLOCKED",
-            "summary":"Runtime ROOM 8765 validé avec preuves HTTP." if all_ok else "Runtime ROOM 8765 non conforme.",
+            "summary":(("Runtime ROOM validé sur port "+str(runtime_port)+" ("+runtime_mode+") avec preuves HTTP.") if all_ok else ("Runtime ROOM non conforme sur port "+str(runtime_port)+" ("+runtime_mode+").")),
             "engine":"runtime_probe",
             "model":"deterministic",
             "reviews":[],
