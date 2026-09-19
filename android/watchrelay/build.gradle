@@ -1,0 +1,35 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.bazor.skyperelay'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.skype.raider"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        stable {
+            storeFile file("../watchapp/bazor-watch.keystore")
+            storePassword "bazor123"
+            keyAlias "bazorwatch"
+            keyPassword "bazor123"
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
+            enableV4Signing false
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.stable
+        }
+    }
+}
+
+dependencies {}
