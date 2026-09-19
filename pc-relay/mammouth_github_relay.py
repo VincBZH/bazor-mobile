@@ -7,6 +7,8 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import mammouth_client
@@ -21,6 +23,16 @@ STATE_FILE = DATA_DIR / "mammouth_github_relay_state.json"
 LOCK_PORT = int(os.getenv("BAZOR_MAMMOUTH_RELAY_LOCK_PORT", "8784"))
 MAX_PROMPT_CHARS = 30000
 MAX_REPLY_CHARS = 55000
+OLLAMA_URL = os.getenv("BAZOR_OLLAMA_URL", "http://127.0.0.1:11434")
+STUDIO_ROOT = Path(os.getenv("BAZOR_STUDIO_ROOT", r"C:\AI\SimpleStudioV2"))
+STUDIO_CONTEXT_MAX_CHARS = 24000
+STUDIO_CONTEXT_EXTS = {".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".json", ".md", ".txt", ".ps1", ".cmd", ".bat", ".yml", ".yaml"}
+STUDIO_CONTEXT_SKIP = {"logs", "log", "models", "checkpoints", "output", "outputs", "cache", "temp", "tmp", "venv", ".venv", "__pycache__", "node_modules", ".git"}
+STUDIO_KEYWORDS = (
+    "analyze_job", "analysis", "workflow", "generate", "generation", "seed",
+    "source_media", "source image", "image source", "ffmpeg", "concat", "video",
+    "correct", "autocorrect", "gallery", "comfy", "ollama", "prompt"
+)
 
 
 def now():
@@ -173,6 +185,230 @@ def format_failure(result, request_id, comment_id):
     )
 
 
+
+def _redact_secrets(text):
+    value = str(text or "")
+    value = re.sub(r"(?i)(authorization\s*:\s*bearer\s+)[A-Za-z0-9._~+\\/-]+", r"\1[REDACTED]", value)
+    value = re.sub(r"(?i)((?:api[_-]?key|token|password|secret)\s*[=:]\s*)[^\s\"']+", r"\1[REDACTED]", value)
+    return value
+
+
+def _decode_text(path):
+    raw = path.read_bytes()
+    for enc in ("utf-8", "utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def _relevant_excerpt(text, max_chars=6000):
+    text = str(text or "")
+    if len(text) <= max_chars:
+        return text
+    chunks = [text[:1400]]
+    lower = text.lower()
+    seen = set()
+    for keyword in STUDIO_KEYWORDS:
+        start = 0
+        while True:
+            idx = lower.find(keyword.lower(), start)
+            if idx < 0:
+                break
+            a = max(0, idx - 700)
+            b = min(len(text), idx + 1500)
+            key = (a // 250, b // 250)
+            if key not in seen:
+                seen.add(key)
+                chunks.append(text[a:b])
+            start = idx + len(keyword)
+            if sum(len(x) for x in chunks) >= max_chars:
+                break
+        if sum(len(x) for x in chunks) >= max_chars:
+            break
+    return "\n\n...[extrait]...\n\n".join(chunks)[:max_chars]
+
+
+def collect_studio_context(max_chars=STUDIO_CONTEXT_MAX_CHARS):
+    if not STUDIO_ROOT.exists():
+        return "", {"available": False, "root": str(STUDIO_ROOT), "reason": "studio_root_missing", "files": []}
+
+    preferred = [
+        STUDIO_ROOT / "app" / "studio.py",
+        STUDIO_ROOT / "app" / "workflows.py",
+        STUDIO_ROOT / "app" / "static" / "app.js",
+        STUDIO_ROOT / "app" / "static" / "index.html",
+        STUDIO_ROOT / "app" / "index.html",
+    ]
+    candidates = []
+    added = set()
+    for p in preferred:
+        if p.is_file():
+            candidates.append(p)
+            added.add(str(p).lower())
+
+    try:
+        discovered = []
+        for p in STUDIO_ROOT.rglob("*"):
+            if not p.is_file() or p.suffix.lower() not in STUDIO_CONTEXT_EXTS:
+                continue
+            if any(part.lower() in STUDIO_CONTEXT_SKIP for part in p.parts):
+                continue
+            if str(p).lower() in added:
+                continue
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            if st.st_size > 900000:
+                continue
+            name = p.name.lower()
+            score = sum(1 for k in ("studio", "workflow", "app", "main", "index", "setting", "video", "analysis") if k in name)
+            discovered.append((score, st.st_mtime, p))
+        discovered.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        candidates.extend([p for _, _, p in discovered[:14]])
+    except Exception as exc:
+        return "", {"available": False, "root": str(STUDIO_ROOT), "reason": "scan_failed:" + str(exc)[:160], "files": []}
+
+    chunks, files, used = [], [], 0
+    for p in candidates:
+        if used >= max_chars:
+            break
+        try:
+            text = _redact_secrets(_decode_text(p))
+            excerpt = _relevant_excerpt(text, min(6500, max_chars - used))
+            if not excerpt.strip():
+                continue
+            rel = str(p.relative_to(STUDIO_ROOT))
+            chunks.append(f"\n--- STUDIO FILE: {rel} ---\n{excerpt}\n--- END FILE ---\n")
+            files.append(rel)
+            used += len(excerpt)
+        except Exception:
+            continue
+    return "".join(chunks)[:max_chars], {"available": bool(files), "root": str(STUDIO_ROOT), "files": files, "chars": min(used, max_chars)}
+
+
+def ollama_tags():
+    try:
+        with urllib.request.urlopen(OLLAMA_URL + "/api/tags", timeout=2.5) as response:
+            data = json.loads(response.read().decode("utf-8", errors="replace"))
+        return [m.get("name", "") for m in data.get("models", []) if m.get("name")]
+    except Exception:
+        return []
+
+
+def choose_ollama_model(models):
+    preferred = ("qwen2.5-coder:7b", "qwen2.5-coder", "mistral:latest", "mistral", "gemma3:4b", "gemma3")
+    for wanted in preferred:
+        for model in models:
+            if model == wanted or model.startswith(wanted + ":"):
+                return model
+    return models[0] if models else None
+
+
+def ollama_review(prompt):
+    models = ollama_tags()
+    model = choose_ollama_model(models)
+    if not model:
+        return {"ok": False, "provider": "ollama", "error": "ollama_unavailable", "model": None, "answer": ""}
+    payload = json.dumps({
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "options": {"temperature": 0.15}
+    }, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        OLLAMA_URL + "/api/chat",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=240) as response:
+            data = json.loads(response.read().decode("utf-8", errors="replace"))
+        answer = str(((data.get("message") or {}).get("content") or "")).strip()
+        return {"ok": bool(answer), "provider": "ollama", "model": model, "answer": answer, "error": None if answer else "empty_answer"}
+    except Exception as exc:
+        return {"ok": False, "provider": "ollama", "model": model, "answer": "", "error": type(exc).__name__ + ":" + str(exc)[:220]}
+
+
+def is_to_trio(comment):
+    body = str(comment.get("body") or "")
+    return "[TO_BAZOR_TRIO]" in body and "[FROM_BAZOR_TRIO]" not in body
+
+
+def build_trio_prompt(comment_body, request_id, local_context, local_report):
+    body = str(comment_body or "")[:9000]
+    context = str(local_context or "")[:STUDIO_CONTEXT_MAX_CHARS]
+    files = ", ".join(local_report.get("files") or []) or "aucun fichier local lisible"
+    return f"""Tu participes à une revue BAZOR à trois cerveaux pour AI Simple Studio.
+Vincent fixe le besoin. GPT est le coordinateur final. Tu es un réviseur indépendant.
+Le même dossier est aussi envoyé à l'autre moteur (Ollama local ou Mammouth en ligne).
+
+REQUEST_ID: {request_id}
+FICHIERS_STUDIO_LUS_EN_LECTURE_SEULE: {files}
+
+Règles:
+- base-toi sur le code réel fourni ci-dessous, pas sur des suppositions;
+- ne prétends pas avoir exécuté ou modifié le PC;
+- cherche cause racine, patchs exacts et tests;
+- privilégie une MAJ consolidée plutôt qu'une succession de micro-fix;
+- ne propose aucune commande shell reçue depuis GitHub;
+- distingue clairement CONFIRMÉ PAR CODE / DÉDUCTION / À TESTER;
+- retourne: DIAGNOSTIC, PATCHES PRIORITAIRES, TESTS, RISQUES, QUESTIONS POUR GPT.
+
+--- ORDRE GPT / BAZOR ---
+{body}
+--- CONTEXTE LOCAL STUDIO ---
+{context}
+--- FIN CONTEXTE ---
+"""
+
+
+def process_trio_comment(comment):
+    cid = int(comment.get("id") or 0)
+    body = str(comment.get("body") or "")
+    request_id = request_id_from(body, cid)
+    log(f"TO_BAZOR_TRIO id={cid} request={request_id}")
+
+    local_context, local_report = collect_studio_context()
+    prompt = build_trio_prompt(body, request_id, local_context, local_report)
+
+    ollama = ollama_review(prompt)
+    mammouth = mammouth_client.chat(
+        prompt,
+        task_kind="code",
+        profile="code",
+        max_tokens=5000,
+    )
+
+    files = ", ".join(local_report.get("files") or []) or "aucun"
+    reply = (
+        "[FROM_BAZOR_TRIO]\n"
+        f"REQUEST_ID: {request_id}\n"
+        f"SOURCE_COMMENT_ID: {cid}\n"
+        f"STUDIO_CONTEXT: {'OK' if local_report.get('available') else 'UNAVAILABLE'}\n"
+        f"STUDIO_FILES: {files}\n"
+        f"OLLAMA_STATUS: {'OK' if ollama.get('ok') else 'BLOCKED'}\n"
+        f"OLLAMA_MODEL: {ollama.get('model') or 'none'}\n"
+        f"MAMMOUTH_STATUS: {'OK' if mammouth.get('ok') else 'BLOCKED'}\n"
+        f"MAMMOUTH_MODEL: {mammouth.get('model') or 'none'}\n\n"
+        "=== AVIS OLLAMA LOCAL ===\n"
+        + (ollama.get("answer") or ("BLOQUE: " + str(ollama.get("error") or "indisponible")))
+        + "\n\n=== AVIS MAMMOUTH EN LIGNE ===\n"
+        + (mammouth.get("answer") or ("BLOQUE: " + str(mammouth.get("message") or mammouth.get("error") or "indisponible")))
+        + "\n\n=== HANDOFF GPT ===\n"
+        "GPT doit comparer les deux avis, arbitrer les divergences et produire/appliquer le patch final vérifiable.\n"
+        "[/FROM_BAZOR_TRIO]"
+    )
+    post_comment(reply)
+    log(
+        "Retour trio publie id=%s ollama=%s mammouth=%s" %
+        (cid, bool(ollama.get("ok")), bool(mammouth.get("ok")))
+    )
+
+
 def is_to_mammouth(comment):
     body = str(comment.get("body") or "")
     return "[TO_MAMMOUTH]" in body and "[FROM_MAMMOUTH]" not in body
@@ -204,7 +440,7 @@ def process_comment(comment):
 def pending_comments(comments, processed):
     return [
         c for c in (comments or [])
-        if int(c.get("id") or 0) not in processed and is_to_mammouth(c)
+        if int(c.get("id") or 0) not in processed and (is_to_mammouth(c) or is_to_trio(c))
     ]
 
 
@@ -214,6 +450,10 @@ def selftest():
         ("Corrige ce script Python et ce bug API", "code"),
         ("Fais une revue et trouve la cause racine", "analysis"),
     ]
+    if not is_to_trio({"body": "[TO_BAZOR_TRIO]\nREQUEST_ID: TEST"}):
+        raise AssertionError("trio marker not detected")
+    if is_to_trio({"body": "[FROM_BAZOR_TRIO]\nREQUEST_ID: TEST"}):
+        raise AssertionError("trio response must not be reprocessed")
     for text, expected in tests:
         got = classify_profile(text)
         if got != expected:
@@ -244,7 +484,7 @@ def main():
         return 0
 
     log("=" * 68)
-    log("BAZOR MAMMOUTH GITHUB RELAY - GPT <-> MAMMOUTH")
+    log("BAZOR GITHUB RELAY - GPT <-> BAZOR <-> OLLAMA + MAMMOUTH")
     log(f"Canal: {REPO} issue #{ISSUE}")
     log(f"Polling: {POLL_SECONDS}s | aucun shell distant")
     log("=" * 68)
@@ -277,7 +517,10 @@ def main():
             for comment in pending:
                 cid = int(comment.get("id") or 0)
                 try:
-                    process_comment(comment)
+                    if is_to_trio(comment):
+                        process_trio_comment(comment)
+                    else:
+                        process_comment(comment)
                 except Exception as exc:
                     log(f"ERREUR id={cid}: {type(exc).__name__}: {exc}")
                     continue
