@@ -904,13 +904,23 @@ $ErrorActionPreference='SilentlyContinue'
 $conn=Get-NetTCPConnection -LocalPort 8765 -State Listen | Select-Object -First 1
 if(-not $conn){ exit 0 }
 $p=Get-CimInstance Win32_Process -Filter ("ProcessId="+$conn.OwningProcess)
-if($p -and $p.CommandLine -and ($p.CommandLine -like '*\\BazorAIROOM\\app.py*')){
-  Write-Output ("TARGET_PID="+$p.ProcessId)
-  Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop
+$gp=Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+$cmd=if($p){$p.CommandLine}else{""}
+$exe=if($p -and $p.ExecutablePath){$p.ExecutablePath}elseif($gp){$gp.Path}else{""}
+$parent=if($p){$p.ParentProcessId}else{0}
+if($cmd -and ($cmd -like '*\\BazorAIROOM\\app.py*')){
+  Write-Output ("TARGET_PID="+$conn.OwningProcess)
+  Write-Output ("TARGET_CMD="+$cmd)
+  Stop-Process -Id $conn.OwningProcess -Force -ErrorAction Stop
   exit 0
 }
+# Certains pythonw lancés par BAZOR exposent une CommandLine vide via CIM.
+# Dans ce cas, ne jamais tuer à l'aveugle : publier l'exécutable et le parent
+# pour permettre une récupération déterministe au passage suivant.
 Write-Output ("UNRELATED_PID="+$conn.OwningProcess)
-if($p){ Write-Output ("UNRELATED_CMD="+$p.CommandLine) }
+Write-Output ("UNRELATED_EXE="+$exe)
+Write-Output ("UNRELATED_PARENT="+$parent)
+Write-Output ("UNRELATED_CMD="+$cmd)
 exit 42
 """
                 owner_cp=subprocess.run(
