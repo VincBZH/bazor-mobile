@@ -1144,7 +1144,10 @@ print()
 while True:
     try:
         safe_update()
-        ensure_core_alive()\n        _process_filebus_repo(COORD_REPO)\n        try:\n            issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
+        ensure_core_alive()
+        _process_filebus_repo(COORD_REPO)
+        try:
+            issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
             for issue in issues:
                 title=issue["title"].lower()
                 comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
