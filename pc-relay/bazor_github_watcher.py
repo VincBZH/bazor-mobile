@@ -14,6 +14,7 @@ QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 CERTIFY_MARK="[BAZOR-CERTIFY-DONE]"
 H3_AUDIT_MARK="[BAZOR-H3-AUDIT-DONE]"
 WORKFLOWS_AUDIT_MARK="[BAZOR-WORKFLOWS-AUDIT-DONE]"
+H3_CONVERTER_MARK="[BAZOR-H3-CONVERTER-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
@@ -747,6 +748,25 @@ def _run_workflows_audit():
         return {"ok":False,"error":"report_unreadable","detail":str(exc)[:800],"stdout":cp.stdout[-2000:],"stderr":cp.stderr[-2000:]}
     return {"ok":cp.returncode==0,"report":report,"stdout":cp.stdout[-2000:],"stderr":cp.stderr[-2000:]}
 
+def _run_h3_converter_hotfix():
+    script=os.path.join(ROOT,"pc-relay","bazor_studio_h3_converter_hotfix.py")
+    if not os.path.exists(script):
+        return {"ok":False,"error":"hotfix_missing"}
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    try:
+        cp=subprocess.run([sys.executable,script],cwd=ROOT,capture_output=True,text=True,encoding="utf-8",errors="replace",timeout=180,creationflags=flags)
+    except Exception as exc:
+        return {"ok":False,"error":type(exc).__name__,"detail":str(exc)[:1000]}
+    payload=None
+    for line in reversed((cp.stdout or "").splitlines()):
+        try:
+            obj=json.loads(line)
+            if isinstance(obj,dict):
+                payload=obj; break
+        except Exception:
+            pass
+    return {"ok":cp.returncode==0 and bool((payload or {}).get("ok")),"returncode":cp.returncode,"payload":payload or {},"stdout":cp.stdout[-5000:],"stderr":cp.stderr[-2500:]}
+
 def answer_text(result):
     for section in ("mammouth","ollama"):
         o=result.get(section) or {}
@@ -783,6 +803,27 @@ while True:
                     reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body),task_smoke=("task-smoke" in body or "task smoke" in body))
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
+                    continue
+                if title.startswith("[bazor-hotfix:h3-ui-api]"):
+                    if H3_CONVERTER_MARK in comments:
+                        continue
+                    result=_run_h3_converter_hotfix()
+                    payload=result.get("payload") or {}
+                    lines=[
+                        H3_CONVERTER_MARK,"","**BAZOR Studio — hotfix UI → API H3**","",
+                        "Statut: "+("PASS" if result.get("ok") else "FAIL"),
+                        "Code: "+str(result.get("returncode")),
+                        "État: "+str(payload.get("state") or "?"),
+                        "Modifié: "+str(payload.get("changed")),
+                        "Rapport: "+str(payload.get("report") or "?"),
+                        "Test: "+json.dumps(payload.get("unit_test") or {},ensure_ascii=False),
+                    ]
+                    if result.get("stderr"):
+                        lines += ["","stderr:",str(result.get("stderr"))[-1800:]]
+                    try:
+                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","\n".join(lines)[:12000]])
+                    except Exception:
+                        pass
                     continue
                 if title.startswith("[bazor-workflows-audit]"):
                     if WORKFLOWS_AUDIT_MARK in comments:
