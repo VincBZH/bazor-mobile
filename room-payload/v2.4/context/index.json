@@ -1,0 +1,13 @@
+{
+  "schema": "bazor.context.index/1.0",
+  "protected_categories": ["identities", "security_rules", "runtime_capabilities"],
+  "memory_types": ["fact", "hypothesis", "decision", "preference", "task", "proof"],
+  "required_provenance": [
+    "source_agent",
+    "source_file",
+    "source_message_id",
+    "verified_by",
+    "confidence",
+    "last_verified_at"
+  ]
+}
