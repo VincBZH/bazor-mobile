@@ -1,4 +1,4 @@
-import json, subprocess, time, urllib.request, os, sys, re, concurrent.futures, zipfile
+import json, subprocess, time, urllib.request, os, sys, re, concurrent.futures, zipfile, hashlib
 
 REPO="VincBZH/bazor-mobile"
 COORD_REPO="VincBZH/projetWII-ai-relay"
@@ -92,6 +92,46 @@ def maybe_restart_core(reason="update"):
         pass
     _restart_core()
     return True
+
+def _expected_core_runtime_signature():
+    h=hashlib.sha256()
+    for rel in (
+        os.path.join("pc-relay","bazor_pc_relay_v3.py"),
+        os.path.join("pc-relay","bazor_action_engine.py"),
+        os.path.join("pc-relay","bazor_security.py"),
+        os.path.join("pc-relay","mammouth_client.py"),
+    ):
+        p=os.path.join(ROOT,rel)
+        try:
+            h.update(os.path.basename(p).encode("utf-8"))
+            h.update(open(p,"rb").read())
+        except Exception:
+            h.update(("missing:"+p).encode("utf-8"))
+    return h.hexdigest()
+
+def _core_runtime_signature():
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8775/api/v1/health",timeout=2.5) as r:
+            data=json.loads(r.read().decode("utf-8"))
+        return str(data.get("runtime_signature") or "")
+    except Exception:
+        return ""
+
+def _ensure_core_runtime_current():
+    expected=_expected_core_runtime_signature()
+    loaded=_core_runtime_signature()
+    if loaded and loaded==expected:
+        return True
+    print("[CORE RUNTIME] signature stale/missing -> restart required")
+    maybe_restart_core("runtime signature mismatch")
+    deadline=time.time()+18
+    while time.time()<deadline:
+        time.sleep(1.0)
+        loaded=_core_runtime_signature()
+        if loaded and loaded==expected:
+            print("[OK CORE RUNTIME] signature chargee:",loaded[:12])
+            return True
+    return False
 
 def ensure_core_alive():
     global CORE_FAILS,PENDING_CORE_RESTART
@@ -2330,6 +2370,9 @@ while True:
                         continue
                     retrying=(TASK_MARK in comments)
                     print(f"[TASK{' RETRY' if retrying else ''}] #{issue['number']} {task_id}")
+                    if not _ensure_core_runtime_current():
+                        print(f"[TASK WAIT] #{issue['number']} {task_id} - Core runtime pas encore sur le code courant")
+                        continue
                     if retrying:
                         try:
                             gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",
