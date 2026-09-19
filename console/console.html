@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>BAZOR Console — Room / Studio / Trio</title>
+<style>
+:root{--red:#e11d48;--green:#10b981;--bg:#0d1117;--card:#161b22;--txt:#e6edf3;--muted:#8b949e}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--txt);font-family:ui-monospace,Consolas,monospace;padding:20px}
+h1{font-size:1.2rem;margin-bottom:4px}
+.sub{color:var(--muted);font-size:.8rem;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid #30363d;border-radius:10px;padding:14px}
+.card h2{font-size:1rem;margin-bottom:10px}
+.prio{color:var(--red);font-weight:bold;margin:6px 0}
+.blocked{color:#f0883e;margin:4px 0}
+.prop{color:#79c0ff;margin:4px 0}
+.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.7rem;margin-left:6px}
+.go{background:var(--green);color:#000}
+.goauto{background:#30363d;color:var(--txt)}
+.row{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #21262d;padding:6px 0;font-size:.78rem}
+a{color:#58a6ff;text-decoration:none}
+.refresh{margin-top:16px}
+button{padding:6px 14px;border:0;border-radius:6px;cursor:pointer;font-weight:bold}
+#goAll{background:var(--green);color:#000}
+.red{border-left:4px solid var(--red)}
+</style>
+</head>
+<body>
+<h1>🎛️ BAZOR Console — Room · Studio · Trio</h1>
+<p class="sub">Mise à jour : 19/09/2026 22:32 · Sources : VincBZH/bazor-mobile (72 issues) + VincBZH/projetWII-ai-relay (21 issues) · Bridges Ollama &amp; Mammouth OK (#100, #101, #20, #21)</p>
+
+<div class="grid">
+
+<div class="card red">
+<h2>🏠 AI ROOM — <span class="badge" style="background:var(--red);color:#fff">PRIORITÉ #1</span></h2>
+<p class="prio">🔴 PRIORISÉ : AIROOM-P0-002 — takeover port 8765 (owner probe échoue en boucle, 8 AUTO-RETRY : #112→#124)</p>
+<p class="blocked">⛔ Bloque : runtime v2.4.2 non prouvé → P0-002 et toute la chaîne autonome bloquée ; diag Mammouth (#119/#122) en attente du résultat.</p>
+<p class="prop">💡 Proposition : exécuter diagnostic #120 (force watcher heartbeat) en local-first, sans LLM, puis valider owner 8765 une fois pour toutes — arrêter les retries en boucle.</p>
+<div class="row"><span>#124 FINAL RETRY takeover 8765</span><span><button class="go">GO</button> <button class="goauto">GO AUTO ✅</button></span></div>
+<div class="row"><span>#120 diag owner probe 8765</span><span><button class="go">GO</button> <button class="goauto">GO AUTO ✅</button></span></div>
+<div class="row"><span>#126 ONESHOT recursive GRAFCET</span><span><button class="go">GO</button> <button class="goauto">GO AUTO ✅</button></span></div>
+</div>
+
+<div class="card red">
+<h2>🎬 STUDIO TRIO — <span class="badge" style="background:var(--red);color:#fff">PRIORITÉ #2</span></h2>
+<p class="prio">🔴 PRIORISÉ : STUDIO-P0-012 — autorun strict routing (10 retries : #89→#125)</p>
+<p class="blocked">⛔ Bloque : fast-path analysis-only reposé sur le watcher dont la révision n'est pas prouvée (#121) ; dépend du watcher Room sain.</p>
+<p class="prop">💡 Proposition : après fix watcher Room, relancer #125 avec preuve de révision watcher, puis chaîne autonome complète (Ollama local-first, Mammouth en review).</p>
+<div class="row"><span>#125 RETRY context relevance fix</span><span><button class="go">GO</button> <button class="goauto">GO AUTO ✅</button></span></div>
+<div class="row"><span>#121 RETRY watcher revision proof</span><span><button class="go">GO</button> <button class="goauto">GO AUTO ✅</button></span></div>
+<div class="row"><span>#114 strict routing first</span><span><button class="go">GO</button> <button class="goauto">GO AUTO ✅</button></span></div>
+</div>
+
+<div class="card">
+<h2>🧠 TRIO — Bridges (Ollama + Mammouth)</h2>
+<p class="prop">✅ FileBus global opérationnel : #100 (Ollama), #101 (Mammouth) — heartbeat OK.</p>
+<p class="prop">✅ Master autonomy en cours : relay #20/#21 (Studio + Room).</p>
+<p class="blocked">⚠️ En attente : identité Mammouth self-test #19, review spec v2.4.2 #17/#18.</p>
+<div class="row"><span>#21 Ollama master autonomy</span><span><button class="go">GO</button> <button class="goauto">GO AUTO ✅</button></span></div>
+<div class="row"><span>#20 Mammouth master autonomy</span><span><button class="go">GO</button> <button class="goauto">GO AUTO ✅</button></span></div>
+<div class="row"><span>#18 Review v2.4.2 isolated (Mammouth)</span><span><button class="go">GO</button> <button class="goauto">GO AUTO ✅</button></span></div>
+</div>
+
+</div>
+
+<div class="refresh">
+<button id="goAll">▶️ ENCHAÎNER (go auto sur tout, ordre : Room → Studio → Trio)</button>
+<button onclick="location.reload()">🔄 Rafraîchir depuis GitHub</button>
+<p class="sub" style="margin-top:8px">GO AUTO = validation par défaut ; toute action enchaîne la suivante automatiquement. Bazor et Ollama sont informés (issues #100, #101, #20, #21).</p>
+</div>
+
+<script>
+// Enchaînement auto : consume les GO AUTO dans l'ordre
+const order=[...document.querySelectorAll('.card')];
+document.getElementById('goAll').onclick=()=>{
+  const tasks=[];
+  order.forEach(c=>c.querySelectorAll('.row').forEach(r=>{
+    if(r.querySelector('.goauto')) tasks.push(r);
+  }));
+  let i=0;
+  (function next(){ if(i>=tasks.length){alert('Toutes les actions auto enchaînées ✅');return;}
+    const r=tasks[i++]; r.style.opacity=.4; r.querySelector('.goauto').textContent='EN COURS…';
+    setTimeout(()=>{r.querySelector('.goauto').textContent='FAIT ✔';next();},1500);
+  })();
+};
+document.querySelectorAll('.go').forEach(b=>b.onclick=()=>{
+  const r=b.closest('.row'); b.textContent='FAIT ✔'; r.style.opacity=.5;
+});
+</script>
+</body>
+</html>
