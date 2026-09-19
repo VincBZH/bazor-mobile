@@ -1349,7 +1349,7 @@ def _safe_filebus_message(title):
         "FILE: bridge/messages/"+name+"\n\n"+raw
     )
     if target=="ollama":
-        result=core_chat(prompt,timeout=45)
+        result=core_chat(prompt,timeout=180)
     else:
         payload={
             "project_id":"simple-studio",
@@ -1364,6 +1364,58 @@ def _safe_filebus_message(title):
         }
         result=_core_task(payload,timeout=260)
     return target,name,result
+
+FILEBUS_RETRY_STATE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","filebus_retry_state.json")
+
+def _filebus_retry_load():
+    try:
+        data=json.load(open(FILEBUS_RETRY_STATE,"r",encoding="utf-8"))
+        return data if isinstance(data,dict) else {}
+    except Exception:
+        return {}
+
+def _filebus_retry_save(data):
+    try:
+        os.makedirs(os.path.dirname(FILEBUS_RETRY_STATE),exist_ok=True)
+        tmp=FILEBUS_RETRY_STATE+".tmp"
+        with open(tmp,"w",encoding="utf-8") as h:
+            json.dump(data,h,ensure_ascii=False,indent=2)
+        os.replace(tmp,FILEBUS_RETRY_STATE)
+    except Exception as exc:
+        print("[FILEBUS RETRY STATE WARN]",type(exc).__name__,str(exc)[:180])
+
+def _filebus_retry_allowed(repo_name, issue_number, target, comments):
+    # Mammouth reste fail-closed tant que provider indisponible.
+    # Ollama local peut se relancer tout seul : timeout réseau/local n'exige pas Vincent.
+    if target!="ollama":
+        return FILEBUS_BLOCKED_MARK not in comments
+    if FILEBUS_MARK in comments:
+        return False
+    if FILEBUS_BLOCKED_MARK not in comments:
+        return True
+    state=_filebus_retry_load()
+    key=str(repo_name)+"#"+str(issue_number)
+    slot=state.get(key) or {}
+    attempts=int(slot.get("attempts") or 0)
+    next_epoch=int(slot.get("next_epoch") or 0)
+    if attempts>=6:
+        return False
+    return int(time.time()) >= next_epoch
+
+def _filebus_retry_note(repo_name, issue_number, target, passed):
+    if target!="ollama":
+        return
+    state=_filebus_retry_load()
+    key=str(repo_name)+"#"+str(issue_number)
+    if passed:
+        state[key]={"attempts":0,"next_epoch":0,"last":"success"}
+    else:
+        prev=state.get(key) or {}
+        attempts=int(prev.get("attempts") or 0)+1
+        # 2, 4, 8, 16, 30, 30 min: borné, autonome, sans spam.
+        delay=min(1800,120*(2**max(0,attempts-1)))
+        state[key]={"attempts":attempts,"next_epoch":int(time.time())+delay,"last":"blocked"}
+    _filebus_retry_save(state)
 
 def _process_filebus_repo(repo_name):
     """Traite uniquement les tickets FileBus du dépôt de coordination.
@@ -1385,7 +1437,11 @@ def _process_filebus_repo(repo_name):
             comments=gh(["issue","view",str(issue["number"]),"--repo",repo_name,"--comments"])
         except Exception:
             comments=""
-        if FILEBUS_MARK in comments or FILEBUS_BLOCKED_MARK in comments:
+        m_target=re.match(r"(?i)^\[bazor-filebus:(ollama|mammouth):",str(issue.get("title") or ""))
+        target_hint=(m_target.group(1).lower() if m_target else "")
+        if FILEBUS_MARK in comments:
+            continue
+        if not _filebus_retry_allowed(repo_name,issue["number"],target_hint,comments):
             continue
         try:
             target,name,result=_safe_filebus_message(issue.get("title") or "")
@@ -1449,6 +1505,7 @@ def _process_filebus_repo(repo_name):
                 +"\n"+answer
             )
             gh(["issue","comment",str(issue["number"]),"--repo",repo_name,"--body",reply[:12000]])
+            _filebus_retry_note(repo_name,issue["number"],target,passed)
             print(f"[{'OK' if passed else 'BLOQUE'} FILEBUS] {repo_name}#{issue['number']} {target} <- {name}")
         except Exception as exc:
             detail=(type(exc).__name__+": "+str(exc))[:1200]
@@ -1457,6 +1514,7 @@ def _process_filebus_repo(repo_name):
                     FILEBUS_BLOCKED_MARK+"\n\nSTATUS: BLOCKED\nERROR: "+detail])
             except Exception:
                 pass
+            _filebus_retry_note(repo_name,issue["number"],target_hint,False)
             print(f"[BLOQUE FILEBUS] {repo_name}#{issue['number']} {detail}")
 
 def _control_load():
