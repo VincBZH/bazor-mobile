@@ -1857,8 +1857,10 @@ def _run_airoom_v3_beta_grafcet():
         checks={p:probe(beta_port,p,3) for p in paths}
         smoke=all(v.get("ok") for v in checks.values())
         if smoke:
+            control_body=checks["/control"].get("body") or ""
             smoke=("BAZOR AI ROOM" in (checks["/"].get("body") or "") and
-                   "PANNEAU DE CONTR" in (checks["/control"].get("body") or ""))
+                   "ÇA BOSSE VRAIMENT" in control_body and
+                   "STOP AUTO" in control_body)
         if not gate("G5_HTTP_UI_CONTROL",smoke,json.dumps({k:v.get("http") for k,v in checks.items()},ensure_ascii=False)):
             return {"ok":False,"status":"BLOCKED","trace":trace,"error":"beta_http_smoke_failed","checks":checks}
 
@@ -2129,7 +2131,7 @@ while True:
                 title=issue["title"].lower()
                 comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
                 if title.startswith("[bazor-v3-beta]"):
-                    if V3_BETA_MARK in comments:
+                    if V3_BETA_MARK in comments and "Statut: V3_BETA_READY" in comments:
                         continue
                     print(f"[V3 BETA] #{issue['number']} GRAFCET one-shot")
                     result=_run_airoom_v3_beta_grafcet()
