@@ -496,6 +496,15 @@ def _mobile_state_put(state):
 
 def _registry_task(task_id):
     path=os.path.join(ROOT,"bazor_registry.json")
+    if not os.path.exists(path):
+        # Auto-récupération sûre d'un fichier versionné connu. Aucun chemin/ordre GitHub libre.
+        try:
+            p=_git("checkout","origin/main","--","bazor_registry.json")
+            if p.returncode:
+                raise RuntimeError((p.stderr or p.stdout).strip() or "git_checkout_failed")
+            print("[RECOVERY] bazor_registry.json restaure depuis origin/main")
+        except Exception as exc:
+            raise RuntimeError("registry_missing_recovery_failed: "+str(exc))
     try:
         data=json.load(open(path,"r",encoding="utf-8"))
     except Exception as exc:
