@@ -35,6 +35,21 @@ def acquire_singleton() -> socket.socket:
         raise SystemExit(0)
 
 
+def current_head() -> str:
+    try:
+        cp = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return (cp.stdout or "").strip() if cp.returncode == 0 else "unknown"
+    except Exception:
+        return "unknown"
+
+
 def start_watcher() -> subprocess.Popen:
     if not WATCHER.exists():
         raise FileNotFoundError(str(WATCHER))
@@ -49,12 +64,13 @@ def start_watcher() -> subprocess.Popen:
         creationflags=creationflags,
         close_fds=True,
     )
-    log(f"watcher started pid={proc.pid} python={sys.executable}")
+    log(f"watcher started pid={proc.pid} python={sys.executable} head={current_head()} watcher={WATCHER}")
     return proc
 
 
 def main() -> int:
     _lock = acquire_singleton()
+    log(f"supervisor boot python={sys.executable} head={current_head()} root={ROOT}")
     proc = None
     last_heartbeat = 0.0
     while True:
@@ -67,7 +83,7 @@ def main() -> int:
 
             now = time.time()
             if now - last_heartbeat >= HEARTBEAT_SECONDS:
-                log(f"supervisor alive watcher_pid={proc.pid}")
+                log(f"supervisor alive watcher_pid={proc.pid} watcher_rc={proc.poll()} head={current_head()}")
                 last_heartbeat = now
             time.sleep(1)
         except KeyboardInterrupt:
