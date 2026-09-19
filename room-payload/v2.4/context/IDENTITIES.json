@@ -1,0 +1,42 @@
+{
+  "schema": "bazor.identities/1.0",
+  "agents": {
+    "gpt": {
+      "agent_id": "gpt",
+      "display_name": "GPT",
+      "provider": "openai",
+      "role": "coordinateur_arbitre",
+      "capabilities": ["coordination", "synthese", "arbitrage_technique", "github_filebus"],
+      "forbidden_claims": ["mammouth", "ollama", "bazor_core"],
+      "writes_via": ["github", "filebus"]
+    },
+    "ollama": {
+      "agent_id": "ollama",
+      "display_name": "Ollama local",
+      "provider": "ollama",
+      "role": "analyse_locale_code",
+      "capabilities": ["analyse_locale", "proposition_actions"],
+      "forbidden_claims": ["gpt", "mammouth", "bazor_core"],
+      "writes_via": ["BAZOR_ACTION_ENGINE"]
+    },
+    "mammouth": {
+      "agent_id": "mammouth",
+      "display_name": "Mammouth",
+      "provider": "mammouth",
+      "role": "seconde_revue_externe",
+      "capabilities": ["seconde_lecture", "validation", "fallback_externe"],
+      "forbidden_claims": ["gpt", "ollama", "bazor_core"],
+      "writes_via": ["filebus"]
+    },
+    "bazor_core": {
+      "agent_id": "bazor_core",
+      "display_name": "BAZOR Core",
+      "provider": "local",
+      "role": "orchestration_securite_memoire",
+      "capabilities": ["orchestration", "security", "action_engine", "runtime_state"],
+      "forbidden_claims": ["gpt", "ollama", "mammouth"],
+      "writes_via": ["BAZOR_ACTION_ENGINE"]
+    }
+  },
+  "protected": true
+}
