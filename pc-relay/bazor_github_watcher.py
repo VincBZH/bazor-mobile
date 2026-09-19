@@ -10,7 +10,7 @@ POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 DIAG_MARK="[BAZOR-DIAG-DONE]"
 MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
-FILEBUS_MARK="[BAZOR-FILEBUS-DONE]"
+FILEBUS_MARK="[BAZOR-FILEBUS-DONE]"\nFILEBUS_BLOCKED_MARK="[BAZOR-FILEBUS-BLOCKED]"
 TASK_MARK="[BAZOR-TASK-DONE]"
 QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 CERTIFY_MARK="[BAZOR-CERTIFY-DONE]"
@@ -1099,24 +1099,37 @@ def _process_filebus_repo(repo_name):
             comments=gh(["issue","view",str(issue["number"]),"--repo",repo_name,"--comments"])
         except Exception:
             comments=""
-        if FILEBUS_MARK in comments:
+        if FILEBUS_MARK in comments or FILEBUS_BLOCKED_MARK in comments:
             continue
         try:
             target,name,result=_safe_filebus_message(issue.get("title") or "")
+            answer=answer_text(result)
+            expected=None
+            try:
+                raw=open(os.path.join(ROOT,"bridge","messages",name),"r",encoding="utf-8-sig",errors="replace").read()
+                m_nonce=re.search(r"\b(?:OLLAMA|MAMMOUTH)-FILEBUS-[0-9]+-OK\b",raw)
+                expected=m_nonce.group(0) if m_nonce else None
+            except Exception:
+                expected=None
+            passed=bool(answer.strip()) and (not expected or expected in answer)
+            mark=FILEBUS_MARK if passed else FILEBUS_BLOCKED_MARK
+            status="VERIFIE" if passed else "BLOCKED"
             reply=(
-                FILEBUS_MARK+"\n\n"
+                mark+"\n\n"
                 "REPO: "+repo_name+"\n"
                 "TARGET: "+target+"\n"
-                "FILE: bridge/messages/"+name+"\n\n"
-                +answer_text(result)
+                "FILE: bridge/messages/"+name+"\n"
+                "STATUS: "+status+"\n"
+                +(("EXPECTED_NONCE: "+expected+"\n") if expected else "")
+                +"\n"+answer
             )
             gh(["issue","comment",str(issue["number"]),"--repo",repo_name,"--body",reply[:12000]])
-            print(f"[OK FILEBUS] {repo_name}#{issue['number']} {target} <- {name}")
+            print(f"[{'OK' if passed else 'BLOQUE'} FILEBUS] {repo_name}#{issue['number']} {target} <- {name}")
         except Exception as exc:
             detail=(type(exc).__name__+": "+str(exc))[:1200]
             try:
                 gh(["issue","comment",str(issue["number"]),"--repo",repo_name,"--body",
-                    FILEBUS_MARK+"\n\nSTATUS: BLOCKED\nERROR: "+detail])
+                    FILEBUS_BLOCKED_MARK+"\n\nSTATUS: BLOCKED\nERROR: "+detail])
             except Exception:
                 pass
             print(f"[BLOQUE FILEBUS] {repo_name}#{issue['number']} {detail}")
