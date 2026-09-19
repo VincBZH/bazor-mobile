@@ -669,7 +669,13 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
         current_progress = 0
 
     context_started = time.monotonic()
-    local_context, local_report = ACTION_ENGINE.context_for_project(project_id, focus=(str(subproject_name or "")+"\n"+str(task or "")))
+    focus_blob = str(subproject_name or "")+"\n"+str(task or "")
+    # STUDIO-P0-012 est une tâche de routage stricte. On injecte le marqueur
+    # canonique dans le focus pour éviter qu'une reformulation du prompt
+    # désactive accidentellement le filtre spécialisé.
+    if project_id=="simple-studio" and "STUDIO-P0-012" in focus_blob.upper():
+        focus_blob += "\nSTUDIO-P0-012 t2i i2i t2v i2v source_media workflow requested_mode effective_mode route"
+    local_context, local_report = ACTION_ENGINE.context_for_project(project_id, focus=focus_blob)
     # IMPORTANT: pour une tâche de routage stricte, ne jamais retomber sur le
     # vieux fallback générique par récence. Sinon le filtre de pertinence de
     # l'Action Engine est contourné et un script checkpoint récent peut revenir.
