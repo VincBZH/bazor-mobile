@@ -25,6 +25,20 @@ except Exception as exc:
     raise SystemExit(1)
 
 try:
+    parser_cases = [
+        ({"choices": [{"message": {"content": "texte simple"}}]}, "texte simple"),
+        ({"choices": [{"message": {"content": [{"type": "text", "text": "texte en parties"}]}}]}, "texte en parties"),
+        ({"output_text": "texte sortie"}, "texte sortie"),
+    ]
+    for payload, expected in parser_cases:
+        assert mammouth_client._extract_answer(payload) == expected
+    assert mammouth_client._extract_answer({"choices": [{"message": {"content": ""}}]}) == ""
+    print("Reponses API  : OK")
+except Exception as exc:
+    print("Reponses API  : BLOQUE", exc)
+    raise SystemExit(1)
+
+try:
     with urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=1.2) as response:
         data = json.loads(response.read().decode("utf-8"))
     models = [m.get("name", "") for m in data.get("models", []) if m.get("name")]
