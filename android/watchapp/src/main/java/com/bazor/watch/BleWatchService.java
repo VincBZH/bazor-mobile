@@ -467,6 +467,19 @@ public class BleWatchService extends Service {
 
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm != null) nm.notify(notificationId, notification);
+
+        relayToC28("BAZOR Agenda • " + label, summary);
+    }
+
+    private void relayToC28(String title, String text) {
+        try {
+            getPackageManager().getPackageInfo("com.skype.raider", 0);
+            Intent relay = new Intent("com.bazor.montre.RELAY_TO_C28");
+            relay.setPackage("com.skype.raider");
+            relay.putExtra("title", title == null ? "BAZOR" : title);
+            relay.putExtra("text", text == null ? "" : text);
+            sendBroadcast(relay);
+        } catch (Exception ignored) {}
     }
 
     private String loadAgendaSummary(int dayOffset) {
