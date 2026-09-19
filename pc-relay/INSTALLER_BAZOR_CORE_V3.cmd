@@ -25,7 +25,6 @@ echo Sauvegarde reversible : %QUAR_DIR%
 echo.
 
 echo [1/9] Arret cible et sauvegarde de l'ancienne version...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$targets=@('mammouth_github_relay.py','bazor_pc_relay_v3.py'); Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { ($_.Name -eq 'python.exe' -or $_.Name -eq 'pythonw.exe') -and $_.CommandLine -and ($targets | Where-Object { $name=$_; $p=$args[0]; $false }) }" >nul 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$install=[IO.Path]::GetFullPath('%INSTALL_DIR%'); $log='%LOG_FILE%'; Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { ($_.Name -eq 'python.exe' -or $_.Name -eq 'pythonw.exe') -and $_.CommandLine -and ($_.CommandLine -like ('*'+$install+'*mammouth_github_relay.py*') -or $_.CommandLine -like ('*'+$install+'*bazor_pc_relay_v3.py*')) } | ForEach-Object { Add-Content -LiteralPath $log -Value ((Get-Date -Format o)+' | STOP | PID='+$_.ProcessId+' | mise a jour | INSTALLER_BAZOR_CORE_V3'); Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 timeout /t 1 /nobreak >nul
 for %%F in (bazor_pc_relay_v3.py bazor_security.py mammouth_client.py mammouth_github_relay.py DEMARRER_BAZOR_PC_RELAY.cmd test_bazor_v3.py) do (
