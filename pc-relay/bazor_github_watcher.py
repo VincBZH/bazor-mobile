@@ -13,6 +13,7 @@ MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
 FILEBUS_MARK="[BAZOR-FILEBUS-DONE]"
 FILEBUS_BLOCKED_MARK="[BAZOR-FILEBUS-BLOCKED]"
 TASK_MARK="[BAZOR-TASK-DONE]"
+V3_BETA_MARK="[BAZOR-V3-BETA-DONE]"
 QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 CERTIFY_MARK="[BAZOR-CERTIFY-DONE]"
 H3_AUDIT_MARK="[BAZOR-H3-AUDIT-DONE]"
@@ -1972,6 +1973,24 @@ while True:
             for issue in issues:
                 title=issue["title"].lower()
                 comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
+                if title.startswith("[bazor-v3-beta]"):
+                    if V3_BETA_MARK in comments:
+                        continue
+                    print(f"[V3 BETA] #{issue['number']} GRAFCET one-shot")
+                    result=_run_airoom_v3_beta_grafcet()
+                    reply=V3_BETA_MARK+"\n\n**BAZOR AI ROOM V3 BETA — GRAFCET**\n\nStatut: "+str(result.get("status") or ("OK" if result.get("ok") else "BLOCKED"))
+                    reply+="\nURL: "+str(result.get("beta_url") or "—")
+                    reply+="\nCONTROL: "+str(result.get("control_url") or "—")
+                    reply+="\nDIAG ZIP: "+str(result.get("diagnostic_zip") or "—")
+                    reply+="\nSCREENSHOT: "+str(result.get("screenshot") or "—")
+                    reply+="\nOLLAMA_PROVED: "+str(result.get("ollama_proved"))
+                    reply+="\nTRIO_READY: "+str(result.get("trio_ready"))
+                    reply+="\n\nGRAFCET:\n"+json.dumps(result.get("trace") or [],ensure_ascii=False,indent=2)[:7000]
+                    if result.get("error") or result.get("detail"):
+                        reply+="\n\nERROR: "+str(result.get("error") or "")+"\nDETAIL: "+str(result.get("detail") or "")[:1800]
+                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
+                    print(f"[V3 BETA DONE] #{issue['number']} -> {result.get('status')}")
+                    continue
                 if title.startswith("[bazor-diag]"):
                     if DIAG_MARK in comments: continue
                     print(f"[DIAG] #{issue['number']} {issue['title']}")
