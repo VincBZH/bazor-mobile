@@ -1611,6 +1611,199 @@ def _control_export_bundle(reason="manual",include_screenshot=True):
     except Exception as exc:
         return {"ok":False,"zip":None,"screenshot":shot,"error":type(exc).__name__+": "+str(exc)[:800]}
 
+def _run_airoom_v3_beta_grafcet():
+    """GRAFCET borné V3 Beta: sync -> staging -> smoke -> control -> logs -> capture -> providers -> OK.
+    Ne touche pas au service 8765 s'il n'est pas positivement identifié.
+    """
+    trace=[]
+    def gate(name,ok,detail=""):
+        row={"gate":name,"ok":bool(ok),"detail":str(detail or "")[:1200],"at":time.strftime("%Y-%m-%dT%H:%M:%S")}
+        trace.append(row)
+        state=_control_load()
+        state["grafcet"]=trace[-12:]
+        state["current_gate"]=name
+        state["last_proof"]=json.dumps(row,ensure_ascii=False)
+        _control_save(state)
+        return bool(ok)
+
+    try:
+        from bazor_action_engine import ActionEngine
+        localapp=os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"),"AppData","Local")
+        room_root=os.path.join(localapp,"BazorAIROOM")
+        app_path=os.path.join(room_root,"app.py")
+        payload_path=os.path.join(ROOT,"room-payload","v2.4","BAZOR_ROOM_V2_4_STANDALONE.py")
+        if not gate("G0_SOURCES",os.path.exists(payload_path),"payload="+str(os.path.exists(payload_path))):
+            return {"ok":False,"status":"BLOCKED","trace":trace,"error":"payload_missing"}
+
+        # G1 — synchronisation locale via Action Engine uniquement.
+        source=open(payload_path,"r",encoding="utf-8").read()
+        actions=[]
+        if os.path.exists(app_path):
+            current=open(app_path,"r",encoding="utf-8",errors="strict").read()
+            if current!=source:
+                actions.append({"op":"replace","root":"ai_room","path":"app.py","find":current,"replace":source,"expected_count":1})
+        else:
+            actions.append({"op":"create","root":"ai_room","path":"app.py","content":source})
+
+        payload_context=os.path.join(ROOT,"room-payload","v2.4","context")
+        for rel in ("IDENTITIES.json","index.json"):
+            src=os.path.join(payload_context,rel)
+            dst=os.path.join(room_root,"context",rel)
+            if os.path.exists(src):
+                desired=open(src,"r",encoding="utf-8").read()
+                if os.path.exists(dst):
+                    existing=open(dst,"r",encoding="utf-8",errors="strict").read()
+                    if existing!=desired:
+                        actions.append({"op":"replace","root":"ai_room","path":"context/"+rel,"find":existing,"replace":desired,"expected_count":1})
+                else:
+                    actions.append({"op":"create","root":"ai_room","path":"context/"+rel,"content":desired})
+        src_state=os.path.join(payload_context,"CURRENT_STATE.json")
+        dst_state=os.path.join(room_root,"context","CURRENT_STATE.json")
+        if os.path.exists(src_state) and not os.path.exists(dst_state):
+            actions.append({"op":"create","root":"ai_room","path":"context/CURRENT_STATE.json","content":open(src_state,"r",encoding="utf-8").read()})
+
+        ar={"ok":True,"applied":False,"preflight":{"ok":True},"files":[],"tests":[]}
+        if actions:
+            engine=ActionEngine(os.path.join(ROOT,"pc-relay","BAZOR_DATA"))
+            ar=engine.apply("ai-room",actions,request_id="AIROOM-V3-BETA-GRAFCET")
+        if not gate("G1_SYNC_ACTION_ENGINE",bool(ar.get("ok")),str(ar.get("detail") or ar.get("reason") or "sync_ok")):
+            return {"ok":False,"status":"BLOCKED","trace":trace,"error":"sync_failed","action_result":ar}
+
+        # G2 — compilation locale avant lancement.
+        cp=subprocess.run([sys.executable,"-m","py_compile",app_path],capture_output=True,text=True,timeout=20,
+                          creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+        if not gate("G2_PY_COMPILE",cp.returncode==0,(cp.stderr or cp.stdout or "PASS")):
+            return {"ok":False,"status":"BLOCKED","trace":trace,"error":"py_compile_failed","detail":cp.stderr[-1200:]}
+
+        def probe(port,path="/health",timeout=2):
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:"+str(port)+path,timeout=timeout) as r:
+                    raw=r.read().decode("utf-8","replace")
+                    return {"ok":200<=r.status<300,"http":r.status,"body":raw}
+            except Exception as exc:
+                return {"ok":False,"http":None,"error":type(exc).__name__+": "+str(exc)[:260]}
+
+        # G3 — choisir un port beta sans perturber 8765. Réutiliser un V3 beta déjà sain.
+        beta_port=None
+        for port in (8768,8769,8780):
+            h=probe(port)
+            if h.get("ok"):
+                try:
+                    hj=json.loads(h.get("body") or "{}")
+                except Exception:
+                    hj={}
+                if str(hj.get("version") or "").startswith("3.0.0-beta"):
+                    beta_port=port
+                    break
+                continue
+            beta_port=port
+            break
+        if not gate("G3_BETA_PORT",beta_port is not None,"port="+str(beta_port)):
+            return {"ok":False,"status":"BLOCKED","trace":trace,"error":"no_safe_beta_port"}
+
+        # G4 — lancer uniquement si ce port n'héberge pas déjà la bonne beta.
+        h=probe(beta_port)
+        already=False
+        if h.get("ok"):
+            try:
+                already=str(json.loads(h.get("body") or "{}").get("version") or "").startswith("3.0.0-beta")
+            except Exception:
+                already=False
+        if not already:
+            env=os.environ.copy()
+            env["BAZOR_ROOM_PORT"]=str(beta_port)
+            env["BAZOR_ROOM_HOST"]="127.0.0.1"
+            log_path=os.path.join(room_root,"room_v3_beta.log")
+            log=open(log_path,"a",encoding="utf-8",buffering=1)
+            flags=(getattr(subprocess,"CREATE_NO_WINDOW",0)|getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0)) if os.name=="nt" else 0
+            subprocess.Popen([sys.executable,app_path],cwd=room_root,env=env,stdout=log,stderr=subprocess.STDOUT,creationflags=flags)
+            started=False
+            for _ in range(30):
+                time.sleep(0.5)
+                hh=probe(beta_port)
+                if hh.get("ok"):
+                    try:
+                        started=str(json.loads(hh.get("body") or "{}").get("version") or "").startswith("3.0.0-beta")
+                    except Exception:
+                        started=False
+                    if started: break
+            if not gate("G4_START_BETA",started,"http://127.0.0.1:"+str(beta_port)):
+                tail=""
+                try: tail=open(log_path,"r",encoding="utf-8",errors="replace").read()[-2500:]
+                except Exception: pass
+                return {"ok":False,"status":"BLOCKED","trace":trace,"error":"beta_start_failed","detail":tail}
+        else:
+            gate("G4_START_BETA",True,"already_running")
+
+        # G5 — smoke test complet, y compris panneau.
+        paths=("/","/control","/app.js","/style.css","/api/status","/api/context","/api/control/status","/api/projects","/health")
+        checks={p:probe(beta_port,p,3) for p in paths}
+        smoke=all(v.get("ok") for v in checks.values())
+        if smoke:
+            smoke=("BAZOR AI ROOM" in (checks["/"].get("body") or "") and
+                   "PANNEAU DE CONTR" in (checks["/control"].get("body") or ""))
+        if not gate("G5_HTTP_UI_CONTROL",smoke,json.dumps({k:v.get("http") for k,v in checks.items()},ensure_ascii=False)):
+            return {"ok":False,"status":"BLOCKED","trace":trace,"error":"beta_http_smoke_failed","checks":checks}
+
+        # G6 — vérifier bootstrap contexte.
+        try:
+            cj=json.loads(checks["/api/context"].get("body") or "{}")
+            context_ok=bool((cj.get("bootstrap") or {}).get("ready_for_chat"))
+        except Exception:
+            context_ok=False
+        if not gate("G6_CONTEXT_BOOTSTRAP",context_ok,"ready_for_chat="+str(context_ok)):
+            return {"ok":False,"status":"BLOCKED","trace":trace,"error":"context_not_ready"}
+
+        # G7 — preuve Ollama réelle; autres providers restent honnêtes.
+        ollama=probe(11434,"/api/tags",3)
+        gate("G7_OLLAMA_PROOF",ollama.get("ok"),str(ollama.get("http") or ollama.get("error") or ""))
+        try:
+            sj=json.loads(checks["/api/status"].get("body") or "{}")
+            engines=sj.get("engines") or {}
+        except Exception:
+            engines={}
+        provider_truth=not bool((engines.get("mammouth") or {}).get("available") is True and not (engines.get("mammouth") or {}).get("status"))
+        gate("G8_PROVIDER_TRUTHFULNESS",provider_truth,json.dumps(engines,ensure_ascii=False)[:1200])
+
+        # G9 — export automatique + capture écran intégrée.
+        diag=_control_export_bundle("V3_BETA_GRAFCET_FINAL",include_screenshot=True)
+        if not gate("G9_DIAG_EXPORT",bool(diag.get("ok")),str(diag.get("zip") or diag.get("error") or "")):
+            return {"ok":False,"status":"BLOCKED","trace":trace,"error":"diagnostic_export_failed","diagnostic":diag}
+
+        # G10 — sortie BETA READY. Stable/Trio restent séparés.
+        result={
+            "ok":True,
+            "status":"V3_BETA_READY",
+            "beta_url":"http://127.0.0.1:"+str(beta_port)+"/",
+            "control_url":"http://127.0.0.1:"+str(beta_port)+"/control",
+            "diagnostic_zip":diag.get("zip"),
+            "screenshot":(diag.get("screenshot") or {}).get("path"),
+            "ollama_proved":bool(ollama.get("ok")),
+            "trio_ready":False,
+            "room_core_delivered":False,
+            "trace":trace,
+            "action_result":ar,
+        }
+        gate("G10_V3_BETA_READY",True,result["control_url"])
+        result["trace"]=trace
+        state=_control_load()
+        state.update({
+            "beta_ready":True,
+            "beta_url":result["beta_url"],
+            "control_url":result["control_url"],
+            "diagnostic_zip":result["diagnostic_zip"],
+            "diagnostic_screenshot":result["screenshot"],
+            "last_result_status":"V3_BETA_READY",
+            "last_result_summary":"V3 Beta full logs/diagnostic prête au test.",
+            "last_proof":"GRAFCET G10 OK",
+            "grafcet":trace,
+        })
+        _control_save(state)
+        return result
+    except Exception as exc:
+        gate("GX_EXCEPTION",False,type(exc).__name__+": "+str(exc))
+        return {"ok":False,"status":"BLOCKED","trace":trace,"error":"grafcet_exception","detail":type(exc).__name__+": "+str(exc)[:1200]}
+
 def _control_process_request():
     data=_control_load()
     req=int(data.get("request_seq") or 0)
@@ -1635,6 +1828,33 @@ def _control_process_request():
         data["processed_seq"]=req
         data["go_requested"]=False
         data["working"]=False
+        data["watcher_last_seen_epoch"]=int(time.time())
+        data["watcher_last_seen"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+        _control_save(data)
+        return
+    if request_action=="angry":
+        data.update({
+            "working":True,
+            "last_action":"angry_grafcet",
+            "started_at":time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "last_result_status":"RUNNING",
+            "last_result_summary":"GRAFCET V3 Beta one-shot démarré."
+        })
+        _control_save(data)
+        beta=_run_airoom_v3_beta_grafcet()
+        data=_control_load()
+        data["processed_seq"]=req
+        data["go_requested"]=False
+        data["working"]=False
+        data["last_finished_at"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+        if beta.get("ok"):
+            data["last_result_status"]="V3_BETA_READY"
+            data["last_result_summary"]="V3 Beta full logs/diagnostic prête."
+            data["last_proof"]="GRAFCET FINAL OK"
+        else:
+            data["last_result_status"]="BLOCKED"
+            data["last_result_summary"]=str(beta.get("error") or beta.get("detail") or "GRAFCET bloqué")[:1200]
+            data["last_proof"]=json.dumps((beta.get("trace") or [])[-3:],ensure_ascii=False)[:2200]
         data["watcher_last_seen_epoch"]=int(time.time())
         data["watcher_last_seen"]=time.strftime("%Y-%m-%dT%H:%M:%S")
         _control_save(data)
