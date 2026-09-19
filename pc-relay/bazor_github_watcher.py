@@ -1141,11 +1141,15 @@ def _run_registry_task(task_id):
             })
 
     # Une première analyse seule n'est pas un succès : une seule relance explicite.
-    if not real and not already and not blocked and not studio_p0_fast:
+    # Ceci vaut aussi pour le fast-path Studio P0 ; sinon une simple réponse
+    # textuelle Ollama arrêtait la chaîne sans jamais donner à l'Action Engine
+    # une seconde chance de recevoir des BAZOR_ACTIONS structurées.
+    if not real and not already and not blocked:
         retry=dict(payload)
         retry["repair"]=True
         retry["previous"]=str(result.get("answer") or "")[:5000]
-        result=_core_task(retry,timeout=420)
+        retry["task"]=final_prompt+"\n\nRELANCE CORRECTIVE OBLIGATOIRE: la passe précédente n'a produit aucune modification prouvée. Si une correction est nécessaire, retourne des BAZOR_ACTIONS minimales et structurées pour l'Action Engine. Si tout est déjà conforme, commence SUMMARY par DEJA_CONFORME: et cite les fichiers/preuves lus."
+        result=_core_task(retry,timeout=(300 if studio_p0_fast else 420))
         execution=result.get("execution") or {}
         ar=execution.get("action_result") or {}
         real=execution.get("mode")=="file_changes" and bool(ar.get("applied"))
@@ -1455,8 +1459,31 @@ def answer_text(result):
         o=result.get(section) or {}
         for k in ("response","answer","content","text"):
             if o.get(k): return str(o[k])
+        if isinstance(o,dict) and (o.get("error") or o.get("message") or o.get("attempts")):
+            return json.dumps({
+                "provider":section,
+                "ok":o.get("ok"),
+                "transport_ok":o.get("transport_ok"),
+                "provider_ok":o.get("provider_ok"),
+                "content_valid":o.get("content_valid"),
+                "error":o.get("error"),
+                "message":o.get("message"),
+                "model":o.get("model"),
+                "profile":o.get("profile"),
+                "http_status":o.get("http_status"),
+                "attempts":o.get("attempts"),
+                "budget":o.get("budget"),
+            },ensure_ascii=False,indent=2)[:12000]
     for k in ("answer","message","summary","detail"):
         if result.get(k): return str(result[k])
+    inner=result.get("result")
+    if isinstance(inner,dict):
+        for section in ("mammouth","ollama"):
+            o=inner.get(section) or {}
+            if isinstance(o,dict) and (o.get("error") or o.get("message") or o.get("attempts")):
+                return json.dumps(o,ensure_ascii=False,indent=2)[:12000]
+        for k in ("answer","message","summary","detail"):
+            if inner.get(k): return str(inner[k])
     return json.dumps(result,ensure_ascii=False,indent=2)[:12000]
 
 if not _single_instance():
