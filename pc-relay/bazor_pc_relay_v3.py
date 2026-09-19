@@ -670,10 +670,18 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
 
     context_started = time.monotonic()
     local_context, local_report = ACTION_ENGINE.context_for_project(project_id, focus=(str(subproject_name or "")+"\n"+str(task or "")))
-    if not local_context:
+    # IMPORTANT: pour une tâche de routage stricte, ne jamais retomber sur le
+    # vieux fallback générique par récence. Sinon le filtre de pertinence de
+    # l'Action Engine est contourné et un script checkpoint récent peut revenir.
+    routing_focus = bool(isinstance(local_report, dict) and local_report.get("routing_focus"))
+    if not local_context and not routing_focus:
         local_context, fallback_report = project_local_context(project_id)
         if local_context:
             local_report = fallback_report
+    elif not local_context and routing_focus:
+        if isinstance(local_report, dict):
+            local_report["available"] = False
+            local_report["reason"] = "routing_context_missing_fail_closed"
     journal("MOBILE_TASK_CONTEXT", {
         "project": project_id,
         "subproject": str(subproject_name)[:160],
@@ -685,6 +693,33 @@ def run_mobile_subtask(project_id, subproject_name, task, current_progress=0, re
     })
 
     roots = ACTION_ENGINE.available_roots(project_id)
+    if routing_focus and not local_context:
+        return {
+            "ok": False,
+            "status": "BLOQUE",
+            "progress": current_progress,
+            "summary": "Contexte routage introuvable; fallback générique interdit.",
+            "next": "identifier les vrais fichiers de routage Studio dans la racine autorisée",
+            "answer": "",
+            "route": {"target":"none","reason":"routing_context_missing"},
+            "engine": "context_guard",
+            "model": None,
+            "local_context": local_report,
+            "repair": bool(repair),
+            "provider_requested": provider,
+            "execution": {
+                "mode": "analysis_only",
+                "actions_requested": 0,
+                "action_result": {
+                    "ok": False,
+                    "applied": False,
+                    "reason": "routing_context_missing",
+                    "actions": [],
+                    "tests": [],
+                    "files": []
+                }
+            },
+        }
     repair_note = ""
     if repair:
         repair_note = (
