@@ -72,6 +72,41 @@ def object_info():
         if keys: out["dimension_classes"].append({"class_type":cls,"keys":keys})
     return out
 
+def ui_graph_summary(data):
+    """Résumé d'un workflow ComfyUI au format UI (nodes + links)."""
+    nodes=data.get("nodes") if isinstance(data,dict) else None
+    links=data.get("links") if isinstance(data,dict) else None
+    if not isinstance(nodes,list):
+        return {"format":"api_or_unknown","nodes":[],"links":[]}
+    out=[]
+    for n in nodes:
+        if not isinstance(n,dict):
+            continue
+        entry={
+            "id":n.get("id"),
+            "type":n.get("type"),
+            "title":n.get("title"),
+            "mode":n.get("mode"),
+            "widgets_values":n.get("widgets_values"),
+            "inputs":[],
+            "outputs":[],
+        }
+        for x in n.get("inputs") or []:
+            if isinstance(x,dict):
+                entry["inputs"].append({"name":x.get("name"),"type":x.get("type"),"link":x.get("link")})
+        for x in n.get("outputs") or []:
+            if isinstance(x,dict):
+                entry["outputs"].append({"name":x.get("name"),"type":x.get("type"),"links":x.get("links")})
+        out.append(entry)
+    compact_links=[]
+    for x in links or []:
+        if isinstance(x,list) and len(x)>=6:
+            compact_links.append({
+                "id":x[0],"origin_id":x[1],"origin_slot":x[2],
+                "target_id":x[3],"target_slot":x[4],"type":x[5]
+            })
+    return {"format":"ui","nodes":out,"links":compact_links}
+
 def audit_workflow(path):
     raw=read(Path(path))
     data=json.loads(raw)
@@ -87,7 +122,8 @@ def audit_workflow(path):
                     bad.append({"node_id":n["id"],"class_type":n["class_type"],"input":k,"bad":v,"replacement":BAD[v]})
             if kl in ("width","height","frames","num_frames","length","video_length","frame_count","fps"):
                 dims.append({"node_id":n["id"],"class_type":n["class_type"],"input":k,"value":v})
-    return {"path":path,"node_count":len(nodes),"loaders":loaders,"dimensions":dims,"bad_values":bad}
+    graph=ui_graph_summary(data)
+    return {"path":path,"node_count":len(nodes),"loaders":loaders,"dimensions":dims,"bad_values":bad,"ui_graph":graph}
 
 def active_refs():
     hits=[]

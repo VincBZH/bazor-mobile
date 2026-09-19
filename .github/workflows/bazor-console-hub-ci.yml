@@ -185,6 +185,9 @@ jobs:
           assert "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors" in audit
           assert "[bazor-h3-audit]" in watcher
           assert "_run_h3_connection_audit" in watcher
+          assert "ui_graph_summary" in audit
+          assert "UI GRAPH nodes=" in watcher
+          assert "widgets_values" in audit
           print("H3 connection audit regression OK")
           PY
       - name: Studio qualifier selftest
