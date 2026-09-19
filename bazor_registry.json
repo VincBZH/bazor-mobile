@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.18.6",
+  "version": "2026.09.19.1",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -61,7 +61,7 @@
       "name": "AI Simple Studio",
       "order": 2,
       "default_progress": 88,
-      "summary": "Studio local image/vidéo basé sur ComfyUI. Priorité absolue : obtenir une version stable, lançable et capable de générer avec MiniMax H3 sur RTX 4060 8 Go avant d'ajouter de nouvelles fonctions.",
+      "summary": "Studio local image/vidéo basé sur ComfyUI. PRIORITÉ: corriger les erreurs réelles de génération H3 observées le 19/09 puis exiger un test E2E avant de déclarer le Studio pleinement opérationnel.",
       "local_root": "C:\\AI\\SimpleStudioV2",
       "subprojects": [
         {
@@ -103,7 +103,7 @@
       ],
       "go_compatible": true,
       "go_reason": "Racine locale reliée au BAZOR Action Engine.",
-      "operational_target": "Le Studio est OPÉRATIONNEL uniquement si: lancement fiable, ComfyUI 8188 et Studio 8191 stables, workflow H3 8 Go valide avec modèles/encodeurs réellement installés, une génération test aboutit, galerie et diagnostic fonctionnent, et aucun faux statut OK n'est affiché.",
+      "operational_target": "Le Studio est pleinement OPÉRATIONNEL uniquement si: lancement/runtime stables, workflow H3 valide, loaders CLIP/VAE/UNET compatibles avec les modèles réellement installés, dimensions UI réellement injectées dans le workflow, au moins une génération E2E sûre réussit via le Studio, puis l’analyse locale du rendu sait charger le média généré.",
       "tasks": [
         {
           "id": "STUDIO-P0-001",
@@ -166,6 +166,48 @@
           "preferred_models": [
             "qwen",
             "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-008",
+          "order": 3.1,
+          "priority": "P0",
+          "subproject": "h3",
+          "title": "HOTFIX H3 : aligner CLIP / VAE / UNET sur les modèles réellement disponibles",
+          "status": "TODO",
+          "action": "Inspecter les fichiers réellement utilisés par AI Simple Studio et son workflow MiniMax H3 actif. Corriger uniquement les références actives qui produisent les erreurs ComfyUI observées: CLIP qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors doit être remplacé par qwen3vl_4b_int8_convrot.safetensors si object_info/options locales le confirment; VAE minimax_h3_video_vae_fp16.safetensors doit être remplacé par minimax_h3_video_vae_int8_convrot.safetensors si disponible; UNET minimax_h3_fl2va_pruned_int8_convrot.safetensors doit être remplacé par minimax_h3_fl2va_pruned_w4a8_mixed.safetensors si disponible. Chercher toutes les sources actives: workflow JSON, presets, mappings et code qui réinjecte ces valeurs. Ne pas modifier les logs historiques.",
+          "acceptance": [
+            "Aucune source active du Studio ne réinjecte les trois anciennes valeurs rejetées par ComfyUI.",
+            "Les trois valeurs finales existent dans les options disponibles localement ou sont bloquées explicitement avant soumission.",
+            "Les JSON/JS/Python modifiés passent les tests syntaxiques et le préflight Git sandbox."
+          ],
+          "dependencies": [],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-009",
+          "order": 3.2,
+          "priority": "P0",
+          "subproject": "h3",
+          "title": "HOTFIX H3 : relier largeur/hauteur de l’UI au workflow réel",
+          "status": "TODO",
+          "action": "Inspecter le workflow MiniMax H3 actif et le code de soumission du Studio. Identifier les nœuds/champs réels qui portent largeur et hauteur (ou résolution/latent size) et corriger le mapping UI pour que les dimensions sélectionnées, par exemple 1280x704, soient injectées sans chercher un champ inexistant. Ne pas inventer de node_id: dériver les nœuds/champs des fichiers réellement présents.",
+          "acceptance": [
+            "Le message 'Workflow MiniMax H3 incompatible : réglage largeur/hauteur introuvable' ne peut plus se produire avec le workflow actif.",
+            "La résolution choisie dans l’UI est appliquée aux vrais champs du workflow ou une incompatibilité précise est détectée avant soumission.",
+            "Un test déterministe vérifie le mapping sur le workflow H3 actif."
+          ],
+          "dependencies": [
+            "STUDIO-P0-008"
+          ],
+          "preferred_models": [
+            "qwen",
+            "claude"
           ],
           "proof_required": "file_changes_and_tests"
         },
@@ -255,6 +297,50 @@
           "preferred_models": [
             "qwen",
             "mistral"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-010",
+          "order": 7.1,
+          "priority": "P0",
+          "subproject": "quality",
+          "title": "HOTFIX analyse : charger réellement le média local avant envoi au moteur vision",
+          "status": "TODO",
+          "action": "Inspecter la fonction 'Analyser le rendu' et le chemin média utilisé. Corriger la cause de l’erreur 'Failed to load image or audio file'. Si le moteur vision ne peut pas charger une URL 127.0.0.1/api/media ou un chemin inaccessible, lire le fichier local réel et transmettre le format attendu (fichier/base64/blob selon l’API locale déjà utilisée). Conserver le média même si l’analyse échoue et afficher la cause exacte.",
+          "acceptance": [
+            "Analyser un média local valide ne renvoie plus 'Failed to load image or audio file'.",
+            "Le moteur vision reçoit un média réellement accessible, pas seulement une URL locale non résolue.",
+            "Une erreur d’analyse n’efface ni le rendu ni la demande et affiche un diagnostic exploitable."
+          ],
+          "dependencies": [],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P0-011",
+          "order": 7.2,
+          "priority": "P0",
+          "subproject": "h3",
+          "title": "TEST E2E : une vraie génération sûre doit réussir avant certification complète",
+          "status": "TODO",
+          "action": "Ajouter un smoke test E2E non destructif du Studio utilisant un prompt sûr et simple, par exemple 'un cube rouge sur fond gris, léger mouvement de caméra', avec le preset le plus court et stable. Le test doit passer par la même API/chaîne que le bouton Générer, attendre la réponse ComfyUI, vérifier l’absence de prompt_outputs_failed_validation, puis confirmer qu’un média est réellement produit et accessible. Ne pas réutiliser le contenu des créations utilisateur.",
+          "acceptance": [
+            "La requête passe par la vraie chaîne Studio → ComfyUI et n’est pas seulement une validation statique.",
+            "ComfyUI accepte le prompt sans erreur de validation de nœud.",
+            "Un média de sortie existe et l’endpoint média retourne un contenu accessible.",
+            "La certification complète ne peut afficher 100% si ce smoke test E2E échoue."
+          ],
+          "dependencies": [
+            "STUDIO-P0-008",
+            "STUDIO-P0-009"
+          ],
+          "preferred_models": [
+            "qwen",
+            "gemini"
           ],
           "proof_required": "file_changes_and_tests"
         },
