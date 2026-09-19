@@ -139,12 +139,20 @@ class ActionEngine:
             "text_to_video","text-to-video","image_to_video","image-to-video",
             "generation_mode","input_image","source_image"
         )
+        strong_routing_terms = (
+            "t2i","i2i","t2v","i2v","source_media",
+            "requested_mode","effective_mode","generation_mode",
+            "text_to_image","text-to-image","image_to_image","image-to-image",
+            "text_to_video","text-to-video","image_to_video","image-to-video",
+            "input_image","source_image","routing","route"
+        )
         force_routing = "studio-p0-012" in focus_text
         routing_focus = force_routing or sum(1 for x in routing_terms if x in focus_text) >= 2
         started = time.monotonic()
         deadline = started + MAX_CONTEXT_SCAN_SECONDS
         scanned_files = 0
         scan_limited = False
+        strong_routing_candidates = 0
 
         # GO tourne dans un thread du Core. Un Path.rglob("*") descendait malgré
         # les dossiers à ignorer (.git, models, logs, etc.) puis les rejetait
@@ -208,6 +216,7 @@ class ActionEngine:
                             sample = ""
 
                         matched_routing = sum(1 for x in routing_terms if x in sample or x in rel_text)
+                        strong_routing = sum(1 for x in strong_routing_terms if x in sample or x in rel_text)
 
                         # Pour une tâche de routage Studio (P0-012), ne pas laisser
                         # entrer des fichiers sans signal de routage. C'est volontairement
@@ -229,8 +238,14 @@ class ActionEngine:
                             # A candidate needs a real routing/generation signal, not recency.
                             if noise_name:
                                 continue
+                            # Un simple fichier "workflow"/"ComfyUI"/"prompt" n'est pas
+                            # une preuve de routage. P0-012 exige au moins un signal fort
+                            # de mode/source/route avant de l'envoyer au moteur.
+                            if strong_routing == 0:
+                                continue
                             if matched_routing == 0 and not semantic_generation:
                                 continue
+                            strong_routing_candidates += 1
 
                         for token in focus_tokens:
                             if len(token) < 3:
@@ -293,7 +308,11 @@ class ActionEngine:
             "scanned_files": scanned_files,
             "scan_limited": scan_limited,
             "routing_focus": routing_focus,
-            "routing_context_ok": (bool(files) if routing_focus else True),
+            "routing_strong_candidates": strong_routing_candidates,
+            "routing_context_ok": (
+                bool(files) and strong_routing_candidates > 0
+                if routing_focus else True
+            ),
         }
 
     def parse_actions(self, answer):
