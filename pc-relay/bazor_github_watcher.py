@@ -1483,6 +1483,7 @@ def _task_retry_allowed(issue_number, task_id, comments):
         comments.rfind("[FROM_GPT][GO-NOW-"),
         comments.rfind("[FROM_GPT][GO-AUTO-TEST-"),
         comments.rfind("[FROM_GPT][GO-LOCAL-RUNTIME-PROOF]"),
+        comments.rfind("[FROM_GPT][GO-LOCAL-RUNTIME-PROOF-"),
         comments.rfind("[FROM_GPT][CONTINUE-NOW]"),
         comments.rfind("[FROM_GPT][RUN_NOW]")
     )
