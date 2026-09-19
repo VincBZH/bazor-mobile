@@ -1,6 +1,6 @@
 import json, subprocess, time, urllib.request, os, sys, re, concurrent.futures
 
-REPO="VincBZH/bazor-mobile"
+REPO="VincBZH/bazor-mobile"\nCOORD_REPO="VincBZH/projetWII-ai-relay"
 CORE="http://127.0.0.1:8775/api/v1/chat"
 CORE_HEALTH="http://127.0.0.1:8775/api/v1/security/status"
 CORE_FAILS=0
@@ -1077,6 +1077,48 @@ def _safe_filebus_message(title):
         result=_core_task(payload,timeout=260)
     return target,name,result
 
+def _process_filebus_repo(repo_name):
+    """Traite uniquement les tickets FileBus du dépôt de coordination.
+    Aucun autre type de ticket n'est exécuté depuis ce dépôt.
+    """
+    try:
+        issues=json.loads(gh([
+            "issue","list","--repo",repo_name,"--state","open","--limit","30",
+            "--json","number,title,body"
+        ]))
+    except Exception as exc:
+        print("[FILEBUS COORD WARN]",repo_name,type(exc).__name__,str(exc)[:240])
+        return
+    for issue in issues:
+        title=str(issue.get("title") or "").lower()
+        if not title.startswith("[bazor-filebus:"):
+            continue
+        try:
+            comments=gh(["issue","view",str(issue["number"]),"--repo",repo_name,"--comments"])
+        except Exception:
+            comments=""
+        if FILEBUS_MARK in comments:
+            continue
+        try:
+            target,name,result=_safe_filebus_message(issue.get("title") or "")
+            reply=(
+                FILEBUS_MARK+"\n\n"
+                "REPO: "+repo_name+"\n"
+                "TARGET: "+target+"\n"
+                "FILE: bridge/messages/"+name+"\n\n"
+                +answer_text(result)
+            )
+            gh(["issue","comment",str(issue["number"]),"--repo",repo_name,"--body",reply[:12000]])
+            print(f"[OK FILEBUS] {repo_name}#{issue['number']} {target} <- {name}")
+        except Exception as exc:
+            detail=(type(exc).__name__+": "+str(exc))[:1200]
+            try:
+                gh(["issue","comment",str(issue["number"]),"--repo",repo_name,"--body",
+                    FILEBUS_MARK+"\n\nSTATUS: BLOCKED\nERROR: "+detail])
+            except Exception:
+                pass
+            print(f"[BLOQUE FILEBUS] {repo_name}#{issue['number']} {detail}")
+
 def answer_text(result):
     for section in ("mammouth","ollama"):
         o=result.get(section) or {}
@@ -1100,9 +1142,7 @@ print()
 while True:
     try:
         safe_update()
-        ensure_core_alive()
-        try:
-            issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
+        ensure_core_alive()\n        _process_filebus_repo(COORD_REPO)\n        try:\n            issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
             for issue in issues:
                 title=issue["title"].lower()
                 comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
