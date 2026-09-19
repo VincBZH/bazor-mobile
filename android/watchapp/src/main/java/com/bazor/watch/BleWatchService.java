@@ -404,7 +404,7 @@ public class BleWatchService extends Service {
             channel.setDescription("Surveillance locale des micro-coupures Bluetooth.");
 
             NotificationChannel agenda = new NotificationChannel(
-                AGENDA_CHANNEL, "BAZOR Agenda", NotificationManager.IMPORTANCE_DEFAULT);
+                AGENDA_CHANNEL, "BAZOR Agenda", NotificationManager.IMPORTANCE_HIGH);
             agenda.setDescription("Résumé aujourd’hui / demain destiné au téléphone et à la montre.");
 
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -458,6 +458,8 @@ public class BleWatchService extends Service {
             .setContentTitle("BAZOR Agenda • " + label)
             .setContentText(summary.replace("\n", " • "))
             .setStyle(new Notification.BigTextStyle().bigText(summary))
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(pi)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
