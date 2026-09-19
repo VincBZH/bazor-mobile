@@ -9,6 +9,7 @@ on:
       - "pc-relay/bazor_github_watcher.py"
       - "pc-relay/bazor_action_engine.py"
       - "pc-relay/bazor_studio_qualifier.py"
+      - "pc-relay/bazor_h3_connection_audit.py"
       - "bazor_registry.json"
       - "index.html"
       - "BAZOR_ENCYCLOPEDIA.md"
@@ -37,6 +38,7 @@ jobs:
             pc-relay/bazor_pc_relay_v3.py \
             pc-relay/bazor_github_watcher.py \
             pc-relay/bazor_action_engine.py \
+            pc-relay/bazor_h3_connection_audit.py \
             pc-relay/mammouth_client.py
       - name: Validate mobile UI JavaScript
         run: |
@@ -165,6 +167,25 @@ jobs:
           assert 'worker_kwargs["request_id"] = rid' in src
           assert 'result = start_mobile_task(request_id, **kwargs)' in src
           print("Mobile task async regression OK")
+          PY
+      - name: H3 connection audit regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          audit=Path("pc-relay/bazor_h3_connection_audit.py").read_text(encoding="utf-8")
+          watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
+          for name in (
+              "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+              "minimax_h3_video_vae_fp16.safetensors",
+              "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          ):
+              assert name in audit
+          assert "qwen3vl_4b_int8_convrot.safetensors" in audit
+          assert "minimax_h3_video_vae_int8_convrot.safetensors" in audit
+          assert "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors" in audit
+          assert "[bazor-h3-audit]" in watcher
+          assert "_run_h3_connection_audit" in watcher
+          print("H3 connection audit regression OK")
           PY
       - name: Studio qualifier selftest
         run: |
