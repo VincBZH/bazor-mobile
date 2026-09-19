@@ -1499,7 +1499,7 @@ def _task_retry_allowed(issue_number, task_id, comments):
         return True
     attempts=int(slot.get("attempts") or 0)
     next_epoch=int(slot.get("next_epoch") or 0)
-    if attempts>=5:
+    if attempts>=8:
         return False
     return int(time.time()) >= next_epoch
 
@@ -1519,8 +1519,17 @@ def _task_retry_note(issue_number, task_id, task_status):
         # Après un nouveau commit chargé, on repart à une première tentative
         # plutôt que d'hériter des échecs de l'ancienne version.
         attempts=(0 if current_head and prev.get("head")!=current_head else int(prev.get("attempts") or 0))+1
-        delay=min(1800,90*(2**max(0,attempts-1)))
-        state[key]={"attempts":attempts,"next_epoch":int(time.time())+delay,"last":str(task_status),"head":current_head}
+        # GO AUTO Studio: 30s, 60s, 2m, 4m, 8m, 15m, 30m, 30m.
+        # Borné à 8 essais et sans intervention Vincent.
+        delay=min(1800,30*(2**max(0,attempts-1)))
+        state[key]={
+            "attempts":attempts,
+            "next_epoch":int(time.time())+delay,
+            "last":str(task_status),
+            "head":current_head,
+            "auto_go":True,
+            "delay_seconds":delay,
+        }
     _task_retry_save(state)
 
 def _filebus_retry_load():
@@ -2494,6 +2503,21 @@ while True:
                                 reply+="\nRuntime checks: "+json.dumps(result.get("runtime_checks"),ensure_ascii=False,separators=(",",":"))[:5000]
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
                         _task_retry_note(issue["number"],task_id,result.get("task_status"))
+                        if str(task_id or "").upper().startswith("STUDIO-P0-") and str(result.get("task_status") or "").upper() in ("BLOCKED","ANALYSE_SEULE"):
+                            try:
+                                auto_state=_task_retry_load().get("issue#"+str(issue["number"])+":"+str(task_id).upper()) or {}
+                                auto_msg=(
+                                    "[BAZOR-GO-AUTO]\n\n"
+                                    "Studio auto-retry armé. Aucune action Vincent requise.\n"
+                                    "attempt: "+str(auto_state.get("attempts") or 0)+"/8\n"
+                                    "delay_seconds: "+str(auto_state.get("delay_seconds") or 0)+"\n"
+                                    "next_epoch: "+str(auto_state.get("next_epoch") or 0)+"\n"
+                                    "task_id: "+str(task_id)+"\n"
+                                    "[/BAZOR-GO-AUTO]"
+                                )
+                                gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",auto_msg])
+                            except Exception:
+                                pass
                         print(f"[OK TASK] #{issue['number']} {task_id} -> {result.get('task_status')}")
                         if result.get("task_status") in ("DONE","VERIFIE"):
                             # Studio conserve sa porte logique spécialisée.
