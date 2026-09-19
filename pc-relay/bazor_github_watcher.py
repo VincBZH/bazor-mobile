@@ -1805,6 +1805,26 @@ def _run_airoom_v3_beta_grafcet():
         gate("GX_EXCEPTION",False,type(exc).__name__+": "+str(exc))
         return {"ok":False,"status":"BLOCKED","trace":trace,"error":"grafcet_exception","detail":type(exc).__name__+": "+str(exc)[:1200]}
 
+def _control_autorun_tick():
+    """AUTO TOTAL persistant : relance une étape sûre si rien ne travaille.
+    Il ne tourne qu'une étape par tick pour laisser respirer le watcher et
+    conserve toutes les preuves dans control.json.
+    """
+    data=_control_load()
+    if not data.get("auto_mode") or data.get("working") or data.get("go_requested"):
+        return
+    if data.get("beta_ready") and data.get("trio_ready"):
+        return
+    tid=_control_next_airoom_task()
+    if not tid:
+        return
+    data["request_seq"]=int(data.get("request_seq") or 0)+1
+    data["request_action"]="auto_tick"
+    data["request_at"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+    data["go_requested"]=True
+    data["last_action"]="AUTO TOTAL → "+tid
+    _control_save(data)
+
 def _control_process_request():
     data=_control_load()
     req=int(data.get("request_seq") or 0)
@@ -1860,7 +1880,7 @@ def _control_process_request():
         data["watcher_last_seen"]=time.strftime("%Y-%m-%dT%H:%M:%S")
         _control_save(data)
         return
-    auto=bool(data.get("auto_mode"))
+    auto=bool(data.get("auto_mode")) or request_action=="auto_tick"
     data.update({
         "working":True,
         "last_action":data.get("request_action") or "go",
@@ -1887,10 +1907,28 @@ def _control_process_request():
             result=_run_registry_task(tid)
             steps+=1
             status=str(result.get("task_status") or ("VERIFIE" if result.get("ok") else "BLOCKED"))
+
+            # IMPORTANT: une exécution depuis le panneau doit mettre à jour le
+            # même état canonique que les issues [bazor-task:*]. Sans ceci,
+            # _control_next_airoom_task() resélectionnait P0-001 indéfiniment.
+            try:
+                project,task,_=_registry_task(tid)
+                _task_update_mobile(
+                    project,task,status,
+                    str(result.get("summary") or result.get("detail") or result.get("error") or "")[:1200],
+                    result=result,reviews=result.get("reviews") or []
+                )
+            except Exception as state_exc:
+                result.setdefault("control_warnings",[]).append("state_update: "+type(state_exc).__name__+": "+str(state_exc)[:240])
+
+            data=_control_load()
             data["last_result_status"]=status
             data["last_result_summary"]=str(result.get("summary") or result.get("detail") or result.get("error") or "")[:1200]
             data["last_proof"]=_control_result_proof(result)
             data["last_finished_at"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+            data["last_engine"]=result.get("engine")
+            data["last_model"]=result.get("model")
+            data["last_reviews"]=result.get("reviews") or []
             _control_save(data)
             if status not in ("DONE","VERIFIE"):
                 auto_diag=_control_export_bundle("AUTO_DIAG_BLOCKED_"+tid,include_screenshot=True)
@@ -1967,6 +2005,7 @@ while True:
         ensure_core_alive()
         _control_heartbeat()
         _control_process_request()
+        _control_autorun_tick()
         _process_filebus_repo(COORD_REPO)
         try:
             issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
