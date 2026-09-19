@@ -1451,6 +1451,9 @@ def _task_retry_allowed(issue_number, task_id, comments):
     last_done_pos=max(comments.rfind("[BAZOR-TASK-DONE]"),comments.rfind("[BAZOR-TASK-START]"))
     last_go_pos=max(
         comments.rfind("[FROM_GPT][GO-AFTER-RUNTIME-GATE]"),
+        comments.rfind("[FROM_GPT][GO-NOW]"),
+        comments.rfind("[FROM_GPT][GO-NOW-"),
+        comments.rfind("[FROM_GPT][GO-AUTO-TEST-"),
         comments.rfind("[FROM_GPT][CONTINUE-NOW]"),
         comments.rfind("[FROM_GPT][RUN_NOW]")
     )
