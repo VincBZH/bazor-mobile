@@ -861,7 +861,9 @@ def _run_airoom_p0_002_deterministic(project, task):
                 return {"ok":False,"http":None,"error":type(exc).__name__+": "+str(exc)[:240]}
 
         status=get("/api/status")
-        needs_restart=not status.get("ok")
+        # Un app.py synchronisé n'est pas chargé tant que l'ancien processus reste vivant.
+        # Toute écriture réelle de l'app force donc le redémarrage ciblé du runtime ROOM.
+        needs_restart=bool(ar.get("applied")) or not status.get("ok")
         if status.get("ok"):
             try:
                 sj=json.loads(status.get("body") or "{}")
