@@ -13,6 +13,7 @@ TASK_MARK="[BAZOR-TASK-DONE]"
 QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 CERTIFY_MARK="[BAZOR-CERTIFY-DONE]"
 H3_AUDIT_MARK="[BAZOR-H3-AUDIT-DONE]"
+WORKFLOWS_AUDIT_MARK="[BAZOR-WORKFLOWS-AUDIT-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
@@ -733,6 +734,19 @@ def _run_h3_connection_audit():
         return {"ok":False,"error":"report_unreadable","detail":str(exc)[:800],"stdout":cp.stdout[-3000:],"stderr":cp.stderr[-2000:]}
     return {"ok":cp.returncode==0,"report":data,"stdout":cp.stdout[-3000:],"stderr":cp.stderr[-2000:]}
 
+def _run_workflows_audit():
+    script=os.path.join(ROOT,"pc-relay","bazor_studio_workflows_audit.py")
+    if not os.path.exists(script):
+        return {"ok":False,"error":"audit_missing"}
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    cp=subprocess.run([sys.executable,script],cwd=ROOT,capture_output=True,text=True,encoding="utf-8",errors="replace",timeout=90,creationflags=flags)
+    latest=os.path.join(ROOT,"pc-relay","BAZOR_DATA","STUDIO_WORKFLOWS_AUDIT","latest.json")
+    try:
+        report=json.load(open(latest,"r",encoding="utf-8"))
+    except Exception as exc:
+        return {"ok":False,"error":"report_unreadable","detail":str(exc)[:800],"stdout":cp.stdout[-2000:],"stderr":cp.stderr[-2000:]}
+    return {"ok":cp.returncode==0,"report":report,"stdout":cp.stdout[-2000:],"stderr":cp.stderr[-2000:]}
+
 def answer_text(result):
     for section in ("mammouth","ollama"):
         o=result.get(section) or {}
@@ -769,6 +783,25 @@ while True:
                     reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body),task_smoke=("task-smoke" in body or "task smoke" in body))
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
+                    continue
+                if title.startswith("[bazor-workflows-audit]"):
+                    if WORKFLOWS_AUDIT_MARK in comments:
+                        continue
+                    result=_run_workflows_audit()
+                    report=result.get("report") or {}
+                    lines=[WORKFLOWS_AUDIT_MARK,"","**BAZOR Studio — audit workflows.py**","",
+                           "Statut: "+("PASS" if result.get("ok") else "FAIL"),
+                           "Fichier: "+str(report.get("path") or "?"),""]
+                    for ex in report.get("excerpts") or []:
+                        lines.append(f"--- lignes {ex.get('start')}-{ex.get('end')} ---")
+                        for row in ex.get("lines") or []:
+                            lines.append(f"L{row.get('line')}: {str(row.get('text') or '')[:1000]}")
+                    if result.get("stderr"):
+                        lines += ["","stderr:",str(result.get("stderr"))[-1200:]]
+                    try:
+                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","\n".join(lines)[:12000]])
+                    except Exception:
+                        pass
                     continue
                 if title.startswith("[bazor-h3-audit]"):
                     if H3_AUDIT_MARK in comments:
