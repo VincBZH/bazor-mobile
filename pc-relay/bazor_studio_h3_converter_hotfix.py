@@ -177,6 +177,8 @@ def unit_test(path):
                  {"name":"first_frame","type":"IMAGE","link":18},
                  {"name":"last_frame","type":"IMAGE","link":19},
              ]},
+            {"id": 11, "type": "RandomNoise", "widgets_values": [123],
+             "inputs":[{"name":"noise_seed","type":"INT","link":None,"widget":{"name":"noise_seed"}}]},
             {"id": 14, "type": "VAEDecode", "widgets_values": [],
              "inputs":[{"name":"samples","type":"LATENT","link":15},{"name":"vae","type":"VAE","link":5}]},
             {"id": 15, "type": "CreateVideo", "widgets_values": [24.0],
