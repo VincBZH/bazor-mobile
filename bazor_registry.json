@@ -1,13 +1,13 @@
 {
-  "version": "2026.09.19.3",
+  "version": "2026.09.19.4",
   "title": "BAZOR Project Registry",
   "projects": [
     {
       "id": "ai-room",
       "name": "BAZOR AI Room",
       "order": 1,
-      "default_progress": 62,
-      "summary": "Coordination centrale, mobile, routage IA, historique et diagnostics.",
+      "default_progress": 70,
+      "summary": "Coordination centrale BAZOR AI ROOM V2.4 : déploiement local sécurisé, runtime 8765, interface optimisée, routage GPT/Mammouth/Ollama et qualification par gates.",
       "local_root": "%LOCALAPPDATA%\\BazorAIROOM",
       "subprojects": [
         {
@@ -66,7 +66,114 @@
         }
       ],
       "go_compatible": true,
-      "go_reason": "Racine locale reliée au BAZOR Action Engine."
+      "go_reason": "Racine locale reliée au BAZOR Action Engine.",
+      "tasks": [
+        {
+          "id": "AIROOM-P0-001",
+          "order": 1,
+          "priority": "P0",
+          "subproject": "core",
+          "title": "Déployer BAZOR AI ROOM V2.4 dans la racine locale autorisée",
+          "status": "TODO",
+          "action": "Lire le vrai contenu de %LOCALAPPDATA%\\\\BazorAIROOM et le dossier bazor_room_v2 synchronisé depuis le dépôt local bazor-mobile si présent. Préserver les fichiers existants par backup. Installer uniquement les fichiers nécessaires de BAZOR AI ROOM V2.4 dans la racine ai_room via BAZOR Action Engine: serveur, interface statique, validateur, orchestrateur, rules/state/handoff/message_contract/projects. Ne supprimer aucun secret ni configuration locale. Corriger les chemins d'import pour Windows. Aucun shell/exec arbitraire reçu de GitHub.",
+          "acceptance": [
+            "Le preflight sandbox Action Engine est PASS.",
+            "Les fichiers Python modifiés/créés passent py_compile dans le sandbox.",
+            "Les fichiers JSON modifiés/créés sont syntaxiquement valides.",
+            "La racine locale AI Room contient une seule version cible V2.4 sans écrasement non sauvegardé.",
+            "Un backup/rollback est disponible.",
+            "Le rapport final liste FILES_READ, FILES_CHANGED, PREFLIGHT, TESTS, BACKUP et REPORT."
+          ],
+          "dependencies": [],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_preflight_tests_backup_report"
+        },
+        {
+          "id": "AIROOM-P0-002",
+          "order": 2,
+          "priority": "P0",
+          "subproject": "logs",
+          "title": "Valider le runtime local AI ROOM V2.4 et l'interface",
+          "status": "TODO",
+          "action": "Sur la version locale issue de AIROOM-P0-001, vérifier le démarrage sur 127.0.0.1:8765, la route /, /app.js, /style.css, /api/status et /api/projects. Vérifier qu'une erreur reste visible/journalisée. Vérifier qu'aucun autre service non identifié n'est tué. Si un défaut déterministe est trouvé, appliquer uniquement le correctif minimal via Action Engine puis retester.",
+          "acceptance": [
+            "HTTP GET / retourne 200 et contient BAZOR AI ROOM.",
+            "GET /api/status retourne JSON valide avec version et état.",
+            "GET /api/projects retourne JSON valide.",
+            "Les assets app.js et style.css retournent 200.",
+            "Le port 8765 est détenu par le serveur BAZOR AI ROOM cible.",
+            "Toute correction est couverte par preflight, tests et rollback.",
+            "Une preuve runtime est publiée avant VERIFIE."
+          ],
+          "dependencies": [
+            "AIROOM-P0-001"
+          ],
+          "preferred_models": [
+            "qwen"
+          ],
+          "proof_required": "runtime_http_proof_and_tests"
+        },
+        {
+          "id": "AIROOM-P0-003",
+          "order": 3,
+          "priority": "P0",
+          "subproject": "mammouth",
+          "title": "Valider le routage réel Ollama / Mammouth et les fallbacks",
+          "status": "TODO",
+          "action": "Tester le routeur de la ROOM avec les providers réellement disponibles. Ollama doit être détecté localement; Mammouth doit être marqué DISPONIBLE uniquement si un appel de santé ou une réponse exploitable est prouvée; GPT doit rester UNKNOWN/RELAY tant qu'aucune preuve locale n'existe. Tester les portes logiques de fallback sans inventer la disponibilité d'un provider.",
+          "acceptance": [
+            "Ollama local est marqué selon une preuve réelle.",
+            "Mammouth n'est jamais marqué disponible sur une réponse vide/error.",
+            "Fallback GPT indisponible -> Mammouth/Ollama respecte les preuves réelles.",
+            "Fallback Mammouth indisponible -> GPT/Ollama respecte les preuves réelles.",
+            "Si aucun externe n'est prouvé, les tâches externes passent QUEUED.",
+            "Même erreur deux fois stoppe le retry identique.",
+            "Le rapport publie providers, modèles, erreurs exactes et handoff_logic."
+          ],
+          "dependencies": [
+            "AIROOM-P0-002"
+          ],
+          "preferred_models": [
+            "qwen",
+            "claude"
+          ],
+          "proof_required": "provider_runtime_proof"
+        },
+        {
+          "id": "AIROOM-P0-004",
+          "order": 4,
+          "priority": "P0",
+          "subproject": "mobile",
+          "title": "Qualification finale ROOM V2.4 et statut DELIVERED",
+          "status": "TODO",
+          "action": "Consolider les preuves de AIROOM-P0-001/002/003, vérifier le protocole GitHub, l'interface locale, le runtime et les fallbacks. Ne déclarer DELIVERED que si tous les gates sont PASS. Sinon publier le blocage exact et rester PARTIAL/BLOCKED.",
+          "acceptance": [
+            "PROTOCOL_READY prouvé.",
+            "CODE_PATCHED ou DEJA_CONFORME prouvé.",
+            "CI_PASS prouvé.",
+            "RUNTIME_PASS prouvé.",
+            "Ollama runtime prouvé.",
+            "Mammouth runtime prouvé ou explicitement BLOCKED sans faux succès; DELIVERED exige sa preuve si l'intégration Mammouth fait partie du livrable.",
+            "Interface locale optimisée testée.",
+            "handoff/message contract valides.",
+            "Aucune erreur bloquante restante.",
+            "Rapport final versionné avec lien/artifact utilisable."
+          ],
+          "dependencies": [
+            "AIROOM-P0-003"
+          ],
+          "preferred_models": [
+            "qwen",
+            "gemini",
+            "claude"
+          ],
+          "proof_required": "all_gates_and_runtime_proof"
+        }
+      ],
+      "operational_target": "AI ROOM est DELIVERED uniquement si protocole, patch local, CI, runtime HTTP/UI, Ollama, Mammouth, fallbacks, preuves et handoff sont validés; aucune simple présence de fichiers ne vaut livraison."
     },
     {
       "id": "simple-studio",
