@@ -1396,7 +1396,11 @@ def _task_retry_allowed(issue_number, task_id, comments):
     if re.search(r"Statut:\s*(DONE|VERIFIE)",comments,re.I):
         return False
     if "ANALYSE_SEULE" not in comments and "routing_context_missing" not in comments:
-        return False
+        # STUDIO-P0-012 may have produced a generic BLOCKED before the Core
+        # exposed the strict routing guard. Allow the bounded retry so the
+        # corrected context selector can prove or fail closed on the same issue.
+        if str(task_id or "").upper()!="STUDIO-P0-012" or "Statut: BLOCKED" not in comments:
+            return False
     state=_task_retry_load()
     key="issue#"+str(issue_number)+":"+str(task_id).upper()
     slot=state.get(key) or {}
