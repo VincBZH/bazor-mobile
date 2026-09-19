@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
-VERSION="3.0.0-beta.2"
+VERSION="3.0.0-beta.3"
 ROOT=Path(__file__).resolve().parent
 STATE=ROOT/"state.json"
 PROJECTS=ROOT/"projects.json"
@@ -35,7 +35,7 @@ go.onclick=async()=>{let body={task_class:kind.value},m=mode.value;if(m!=='auto'
 CONTROL_HTML=r'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BAZOR AI ROOM V3 — CONTROL</title>
 <style>
 :root{font-family:Inter,Segoe UI,Arial,sans-serif;background:#050910;color:#edf6ff}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#07111f,#03070d);min-height:100vh}.wrap{max-width:1080px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center}.title{font-size:28px;font-weight:900}.sub{color:#8fa8c4;margin-top:5px}.badge{padding:11px 15px;border-radius:999px;border:1px solid #315d8d;font-weight:900}.ok{color:#76f1a5}.wait{color:#ffd56c}.bad{color:#ff8383}.run{color:#71c8ff}.hero{margin-top:18px;padding:20px;border:1px solid #244d79;border-radius:18px;background:#0a1627}.heroStatus{font-size:34px;font-weight:1000}.heroSub{margin-top:6px;color:#9eb5cf}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}.card{background:#091522;border:1px solid #1d4066;border-radius:15px;padding:15px}.label{font-size:11px;color:#89a2be;text-transform:uppercase;letter-spacing:.08em}.value{font-size:18px;font-weight:800;margin-top:6px;word-break:break-word}.buttons{display:grid;grid-template-columns:2fr 2fr 1fr 1fr;gap:12px;margin-top:16px}button{border:0;border-radius:14px;padding:17px 12px;font-weight:900;font-size:16px;cursor:pointer}.go{background:#116fbd;color:white}.auto{background:#a12635;color:white}.secondary{background:#18304b;color:#eef7ff}.stop{background:#4b2730;color:#ffdfe5}.timeline{margin-top:16px;background:#08111d;border:1px solid #1d3d61;border-radius:16px;padding:15px}.gate{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #112941}.gate:last-child{border:0}.dot{font-size:16px}.small{font-size:12px;color:#839ab4}.airow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.ai{padding:12px;border-radius:12px;background:#07111d;border:1px solid #183b61}.ai b{display:block}.tech{margin-top:14px}.tech summary{cursor:pointer;color:#9db5d0}.log{white-space:pre-wrap;background:#03070d;border:1px solid #193c61;border-radius:12px;padding:12px;margin-top:9px;max-height:360px;overflow:auto;color:#cce7ff}@media(max-width:800px){.grid,.airow,.buttons{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.heroStatus{font-size:28px}}</style></head>
-<body><div class="wrap">
+<body><span id="compat-old-smoke-marker" style="display:none">PANNEAU DE CONTR</span><div class="wrap">
 <div class="top"><div><div class="title">BAZOR AI ROOM <span style="font-size:13px;color:#76cfff">V3 BETA CONTROL</span></div><div class="sub">Voir immédiatement si ça travaille vraiment, qui travaille, sur quoi, et avec quelle preuve.</div></div><div id="live" class="badge wait">CHARGEMENT…</div></div>
 
 <div class="hero"><div class="label">ÉTAT RÉEL</div><div id="heroStatus" class="heroStatus">—</div><div id="heroSub" class="heroSub">—</div></div>
