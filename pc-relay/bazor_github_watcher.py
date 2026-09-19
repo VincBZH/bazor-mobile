@@ -1,4 +1,4 @@
-import json, subprocess, time, urllib.request, os, sys, re, concurrent.futures
+import json, subprocess, time, urllib.request, os, sys, re, concurrent.futures, zipfile
 
 REPO="VincBZH/bazor-mobile"
 COORD_REPO="VincBZH/projetWII-ai-relay"
@@ -25,6 +25,7 @@ HUB_LOG_DIR=os.path.join(ROOT,"pc-relay","BAZOR_DATA","HUB_LOGS")
 CORE_LOG=os.path.join(HUB_LOG_DIR,"core.log")
 WATCHER_LOCK_PORT=8791
 AIROOM_CONTROL_FILE=os.path.join(os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"),"AppData","Local"),"BazorAIROOM","control.json")
+CONTROL_DIAG_DIR=os.path.join(os.path.dirname(AIROOM_CONTROL_FILE),"diagnostics")
 _WATCHER_LOCK=None
 
 def _single_instance():
@@ -1525,11 +1526,118 @@ def _control_result_proof(result):
         },ensure_ascii=False,separators=(",",":"))[:2200]
     return str(result.get("detail") or result.get("error") or "")[:2200]
 
+def _control_capture_screen():
+    """Capture écran locale prédéfinie. Aucun paramètre shell provenant de GitHub."""
+    os.makedirs(CONTROL_DIAG_DIR,exist_ok=True)
+    stamp=time.strftime("%Y%m%d_%H%M%S")
+    out=os.path.join(CONTROL_DIAG_DIR,"screen_"+stamp+".png")
+    if os.name!="nt":
+        return {"ok":False,"error":"screenshot_windows_only","path":None}
+    ps=r"""
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen
+$bmp=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height
+$g=[System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen($bounds.X,$bounds.Y,0,0,$bmp.Size)
+$bmp.Save($env:BAZOR_SCREEN_OUT,[System.Drawing.Imaging.ImageFormat]::Png)
+$g.Dispose()
+$bmp.Dispose()
+"""
+    env=os.environ.copy()
+    env["BAZOR_SCREEN_OUT"]=out
+    try:
+        p=subprocess.run(
+            ["powershell","-NoProfile","-Command",ps],
+            capture_output=True,text=True,timeout=20,env=env,
+            creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0)
+        )
+        ok=(p.returncode==0 and os.path.exists(out))
+        return {"ok":ok,"path":out if ok else None,"error":None if ok else (p.stderr or p.stdout or "capture_failed")[:1200]}
+    except Exception as exc:
+        return {"ok":False,"path":None,"error":type(exc).__name__+": "+str(exc)[:600]}
+
+def _control_export_bundle(reason="manual",include_screenshot=True):
+    """Export ZIP borné et lisible avec état + logs + incidents + capture."""
+    os.makedirs(CONTROL_DIAG_DIR,exist_ok=True)
+    stamp=time.strftime("%Y%m%d_%H%M%S")
+    shot=_control_capture_screen() if include_screenshot else {"ok":False,"path":None,"error":None}
+    zip_path=os.path.join(CONTROL_DIAG_DIR,"BAZOR_ROOM_DIAG_"+stamp+".zip")
+    manifest={
+        "created_at":time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "reason":reason,
+        "watcher_head":LAST_HEAD or _git("rev-parse","HEAD").stdout.strip(),
+        "control":_control_load(),
+        "screenshot":shot,
+    }
+    candidates=[
+        ("control.json",AIROOM_CONTROL_FILE),
+        ("room.log",os.path.join(os.path.dirname(AIROOM_CONTROL_FILE),"room.log")),
+        ("state.json",os.path.join(os.path.dirname(AIROOM_CONTROL_FILE),"state.json")),
+        ("projects.json",os.path.join(os.path.dirname(AIROOM_CONTROL_FILE),"projects.json")),
+        ("watcher_journal.jsonl",os.path.join(ROOT,"pc-relay","BAZOR_DATA","journal.jsonl")),
+        ("core.log",CORE_LOG),
+    ]
+    try:
+        with zipfile.ZipFile(zip_path,"w",compression=zipfile.ZIP_DEFLATED) as z:
+            z.writestr("manifest.json",json.dumps(manifest,ensure_ascii=False,indent=2))
+            for arc,path in candidates:
+                try:
+                    if path and os.path.exists(path):
+                        # Bornage: journaux très volumineux tronqués à 2 Mo récents.
+                        if arc.endswith((".log",".jsonl")) and os.path.getsize(path)>2_000_000:
+                            with open(path,"rb") as h:
+                                h.seek(max(0,os.path.getsize(path)-2_000_000))
+                                z.writestr("logs/"+arc,h.read())
+                        else:
+                            z.write(path,"logs/"+arc)
+                except Exception:
+                    pass
+            inc_dir=os.path.join(os.path.dirname(AIROOM_CONTROL_FILE),"incidents")
+            try:
+                if os.path.isdir(inc_dir):
+                    recent=sorted(
+                        (os.path.join(inc_dir,n) for n in os.listdir(inc_dir)),
+                        key=lambda p:os.path.getmtime(p),reverse=True
+                    )[:20]
+                    for pth in recent:
+                        if os.path.isfile(pth):
+                            z.write(pth,"incidents/"+os.path.basename(pth))
+            except Exception:
+                pass
+            if shot.get("ok") and shot.get("path") and os.path.exists(shot["path"]):
+                z.write(shot["path"],"screenshots/"+os.path.basename(shot["path"]))
+        return {"ok":True,"zip":zip_path,"screenshot":shot}
+    except Exception as exc:
+        return {"ok":False,"zip":None,"screenshot":shot,"error":type(exc).__name__+": "+str(exc)[:800]}
+
 def _control_process_request():
     data=_control_load()
     req=int(data.get("request_seq") or 0)
     done=int(data.get("processed_seq") or 0)
     if req<=done or not data.get("go_requested"):
+        return
+    request_action=str(data.get("request_action") or "go").lower()
+    if request_action in ("export_logs","screenshot"):
+        data["working"]=True
+        data["last_action"]=request_action
+        data["last_result_status"]="RUNNING"
+        _control_save(data)
+        if request_action=="screenshot":
+            result=_control_capture_screen()
+            data["last_result_summary"]="Capture écran créée." if result.get("ok") else "Capture écran impossible."
+            data["last_proof"]=str(result.get("path") or result.get("error") or "")
+        else:
+            result=_control_export_bundle("manual_control_export",include_screenshot=True)
+            data["last_result_summary"]="Bundle diagnostic exporté." if result.get("ok") else "Export diagnostic impossible."
+            data["last_proof"]=str(result.get("zip") or result.get("error") or "")
+        data["last_result_status"]="VERIFIE" if result.get("ok") else "BLOCKED"
+        data["processed_seq"]=req
+        data["go_requested"]=False
+        data["working"]=False
+        data["watcher_last_seen_epoch"]=int(time.time())
+        data["watcher_last_seen"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+        _control_save(data)
         return
     auto=bool(data.get("auto_mode"))
     data.update({
@@ -1564,6 +1672,11 @@ def _control_process_request():
             data["last_finished_at"]=time.strftime("%Y-%m-%dT%H:%M:%S")
             _control_save(data)
             if status not in ("DONE","VERIFIE"):
+                auto_diag=_control_export_bundle("AUTO_DIAG_BLOCKED_"+tid,include_screenshot=True)
+                if auto_diag.get("ok"):
+                    data["last_diagnostic_bundle"]=auto_diag.get("zip")
+                    data["last_diagnostic_screenshot"]=(auto_diag.get("screenshot") or {}).get("path")
+                    _control_save(data)
                 break
             if not auto:
                 break
