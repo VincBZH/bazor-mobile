@@ -266,3 +266,20 @@ Conclusion : la connectivité de base est saine, mais la chaîne de génération
 - Changements : chaîne autonome Studio P0 = Ollama local → revues Mammouth Claude/Gemini → arbitrage GPT-5.6 Sol → au besoin une réparation locale → nouvelle revue.
 - Sécurité : aucune revue externe n'écrit directement ; Action Engine, sandbox, tests et rollback restent obligatoires.
 - Limite : indisponibilité d'un reviewer externe ne bloque pas un résultat local déterministe suffisamment prouvé.
+## BAZOR AI ROOM V2.4 — pipeline autonome (2026-09-19)
+
+Référence registre : `ai-room` dans `bazor_registry.json` version `2026.09.19.4`.
+
+Chaîne P0 enregistrée :
+- `AIROOM-P0-001` : déployer la V2.4 dans `%LOCALAPPDATA%\BazorAIROOM` via BAZOR Action Engine, avec preflight, backup, tests et rapport.
+- `AIROOM-P0-002` : prouver le runtime local sur `127.0.0.1:8765` et tester l'interface/API.
+- `AIROOM-P0-003` : prouver le routage réel Ollama / Mammouth et les fallbacks, sans faux statut disponible.
+- `AIROOM-P0-004` : qualification finale ; `DELIVERED` interdit tant que tous les gates et preuves ne sont pas PASS.
+
+Machine d'état obligatoire :
+`PROTOCOL_READY -> CODE_PATCHED -> CI_PASS -> RUNTIME_PASS -> DELIVERED`.
+
+Règle de récupération :
+fichier/message incomplet, handoff absent, crash, timeout, réponse provider vide ou état incohérent => `DEFAULT_RECOVERY`, incident horodaté, pas de `DONE`, retry transitoire unique, puis changement de provider ou mise en file d'attente.
+
+GitHub reste un bus de coordination et de preuve ; aucun shell/exec/eval arbitraire reçu depuis GitHub n'est autorisé.
