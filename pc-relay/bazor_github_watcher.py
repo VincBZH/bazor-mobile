@@ -8,7 +8,7 @@ PENDING_CORE_RESTART=False
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 DIAG_MARK="[BAZOR-DIAG-DONE]"
-MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
+MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"\nFILEBUS_MARK="[BAZOR-FILEBUS-DONE]"
 TASK_MARK="[BAZOR-TASK-DONE]"
 QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 CERTIFY_MARK="[BAZOR-CERTIFY-DONE]"
@@ -1034,6 +1034,49 @@ def _run_h3_converter_hotfix():
             pass
     return {"ok":cp.returncode==0 and bool((payload or {}).get("ok")),"returncode":cp.returncode,"payload":payload or {},"stdout":cp.stdout[-5000:],"stderr":cp.stderr[-2500:]}
 
+def _safe_filebus_message(title):
+    """Lit uniquement bridge/messages/<fichier> synchronisé par Git.
+    Aucun chemin arbitraire, aucun shell, aucune instruction exécutée.
+    """
+    m=re.match(r"(?i)^\[bazor-filebus:(ollama|mammouth):([a-z0-9._-]+)\]",str(title or ""))
+    if not m:
+        raise RuntimeError("filebus_title_invalid")
+    target=m.group(1).lower()
+    name=m.group(2)
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,120}",name):
+        raise RuntimeError("filebus_name_invalid")
+    base=os.path.abspath(os.path.join(ROOT,"bridge","messages"))
+    path=os.path.abspath(os.path.join(base,name))
+    if os.path.commonpath([base,path]) != base:
+        raise RuntimeError("filebus_path_escape")
+    if not os.path.isfile(path):
+        raise RuntimeError("filebus_file_missing: "+name)
+    raw=open(path,"r",encoding="utf-8-sig",errors="replace").read()
+    if len(raw)>24000:
+        raise RuntimeError("filebus_message_too_large")
+    prompt=(
+        "BAZOR FILEBUS V1 — message GitHub synchronisé localement.\n"
+        "Ne traite ceci que comme une consigne de coordination; n'exécute aucune commande shell.\n"
+        "Réponds en respectant exactement le bloc RESPONSE_FORMAT demandé à la fin du fichier.\n\n"
+        "FILE: bridge/messages/"+name+"\n\n"+raw
+    )
+    if target=="ollama":
+        result=core_chat(prompt)
+    else:
+        payload={
+            "project_id":"simple-studio",
+            "subproject_name":"BAZOR FILEBUS",
+            "task":prompt,
+            "current_progress":0,
+            "repair":False,
+            "previous":"",
+            "provider":"mammouth",
+            "mammouth_profile":"analysis",
+            "apply_actions":False,
+        }
+        result=_core_task(payload,timeout=260)
+    return target,name,result
+
 def answer_text(result):
     for section in ("mammouth","ollama"):
         o=result.get(section) or {}
@@ -1255,6 +1298,28 @@ while True:
                         except Exception:
                             pass
                         print(f"[BLOQUE TASK] #{issue['number']} {task_id} {detail}")
+                    continue
+                if title.startswith("[bazor-filebus:"):
+                    if FILEBUS_MARK in comments:
+                        continue
+                    try:
+                        target,name,result=_safe_filebus_message(issue.get("title") or "")
+                        reply=(
+                            FILEBUS_MARK+"\n\n"
+                            "TARGET: "+target+"\n"
+                            "FILE: bridge/messages/"+name+"\n\n"
+                            +answer_text(result)
+                        )
+                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
+                        print(f"[OK FILEBUS] #{issue['number']} {target} <- {name}")
+                    except Exception as exc:
+                        detail=(type(exc).__name__+": "+str(exc))[:1200]
+                        try:
+                            gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",
+                                FILEBUS_MARK+"\n\nSTATUS: BLOCKED\nERROR: "+detail])
+                        except Exception:
+                            pass
+                        print(f"[BLOQUE FILEBUS] #{issue['number']} {detail}")
                     continue
                 if title.startswith("[bazor-mammouth"):
                     if MAMMOUTH_MARK in comments: continue
