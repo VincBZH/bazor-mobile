@@ -1,0 +1,14 @@
+PROJECT: BAZOR AI ROOM TRIO
+REQUEST_ID: MAMMOUTH-FILEBUS-STRICT-RETEST-20260919
+TARGET_AGENT: mammouth
+STATUS_EXPECTED: VERIFIE
+
+TASK:
+Réponds exactement avec le nonce suivant, sans texte avant ni après:
+MAMMOUTH-FILEBUS-20260919-OK
+
+RESPONSE_FORMAT:
+MAMMOUTH-FILEBUS-20260919-OK
+
+NEXT:
+Retourner la preuve automatiquement via le watcher/FileBus.
