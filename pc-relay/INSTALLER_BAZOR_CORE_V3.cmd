@@ -25,7 +25,7 @@ echo Sauvegarde reversible : %QUAR_DIR%
 echo.
 
 echo [1/9] Sauvegarde de l'ancienne version...
-for %%F in (bazor_pc_relay_v3.py mammouth_client.py mammouth_github_relay.py DEMARRER_BAZOR_PC_RELAY.cmd test_bazor_v3.py) do (
+for %%F in (bazor_pc_relay_v3.py bazor_security.py mammouth_client.py mammouth_github_relay.py DEMARRER_BAZOR_PC_RELAY.cmd test_bazor_v3.py) do (
   if exist "%INSTALL_DIR%\%%F" (
     if not exist "%QUAR_DIR%" mkdir "%QUAR_DIR%" >nul 2>&1
     move /Y "%INSTALL_DIR%\%%F" "%QUAR_DIR%\" >nul
@@ -34,7 +34,7 @@ for %%F in (bazor_pc_relay_v3.py mammouth_client.py mammouth_github_relay.py DEM
 )
 
 echo [2/9] Telechargement BAZOR Core + relay Mammouth...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/bazor_pc_relay_v3.py' -OutFile '%INSTALL_DIR%\bazor_pc_relay_v3.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/mammouth_client.py' -OutFile '%INSTALL_DIR%\mammouth_client.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/mammouth_github_relay.py' -OutFile '%INSTALL_DIR%\mammouth_github_relay.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/DEMARRER_BAZOR_PC_RELAY.cmd' -OutFile '%INSTALL_DIR%\DEMARRER_BAZOR_PC_RELAY.cmd'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/test_bazor_v3.py' -OutFile '%INSTALL_DIR%\test_bazor_v3.py'"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/bazor_pc_relay_v3.py' -OutFile '%INSTALL_DIR%\bazor_pc_relay_v3.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/bazor_security.py' -OutFile '%INSTALL_DIR%\bazor_security.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/mammouth_client.py' -OutFile '%INSTALL_DIR%\mammouth_client.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/mammouth_github_relay.py' -OutFile '%INSTALL_DIR%\mammouth_github_relay.py'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/DEMARRER_BAZOR_PC_RELAY.cmd' -OutFile '%INSTALL_DIR%\DEMARRER_BAZOR_PC_RELAY.cmd'; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/test_bazor_v3.py' -OutFile '%INSTALL_DIR%\test_bazor_v3.py'"
 if errorlevel 1 (
   echo [BLOQUE] Telechargement impossible.
   echo Ancienne version conservee dans : %QUAR_DIR%
@@ -72,7 +72,7 @@ if errorlevel 1 (
 )
 
 echo [5/9] Verification du code...
-python -m py_compile "%INSTALL_DIR%\mammouth_client.py" "%INSTALL_DIR%\mammouth_github_relay.py" "%INSTALL_DIR%\bazor_pc_relay_v3.py" "%INSTALL_DIR%\test_bazor_v3.py"
+python -m py_compile "%INSTALL_DIR%\bazor_security.py" "%INSTALL_DIR%\mammouth_client.py" "%INSTALL_DIR%\mammouth_github_relay.py" "%INSTALL_DIR%\bazor_pc_relay_v3.py" "%INSTALL_DIR%\test_bazor_v3.py"
 if errorlevel 1 (
   echo [BLOQUE] Verification Python echouee.
   echo Ancienne version conservee dans : %QUAR_DIR%
