@@ -662,6 +662,42 @@ def _studio_p0_post_reviews(project, task, sub, base_prompt, execution_result):
         }
     }
 
+def _studio_next_task(task_id):
+    """Chaîne V4 prédéfinie. Aucun texte GitHub n'est exécuté comme commande."""
+    chain={
+        "STUDIO-P0-012":"STUDIO-P0-010",
+        "STUDIO-P0-010":"STUDIO-P0-011",
+    }
+    return chain.get(str(task_id or "").upper())
+
+def _ensure_next_task_issue(current_task_id):
+    next_id=_studio_next_task(current_task_id)
+    if not next_id:
+        return None
+    try:
+        existing=json.loads(gh([
+            "issue","list","--repo",REPO,"--state","open","--limit","100",
+            "--json","number,title"
+        ]))
+        needle="[bazor-task:"+next_id.lower()+"]"
+        for item in existing:
+            if str(item.get("title") or "").lower().startswith(needle):
+                return int(item.get("number"))
+        title="[bazor-task:"+next_id+"] AUTOCHAIN V4"
+        body=(
+            "AUTOCHAIN BAZOR V4.\n\n"
+            "Tâche précédente validée: "+str(current_task_id)+".\n"
+            "Exécuter maintenant la tâche prédéfinie "+next_id+" du registre BAZOR.\n"
+            "Aucune commande shell libre n'est autorisée. Preflight, tests, preuves runtime "
+            "et rollback restent obligatoires."
+        )
+        raw=gh(["issue","create","--repo",REPO,"--title",title,"--body",body])
+        m=re.search(r"/issues/(\d+)",str(raw))
+        return int(m.group(1)) if m else None
+    except Exception as exc:
+        print("[AUTOCHAIN WARN]",type(exc).__name__,str(exc)[:240])
+        return None
+
 def _run_registry_task(task_id):
     project,task,sub=_registry_task(task_id)
     if project.get("go_compatible") is False:
@@ -1152,6 +1188,14 @@ while True:
                         reply+="\n\nMoteur final: "+str(result.get("engine") or "?")+" / "+str(result.get("model") or "?")
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
                         print(f"[OK TASK] #{issue['number']} {task_id} -> {result.get('task_status')}")
+                        if result.get("task_status") in ("DONE","VERIFIE"):
+                            next_issue=_ensure_next_task_issue(task_id)
+                            if next_issue:
+                                chain_msg="[BAZOR-AUTOCHAIN]\n\nÉtape suivante créée automatiquement: #"+str(next_issue)+" • "+str(_studio_next_task(task_id))
+                                try:
+                                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",chain_msg])
+                                except Exception:
+                                    pass
                     except Exception as task_exc:
                         detail=(type(task_exc).__name__+": "+str(task_exc))[:1200]
                         try:
