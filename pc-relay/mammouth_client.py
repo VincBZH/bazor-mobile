@@ -2,6 +2,8 @@ import datetime
 import json
 import os
 import subprocess
+import time
+import uuid
 import threading
 import urllib.error
 import urllib.request
@@ -204,33 +206,43 @@ def _extract_answer(data):
     return ""
 
 
-def chat(text, task_kind="general", profile=None, max_tokens=3000):
+def _error_text(data):
+    if not isinstance(data, dict):
+        return ""
+    err=data.get("error")
+    if isinstance(err, str):
+        return err.strip()
+    if isinstance(err, dict):
+        for key in ("message","detail","error","code","type"):
+            value=err.get(key)
+            if value:
+                return str(value).strip()
+        try:
+            return json.dumps(err,ensure_ascii=False)[:800]
+        except Exception:
+            return str(err)[:800]
+    return ""
+
+
+def _candidate_profiles(selected_profile):
+    # Un FileBus ne doit pas dépendre d'un seul modèle. On garde le profil
+    # demandé en premier puis deux fallbacks distincts et plus économiques.
+    order=[selected_profile,"general","light","recommended"]
+    out=[]
+    seen=set()
+    for prof in order:
+        model=MODEL_PROFILES.get(prof,prof)
+        key=(prof,model)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((prof,model))
+    return out
+
+
+def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_id):
     key = os.getenv("MAMMOUTH_API_KEY", "").strip()
-    selected_profile = profile or choose_profile(task_kind)
-    model = MODEL_PROFILES.get(selected_profile, selected_profile)
-
-    if not key:
-        return {
-            "ok": False,
-            "error": "mammouth_key_missing",
-            "provider": "mammouth",
-            "profile": selected_profile,
-            "model": model,
-            "message": "MAMMOUTH_API_KEY non configurée sur le PC."
-        }
-
-    budget = budget_status()
-    if budget["blocked"]:
-        return {
-            "ok": False,
-            "error": "mammouth_budget_reached",
-            "provider": "mammouth",
-            "profile": selected_profile,
-            "model": model,
-            "budget": budget,
-            "message": "Plafond mensuel Mammouth atteint dans BAZOR."
-        }
-
+    started=time.monotonic()
     payload = json.dumps({
         "model": model,
         "messages": [{"role": "user", "content": text}],
@@ -239,88 +251,196 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
         "temperature": 0.2
     }).encode("utf-8")
 
-    try:
-        completed = subprocess.run(
-            [
-                "curl.exe", "--silent", "--show-error", "--location",
-                "--connect-timeout", "20", "--max-time", "240",
-                "--header", "Authorization: Bearer " + key,
-                "--header", "Content-Type: application/json",
-                "--header", "Accept: application/json",
-                "--header", "User-Agent: BAZOR-Mammouth-Client/3.1",
-                "--data-binary", "@-",
-                "--write-out", "\\nBAZOR_HTTP_STATUS:%{http_code}",
-                MAMMOUTH_URL,
-            ],
-            input=payload,
-            capture_output=True,
-            text=False,
-            timeout=250,
-            check=False,
-        )
-        raw = (completed.stdout or b"").decode("utf-8", errors="replace")
-        marker = "\\nBAZOR_HTTP_STATUS:"
-        if marker in raw:
-            body, status_text = raw.rsplit(marker, 1)
+    completed = subprocess.run(
+        [
+            "curl.exe", "--silent", "--show-error", "--location",
+            "--connect-timeout", "20", "--max-time", "90",
+            "--header", "Authorization: Bearer " + key,
+            "--header", "Content-Type: application/json",
+            "--header", "Accept: application/json",
+            "--header", "User-Agent: BAZOR-Mammouth-Client/3.2",
+            "--data-binary", "@-",
+            "--write-out", "\\nBAZOR_HTTP_STATUS:%{http_code}",
+            MAMMOUTH_URL,
+        ],
+        input=payload,
+        capture_output=True,
+        text=False,
+        timeout=100,
+        check=False,
+    )
+    elapsed_ms=int((time.monotonic()-started)*1000)
+    raw = (completed.stdout or b"").decode("utf-8", errors="replace")
+    marker = "\\nBAZOR_HTTP_STATUS:"
+    if marker in raw:
+        body, status_text = raw.rsplit(marker, 1)
+        try:
             http_status = int(status_text.strip() or "0")
-        else:
-            body, http_status = raw, 0
-        if completed.returncode != 0 or http_status >= 400:
-            detail = ((body or "") + "\\n" + (completed.stderr or b"").decode("utf-8", errors="replace")).strip()
-            return {
-                "ok": False,
-                "error": "mammouth_http" if http_status else "mammouth_curl",
-                "provider": "mammouth",
-                "profile": selected_profile,
-                "model": model,
-                "message": f"Mammouth HTTP {http_status}" if http_status else "curl Mammouth indisponible",
-                "detail": detail[:600],
-                "budget": budget_status(),
-            }
-        data = _parse_api_json(body)
-        if not isinstance(data, dict):
-            raise ValueError("mammouth_response_not_object")
-        choice = (data.get("choices") or [{}])[0]
-        actual_model = data.get("model") or model
-        usage = data.get("usage") or {}
-        estimated_cost = _estimate_cost(actual_model, usage)
-        _record_usage(actual_model, usage, estimated_cost)
-        answer = _extract_answer(data)
-        if not answer:
-            diagnostic = {
-                "response_keys": sorted(data.keys()),
-                "choice_keys": sorted(choice.keys()) if isinstance(choice, dict) else [],
-                "finish_reason": choice.get("finish_reason") if isinstance(choice, dict) else None,
-                "usage": usage,
-            }
-            return {
-                "ok": False,
-                "error": "mammouth_empty_answer",
-                "provider": "mammouth",
-                "profile": selected_profile,
-                "model": actual_model,
-                "message": "Mammouth a repondu sans texte exploitable: " + json.dumps(diagnostic, ensure_ascii=False)[:500],
-                "usage": usage,
-                "estimated_cost_usd": None if estimated_cost is None else round(estimated_cost, 6),
-                "budget": budget_status(),
-            }
-        return {
-            "ok": True,
-            "provider": "mammouth",
-            "profile": selected_profile,
-            "model": actual_model,
-            "answer": answer,
-            "usage": usage,
-            "estimated_cost_usd": None if estimated_cost is None else round(estimated_cost, 6),
-            "budget": budget_status(),
+        except ValueError:
+            http_status = 0
+    else:
+        body, http_status = raw, 0
+
+    base={
+        "provider":"mammouth",
+        "profile":selected_profile,
+        "model":model,
+        "correlation_id":correlation_id,
+        "http_status":http_status,
+        "elapsed_ms":elapsed_ms,
+        "transport_ok":completed.returncode==0 and 0 < http_status < 500,
+    }
+    if completed.returncode != 0 or http_status >= 400 or http_status == 0:
+        detail = ((body or "") + "\n" + (completed.stderr or b"").decode("utf-8", errors="replace")).strip()
+        return {**base,
+            "ok":False,
+            "provider_ok":False,
+            "content_valid":False,
+            "error":"mammouth_http" if http_status else "mammouth_curl",
+            "message":f"Mammouth HTTP {http_status}" if http_status else "curl Mammouth indisponible",
+            "detail":detail[:900],
         }
+
+    try:
+        data=_parse_api_json(body)
     except Exception as exc:
-        return {
-            "ok": False,
-            "error": "mammouth_error",
-            "provider": "mammouth",
-            "profile": selected_profile,
-            "model": model,
-            "message": str(exc)[:300],
-            "budget": budget_status(),
+        return {**base,
+            "ok":False,
+            "provider_ok":False,
+            "content_valid":False,
+            "error":"mammouth_parse_error",
+            "message":str(exc)[:300],
+            "body_excerpt":str(body or "")[:700],
         }
+
+    if not isinstance(data,dict):
+        return {**base,
+            "ok":False,
+            "provider_ok":False,
+            "content_valid":False,
+            "error":"mammouth_response_not_object",
+        }
+
+    api_error=_error_text(data)
+    choice=(data.get("choices") or [{}])[0]
+    actual_model=data.get("model") or model
+    usage=data.get("usage") or {}
+    estimated_cost=_estimate_cost(actual_model,usage)
+    if usage:
+        _record_usage(actual_model,usage,estimated_cost)
+
+    if api_error:
+        return {**base,
+            "ok":False,
+            "provider_ok":False,
+            "content_valid":False,
+            "error":"mammouth_api_error",
+            "model":actual_model,
+            "message":api_error[:800],
+            "response_keys":sorted(data.keys()),
+            "choice_keys":sorted(choice.keys()) if isinstance(choice,dict) else [],
+            "finish_reason":choice.get("finish_reason") if isinstance(choice,dict) else None,
+            "usage":usage,
+        }
+
+    answer=_extract_answer(data)
+    if not answer:
+        return {**base,
+            "ok":False,
+            "provider_ok":True,
+            "content_valid":False,
+            "error":"mammouth_empty_answer",
+            "model":actual_model,
+            "message":"Mammouth a répondu sans texte exploitable.",
+            "response_keys":sorted(data.keys()),
+            "choice_keys":sorted(choice.keys()) if isinstance(choice,dict) else [],
+            "finish_reason":choice.get("finish_reason") if isinstance(choice,dict) else None,
+            "usage":usage,
+        }
+
+    return {**base,
+        "ok":True,
+        "provider_ok":True,
+        "content_valid":True,
+        "model":actual_model,
+        "answer":answer,
+        "usage":usage,
+        "estimated_cost_usd":None if estimated_cost is None else round(estimated_cost,6),
+    }
+
+
+def chat(text, task_kind="general", profile=None, max_tokens=3000):
+    key = os.getenv("MAMMOUTH_API_KEY", "").strip()
+    selected_profile = profile or choose_profile(task_kind)
+    selected_model = MODEL_PROFILES.get(selected_profile, selected_profile)
+    correlation_id="mammouth-"+uuid.uuid4().hex[:12]
+
+    if not key:
+        return {
+            "ok": False, "transport_ok":False, "provider_ok":False, "content_valid":False,
+            "error": "mammouth_key_missing", "provider": "mammouth",
+            "profile": selected_profile, "model": selected_model,
+            "correlation_id":correlation_id,
+            "message": "MAMMOUTH_API_KEY non configurée sur le PC."
+        }
+
+    budget = budget_status()
+    if budget["blocked"]:
+        return {
+            "ok": False, "transport_ok":True, "provider_ok":False, "content_valid":False,
+            "error": "mammouth_budget_reached", "provider": "mammouth",
+            "profile": selected_profile, "model": selected_model,
+            "correlation_id":correlation_id,
+            "budget": budget, "message": "Plafond mensuel Mammouth atteint dans BAZOR."
+        }
+
+    attempts=[]
+    for prof,model in _candidate_profiles(selected_profile):
+        # Ne pas engager un nouvel appel si le budget vient d'être atteint.
+        if budget_status().get("blocked"):
+            attempts.append({"profile":prof,"model":model,"error":"budget_reached_before_attempt"})
+            break
+        try:
+            result=_single_chat_attempt(text,prof,model,max_tokens,correlation_id)
+        except Exception as exc:
+            result={
+                "ok":False,"transport_ok":False,"provider_ok":False,"content_valid":False,
+                "provider":"mammouth","profile":prof,"model":model,
+                "correlation_id":correlation_id,"error":"mammouth_error",
+                "message":str(exc)[:300],
+            }
+        attempts.append({
+            "profile":prof,
+            "model":result.get("model") or model,
+            "ok":bool(result.get("ok")),
+            "http_status":result.get("http_status"),
+            "elapsed_ms":result.get("elapsed_ms"),
+            "transport_ok":bool(result.get("transport_ok")),
+            "provider_ok":bool(result.get("provider_ok")),
+            "content_valid":bool(result.get("content_valid")),
+            "error":result.get("error"),
+            "message":str(result.get("message") or "")[:240],
+        })
+        if result.get("ok") and result.get("content_valid"):
+            result["attempts"]=attempts
+            result["fallback_used"]=len(attempts)>1
+            result["budget"]=budget_status()
+            return result
+
+    last=(result if "result" in locals() else {})
+    return {
+        **last,
+        "ok":False,
+        "provider":"mammouth",
+        "profile":selected_profile,
+        "model":last.get("model") or selected_model,
+        "correlation_id":correlation_id,
+        "transport_ok":any(bool(x.get("transport_ok")) for x in attempts),
+        "provider_ok":any(bool(x.get("provider_ok")) for x in attempts),
+        "content_valid":False,
+        "error":last.get("error") or "mammouth_all_attempts_failed",
+        "message":last.get("message") or "Tous les profils Mammouth testés ont échoué.",
+        "attempts":attempts,
+        "budget":budget_status(),
+    }
+
