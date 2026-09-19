@@ -1668,6 +1668,14 @@ while True:
                         if review_lines:
                             reply+="\n\nSecondes lectures:\n"+review_lines
                         reply+="\n\nMoteur final: "+str(result.get("engine") or "?")+" / "+str(result.get("model") or "?")
+                        try:
+                            cp_sha=_git("rev-parse","HEAD")
+                            watcher_sha=(cp_sha.stdout or "").strip() if cp_sha.returncode==0 else "unknown"
+                        except Exception:
+                            watcher_sha="unknown"
+                        reply+="\nWatcher commit: "+watcher_sha
+                        if result.get("task_status")=="ANALYSE_SEULE":
+                            reply+="\nRéponse moteur (extrait): "+str(result.get("answer") or "")[:2200]
                         if result.get("task_status")=="BLOCKED":
                             if result.get("error") or result.get("detail"):
                                 reply+="\nErreur: "+str(result.get("error") or "?")+"\nDétail: "+str(result.get("detail") or "")[:1800]
@@ -1761,7 +1769,12 @@ while True:
                     result=core_mammouth_task(issue.get("title") or "", issue.get("body") or "")
                     route=result.get("route") or {}
                     model=result.get("model") or route.get("profile") or "mammouth"
-                    reply=MAMMOUTH_MARK+"\n\n**BAZOR/Mammouth — résultat**\n\nProfil: "+str(model)+"\n\n"+answer_text(result)
+                    try:
+                        cp_sha=_git("rev-parse","HEAD")
+                        watcher_sha=(cp_sha.stdout or "").strip() if cp_sha.returncode==0 else "unknown"
+                    except Exception:
+                        watcher_sha="unknown"
+                    reply=MAMMOUTH_MARK+"\n\n**BAZOR/Mammouth — résultat**\n\nProfil: "+str(model)+"\nWatcher commit: "+watcher_sha+"\n\n"+answer_text(result)
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK MAMMOUTH] #{issue['number']} traite et retourne dans GitHub.")
                     continue
