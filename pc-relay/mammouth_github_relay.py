@@ -60,15 +60,18 @@ def save_state(state):
     STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def gh_json(args):
-    p = subprocess.run(
-        ["gh", "api"] + list(args),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=45,
-    )
+def gh_json(args, stdin_json=None):
+    cmd = ["gh", "api"] + list(args)
+    kwargs = {
+        "capture_output": True,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+        "timeout": 45,
+    }
+    if stdin_json is not None:
+        kwargs["input"] = json.dumps(stdin_json, ensure_ascii=False)
+    p = subprocess.run(cmd, **kwargs)
     if p.returncode != 0:
         raise RuntimeError((p.stderr or p.stdout or "gh api error").strip()[:800])
     return json.loads(p.stdout or "null")
@@ -82,11 +85,13 @@ def post_comment(body):
     body = str(body or "").strip()
     if len(body) > MAX_REPLY_CHARS:
         body = body[:MAX_REPLY_CHARS] + "\n\n[TRONQUE_PAR_BAZOR]"
-    return gh_json([
-        "-X", "POST",
-        f"repos/{REPO}/issues/{ISSUE}/comments",
-        "-f", f"body={body}",
-    ])
+    # IMPORTANT Windows: ne jamais passer un gros rapport dans la ligne de commande.
+    # CreateProcess est limité en taille et les réponses Trio (Ollama + Mammouth + code)
+    # dépassent facilement cette limite. Envoyer le JSON via stdin à gh api.
+    return gh_json(
+        ["-X", "POST", f"repos/{REPO}/issues/{ISSUE}/comments", "--input", "-"],
+        stdin_json={"body": body},
+    )
 
 
 def request_id_from(text, comment_id):
@@ -452,6 +457,11 @@ def selftest():
     ]
     if not is_to_trio({"body": "[TO_BAZOR_TRIO]\nREQUEST_ID: TEST"}):
         raise AssertionError("trio marker not detected")
+    # Un gros commentaire Trio doit être publiable sans utiliser argv Windows.
+    # Le test ne contacte pas GitHub : il vérifie seulement que post_comment
+    # repose désormais sur gh_json(..., stdin_json=...).
+    if "stdin_json={\"body\": body}" not in __import__("inspect").getsource(post_comment):
+        raise AssertionError("post_comment must use stdin_json for large Trio replies")
     if is_to_trio({"body": "[FROM_BAZOR_TRIO]\nREQUEST_ID: TEST"}):
         raise AssertionError("trio response must not be reprocessed")
     for text, expected in tests:
@@ -523,6 +533,27 @@ def main():
                         process_comment(comment)
                 except Exception as exc:
                     log(f"ERREUR id={cid}: {type(exc).__name__}: {exc}")
+                    # Un échec Trio doit devenir visible sur GitHub au lieu de boucler
+                    # silencieusement toutes les 15 s. Le commentaire source reste
+                    # traçable et Vincent/GPT voient la cause exacte.
+                    if is_to_trio(comment):
+                        request_id = request_id_from(str(comment.get("body") or ""), cid)
+                        try:
+                            post_comment(
+                                "[FROM_BAZOR_TRIO]\n"
+                                f"REQUEST_ID: {request_id}\n"
+                                f"SOURCE_COMMENT_ID: {cid}\n"
+                                "STATUS: BLOCKED\n"
+                                f"ERROR: {type(exc).__name__}: {str(exc)[:1200]}\n"
+                                "HANDOFF_GPT: Corriger le relay ou la dépendance indiquée puis rejouer la demande.\n"
+                                "[/FROM_BAZOR_TRIO]"
+                            )
+                            processed.add(cid)
+                            state["processed_ids"] = sorted(processed)[-500:]
+                            state["last_seen_id"] = max(int(state.get("last_seen_id") or 0), cid)
+                            save_state(state)
+                        except Exception as report_exc:
+                            log(f"ERREUR publication blocage Trio id={cid}: {type(report_exc).__name__}: {report_exc}")
                     continue
 
                 processed.add(cid)
