@@ -45,6 +45,7 @@ public class BleWatchService extends Service {
     private final Map<String, Candidate> candidates = new LinkedHashMap<>();
 
     private SharedPreferences prefs;
+    private BluetoothManager bluetoothManager;
     private BluetoothAdapter adapter;
     private BluetoothLeScanner scanner;
     private boolean scanning = false;
@@ -69,8 +70,8 @@ public class BleWatchService extends Service {
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         prefs.edit().putBoolean("serviceRunning", true).apply();
 
-        BluetoothManager manager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
-        adapter = manager != null ? manager.getAdapter() : null;
+        bluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
+        adapter = bluetoothManager != null ? bluetoothManager.getAdapter() : null;
 
         createChannel();
         startForeground(NOTIF_ID, notification("Veille Bluetooth active"));
@@ -171,25 +172,68 @@ public class BleWatchService extends Service {
             return;
         }
 
-        long lastSeen = prefs.getLong("lastSeenMs", 0L);
-        if (lastSeen <= 0L) {
-            prefs.edit().putString("status", "SEARCHING").apply();
+        long now = System.currentTimeMillis();
+        if (isGattConnected(target)) {
+            SharedPreferences.Editor e = prefs.edit()
+                .putString("status", "CONNECTED")
+                .putLong("lastSystemConnectedMs", now)
+                .putInt("scanError", 0);
+            if (outageOpen) {
+                e.putInt("recoveries", prefs.getInt("recoveries", 0) + 1)
+                    .putLong("lastRecoveryMs", now);
+                outageOpen = false;
+            }
+            e.apply();
+            updateNotification();
             return;
         }
 
-        long age = System.currentTimeMillis() - lastSeen;
+        long lastSeen = prefs.getLong("lastSeenMs", 0L);
+        long lastSystemConnected = prefs.getLong("lastSystemConnectedMs", 0L);
+
+        if (lastSeen <= 0L) {
+            if (lastSystemConnected > 0L && now - lastSystemConnected > LOST_AFTER_MS && !outageOpen) {
+                outageOpen = true;
+                prefs.edit()
+                    .putString("status", "LOST")
+                    .putInt("outages", prefs.getInt("outages", 0) + 1)
+                    .putLong("lastOutageMs", now)
+                    .apply();
+                recoveryScan();
+                updateNotification();
+            } else if (!outageOpen) {
+                prefs.edit().putString("status", "SEARCHING").apply();
+            }
+            return;
+        }
+
+        long age = now - lastSeen;
         if (age > LOST_AFTER_MS && !outageOpen) {
             outageOpen = true;
             prefs.edit()
                 .putString("status", "LOST")
                 .putInt("outages", prefs.getInt("outages", 0) + 1)
-                .putLong("lastOutageMs", System.currentTimeMillis())
+                .putLong("lastOutageMs", now)
                 .apply();
             recoveryScan();
             updateNotification();
         } else if (age <= LOST_AFTER_MS && !"OK".equals(prefs.getString("status", ""))) {
             prefs.edit().putString("status", "OK").apply();
         }
+    }
+
+    private boolean isGattConnected(String target) {
+        if (bluetoothManager == null || !hasConnectPermission() ||
+            target == null || !BluetoothAdapter.checkBluetoothAddress(target)) return false;
+        try {
+            List<BluetoothDevice> connected = bluetoothManager.getConnectedDevices(BluetoothProfile.GATT);
+            if (connected == null) return false;
+            for (BluetoothDevice d : connected) {
+                if (d != null && target.equalsIgnoreCase(d.getAddress())) return true;
+            }
+        } catch (SecurityException ignored) {
+        } catch (Exception ignored) {}
+        return false;
     }
 
     private void recoveryScan() {
@@ -327,6 +371,7 @@ public class BleWatchService extends Service {
         String status = prefs.getString("status", "");
         String text;
         if ("OK".equals(status)) text = "Montre détectée • liaison surveillée";
+        else if ("CONNECTED".equals(status)) text = "Montre connectée via Android • liaison surveillée";
         else if ("LOST".equals(status)) text = "Micro-coupure • recherche rapide";
         else if ("BT_OFF".equals(status)) text = "Bluetooth désactivé";
         else if ("NO_TARGET".equals(status)) text = "Choisis ta montre dans l'application";
