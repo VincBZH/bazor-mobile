@@ -1,3 +1,4 @@
+import ast
 import hashlib
 import importlib.util
 import json
@@ -118,20 +119,27 @@ def candidate_bytes(original):
     normalized = text.replace("\r\n", "\n")
 
     # Already patched, irrespective of surrounding comments/whitespace.
-    if "ComfyUI UI workflow format" in normalized and "fallback_widget_fields" in normalized:
+    if "fallback_widget_fields" in normalized and "ComfyUI API prompt" in normalized:
         return original, False, "already_patched"
 
-    # Replace the whole _api_graph function by structure, not by an exact text
-    # blob. The live Studio can contain tiny comment/spacing changes between
-    # versions, which must not make the deterministic hotfix fail.
-    m = re.search(
-        r"(?ms)^def _api_graph\(graph\):\n.*?(?=^def [A-Za-z_]\w*\(|\Z)",
-        normalized,
-    )
-    if not m:
+    # Replace only the _api_graph FunctionDef. Using AST line boundaries avoids
+    # deleting module-level constants (e.g. TEXT_INPUTS) that can legitimately
+    # appear between this function and the next function.
+    try:
+        tree = ast.parse(normalized)
+    except SyntaxError as exc:
+        raise RuntimeError("source_parse_failed:"+str(exc)) from exc
+
+    fn = next((n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_api_graph"), None)
+    if fn is None or not getattr(fn, "end_lineno", None):
         raise RuntimeError("api_graph_function_not_found")
 
-    candidate = normalized[:m.start()] + NEW.rstrip() + "\n\n" + normalized[m.end():]
+    lines = normalized.splitlines(keepends=True)
+    start = fn.lineno - 1
+    end = fn.end_lineno
+    replacement = NEW.rstrip() + "\n"
+    candidate = "".join(lines[:start]) + replacement + "".join(lines[end:])
+
     if candidate == normalized:
         return original, False, "no_change"
     if newline == "\r\n":
