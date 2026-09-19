@@ -635,12 +635,16 @@ def _run_registry_task(task_id):
     if useful:
         final_prompt+="\n\nSECOND AVIS À PRENDRE EN COMPTE SANS LE SUIVRE AVEUGLÉMENT:\n"+"\n\n".join(useful)
 
+    # Studio P0 doit commencer localement: le code cible vit sur le PC et
+    # Ollama + Action Engine peuvent lire/preflight/tester sans dépendre d'un
+    # fournisseur externe. Les revues Mammouth restent consultatives.
+    execution_provider="ollama" if (project.get("id")=="simple-studio" and task.get("priority")=="P0") else "auto"
     payload={
         "project_id":project.get("id"),
         "subproject_name":str(task.get("id"))+" / "+str(sub.get("name") or task.get("subproject") or "Studio"),
         "task":final_prompt,
         "current_progress":0,"repair":False,"previous":"",
-        "provider":"auto","apply_actions":True,
+        "provider":execution_provider,"apply_actions":True,
     }
     result=_core_task(payload,timeout=420)
     execution=result.get("execution") or {}
