@@ -1222,6 +1222,7 @@ def _run_registry_task(task_id):
         "task_id":task.get("id"),"task_status":task_status,
         "summary":summary,"engine":result.get("engine"),"model":result.get("model"),
         "reviews":reviews,"execution":execution,
+        "local_context":result.get("local_context"),
         "answer":str(result.get("answer") or "")[:7000],
     }
 
@@ -1366,6 +1367,58 @@ def _safe_filebus_message(title):
     return target,name,result
 
 FILEBUS_RETRY_STATE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","filebus_retry_state.json")
+TASK_RETRY_STATE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","task_retry_state.json")
+
+def _task_retry_load():
+    try:
+        data=json.load(open(TASK_RETRY_STATE,"r",encoding="utf-8"))
+        return data if isinstance(data,dict) else {}
+    except Exception:
+        return {}
+
+def _task_retry_save(data):
+    try:
+        os.makedirs(os.path.dirname(TASK_RETRY_STATE),exist_ok=True)
+        tmp=TASK_RETRY_STATE+".tmp"
+        with open(tmp,"w",encoding="utf-8") as h:
+            json.dump(data,h,ensure_ascii=False,indent=2)
+        os.replace(tmp,TASK_RETRY_STATE)
+    except Exception as exc:
+        print("[TASK RETRY STATE WARN]",type(exc).__name__,str(exc)[:180])
+
+def _task_retry_allowed(issue_number, task_id, comments):
+    # Réutilise le même ticket pour les Studio P0 en ANALYSE_SEULE.
+    if not str(task_id or "").upper().startswith("STUDIO-P0-"):
+        return TASK_MARK not in comments
+    if TASK_MARK not in comments:
+        return True
+    # DONE/VERIFIE ou vraie erreur humaine : jamais de relance aveugle.
+    if re.search(r"Statut:\s*(DONE|VERIFIE)",comments,re.I):
+        return False
+    if "ANALYSE_SEULE" not in comments and "routing_context_missing" not in comments:
+        return False
+    state=_task_retry_load()
+    key="issue#"+str(issue_number)+":"+str(task_id).upper()
+    slot=state.get(key) or {}
+    attempts=int(slot.get("attempts") or 0)
+    next_epoch=int(slot.get("next_epoch") or 0)
+    if attempts>=5:
+        return False
+    return int(time.time()) >= next_epoch
+
+def _task_retry_note(issue_number, task_id, task_status):
+    if not str(task_id or "").upper().startswith("STUDIO-P0-"):
+        return
+    state=_task_retry_load()
+    key="issue#"+str(issue_number)+":"+str(task_id).upper()
+    if str(task_status or "").upper() in ("DONE","VERIFIE"):
+        state[key]={"attempts":0,"next_epoch":0,"last":"success"}
+    elif str(task_status or "").upper() in ("ANALYSE_SEULE","BLOCKED"):
+        prev=state.get(key) or {}
+        attempts=int(prev.get("attempts") or 0)+1
+        delay=min(1800,90*(2**max(0,attempts-1)))
+        state[key]={"attempts":attempts,"next_epoch":int(time.time())+delay,"last":str(task_status)}
+    _task_retry_save(state)
 
 def _filebus_retry_load():
     try:
@@ -2227,12 +2280,20 @@ while True:
                     print(f"[OK QUALIFY] #{issue['number']} operational={result.get('ok')} failures={len(fails)}")
                     continue
                 if title.startswith("[bazor-task:"):
-                    if TASK_MARK in comments: continue
                     m=re.match(r"(?i)^\[bazor-task:([^\]]+)\]",issue.get("title") or "")
                     if not m:
                         continue
                     task_id=m.group(1).strip().upper()
-                    print(f"[TASK] #{issue['number']} {task_id}")
+                    if not _task_retry_allowed(issue["number"],task_id,comments):
+                        continue
+                    retrying=(TASK_MARK in comments)
+                    print(f"[TASK{' RETRY' if retrying else ''}] #{issue['number']} {task_id}")
+                    if retrying:
+                        try:
+                            gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",
+                                "[BAZOR-TASK-AUTO-RETRY]\n\nRelance autonome du même ticket après ANALYSE_SEULE/routing_context_missing. Aucun relais Vincent."])
+                        except Exception:
+                            pass
                     try:
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","[BAZOR-TASK-START]\n\n"+task_id+" démarrée. État mobile passé EN COURS ; secondes lectures puis préflight Git avant toute écriture."])
                     except Exception:
@@ -2254,6 +2315,8 @@ while True:
                         if review_lines:
                             reply+="\n\nSecondes lectures:\n"+review_lines
                         reply+="\n\nMoteur final: "+str(result.get("engine") or "?")+" / "+str(result.get("model") or "?")
+                        if result.get("local_context"):
+                            reply+="\nContexte local: "+json.dumps(result.get("local_context"),ensure_ascii=False,separators=(",",":"))[:4500]
                         try:
                             cp_sha=_git("rev-parse","HEAD")
                             watcher_sha=(cp_sha.stdout or "").strip() if cp_sha.returncode==0 else "unknown"
@@ -2268,6 +2331,7 @@ while True:
                             if result.get("runtime_checks"):
                                 reply+="\nRuntime checks: "+json.dumps(result.get("runtime_checks"),ensure_ascii=False,separators=(",",":"))[:5000]
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
+                        _task_retry_note(issue["number"],task_id,result.get("task_status"))
                         print(f"[OK TASK] #{issue['number']} {task_id} -> {result.get('task_status')}")
                         if result.get("task_status") in ("DONE","VERIFIE"):
                             # Studio conserve sa porte logique spécialisée.
