@@ -1,0 +1,63 @@
+{
+  "schema_version": "2.4-lite",
+  "room": {
+    "status": "bootstrap",
+    "host": "127.0.0.1",
+    "port": 8765,
+    "mode": "auto"
+  },
+  "engines": {
+    "gpt": {
+      "available": null,
+      "quota_state": "unknown"
+    },
+    "mammouth": {
+      "available": null,
+      "model_mode": "auto",
+      "selected_model": null,
+      "credit_state": "unknown"
+    },
+    "ollama": {
+      "available": null,
+      "local": true,
+      "selected_model": null
+    }
+  },
+  "project": {
+    "id": "bazor-ai-room-v2-lite",
+    "name": "BAZOR AI ROOM V2 Lite",
+    "project_version": "2.4-lite",
+    "bazor_version": "2.4-lite",
+    "status": "in_progress",
+    "progress_percent": 70,
+    "objective": "Cockpit robuste avec routage automatique GPT/Mammouth/Ollama, reprise de projets et protocole GitHub auto-validé.",
+    "current_task": "cross_ai_review_and_local_runtime_activation",
+    "next_task": "wait_filebus_reviews_then_activate_local_runtime",
+    "blocked_by": [
+      "FileBus runtime issues #3/#4 have no nonce replies yet",
+      "Local Windows AI ROOM V2.4 not yet runtime-tested",
+      "Mammouth integration not yet runtime-proven"
+    ],
+    "delivery_state": "CI_PASS",
+    "gates": {
+      "protocol_ready": true,
+      "code_patched": true,
+      "ci_pass": true,
+      "runtime_pass": false,
+      "evidence_present": true,
+      "all_required_artifacts_verified": false,
+      "delivered": false
+    }
+  },
+  "github_protocol": {
+    "contract_file": "bazor_room_v2/message_contract.json",
+    "template_file": "bazor_room_v2/MESSAGE_TEMPLATE.md",
+    "rules_file": "bazor_room_v2/rules.json",
+    "required": true,
+    "invalid_message_action": "DEFAULT_RECOVERY"
+  },
+  "last_result": {
+    "status": "partial",
+    "summary": "Nouvelle interface V2.4 + runtime validator/router créés. CI compile/tests/UI smoke = PASS. Promotion arrêtée à CI_PASS jusqu'aux preuves locales et revues inter-IA."
+  }
+}
