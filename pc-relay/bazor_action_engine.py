@@ -178,14 +178,47 @@ class ActionEngine:
                         if st.st_size > 512000:
                             continue
                         rel_text = str(rel).replace("\\","/").lower()
-                        # Priorité aux fichiers dont le chemin correspond à la tâche
-                        # exacte (H3, workflow, launcher, gallery, diag, etc.).
+                        # Priorité aux fichiers réellement liés à la tâche.
+                        # Le tri historique ne regardait que le chemin puis la date :
+                        # un script récent de réparation de checkpoints pouvait donc
+                        # écraser le vrai code de routage Studio dans le contexte.
                         focus_score = 0
                         for token in focus_tokens:
+                            norm = token.replace("_","-")
+                            alt = token.replace("-","_")
                             if token in rel_text:
-                                focus_score += 6
-                            elif token.replace("_","-") in rel_text or token.replace("-","_") in rel_text:
-                                focus_score += 3
+                                focus_score += 8
+                            elif norm in rel_text or alt in rel_text:
+                                focus_score += 4
+
+                        # Score léger sur le CONTENU, borné à 48 KiB pour éviter
+                        # d'alourdir le scan. Les tokens très spécifiques au routage
+                        # (t2i/i2i/t2v/i2v/source_media/workflow) doivent gagner
+                        # nettement sur des fichiers génériques "model/checkpoint".
+                        try:
+                            sample = p.read_bytes()[:49152].decode("utf-8", errors="ignore").lower()
+                        except Exception:
+                            sample = ""
+                        for token in focus_tokens:
+                            if len(token) < 3:
+                                continue
+                            hits = sample.count(token)
+                            if hits:
+                                specific = any(ch.isdigit() for ch in token) or token in {
+                                    "source_media","workflow","route","routing","routage",
+                                    "t2i","i2i","t2v","i2v","analyser","analyse"
+                                }
+                                focus_score += min(30, hits * (6 if specific else 2))
+
+                        # Bonus de cohérence Studio P0-012 : si la tâche mentionne
+                        # plusieurs modes, privilégier fortement les fichiers qui
+                        # parlent eux aussi de plusieurs modes / source_media.
+                        routing_terms = ("t2i","i2i","t2v","i2v","source_media","workflow")
+                        requested_routing = sum(1 for x in routing_terms if x in str(focus or "").lower())
+                        matched_routing = sum(1 for x in routing_terms if x in sample or x in rel_text)
+                        if requested_routing >= 3:
+                            focus_score += matched_routing * 12
+
                         candidates.append((focus_score, st.st_mtime, alias, root, p))
 
                     if scan_limited:
