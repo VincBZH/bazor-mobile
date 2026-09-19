@@ -43,7 +43,10 @@ jobs:
             pc-relay/bazor_h3_connection_audit.py \
             pc-relay/bazor_studio_workflows_audit.py \
             pc-relay/bazor_studio_h3_converter_hotfix.py \
+            pc-relay/test_studio_p0_012_routing.py \
             pc-relay/mammouth_client.py
+      - name: Test Studio P0-012 routing context
+        run: python pc-relay/test_studio_p0_012_routing.py
       - name: Validate mobile UI JavaScript
         run: |
           python - <<'PY'
