@@ -28,19 +28,25 @@ MODEL_PRICES = {
     "gpt-5.6-sol": (5.00, 30.00),
 }
 
+# Routage BAZOR : les travaux lourds utilisent un modèle fort adapté.
+# Les profils économiques restent disponibles explicitement.
 MODEL_PROFILES = {
     "light": "mistral-small-3.2-24b-instruct",
-    "code": "qwen3.8-flash",
-    "general": "glm-5.3-flash",
-    "analysis": "gemini-3.8-flash",
-    "complex": "claude-sonnet-5",
+    "code": "claude-sonnet-5",
+    "general": "gpt-5.6-luna",
+    "analysis": "gpt-5.6-terra",
+    "complex": "gpt-5.6-sol",
+    "strongest": "gpt-5.6-sol",
     "recommended": "mammouth-recommended",
     "claude": "claude-sonnet-5",
-    "gemini": "gemini-3.8-flash",
+    "gemini": "gemini-3.1-pro-preview",
     "mistral": "mistral-small-3.2-24b-instruct",
     "deepseek": "deepseek-v4-flash",
     "qwen": "qwen3.8-flash",
-    "gpt": "gpt-5.6-luna",
+    "gpt": "gpt-5.6-sol",
+    "gpt_luna": "gpt-5.6-luna",
+    "gpt_terra": "gpt-5.6-terra",
+    "gpt_sol": "gpt-5.6-sol",
 }
 
 
@@ -203,7 +209,7 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
                 "--header", "Authorization: Bearer " + key,
                 "--header", "Content-Type: application/json",
                 "--header", "Accept: application/json",
-                "--header", "User-Agent: BAZOR-Mammouth-Client/3.0",
+                "--header", "User-Agent: BAZOR-Mammouth-Client/3.1",
                 "--data-binary", "@-",
                 "--write-out", "\\nBAZOR_HTTP_STATUS:%{http_code}",
                 MAMMOUTH_URL,
