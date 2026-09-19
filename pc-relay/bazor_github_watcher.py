@@ -652,6 +652,48 @@ def _run_registry_task(task_id):
     already=bool(re.search(r"DEJA_CONFORME\s*:",text,re.I))
     blocked=(result.get("status")=="BLOQUE") or (not result.get("ok"))
 
+    # Si AUTO choisit un moteur externe indisponible ou renvoie BLOQUE sans
+    # modification/preflight, ne pas arrêter une tâche Studio exécutable.
+    # Rejouer une fois avec Ollama local, qui possède l'accès au contexte local
+    # via BAZOR Core/Action Engine. Les tests/preflight restent l'arbitre final.
+    if blocked and not real and not already:
+        local_retry=dict(payload)
+        local_retry["provider"]="ollama"
+        local_retry["repair"]=True
+        local_retry["previous"]=str(result.get("answer") or result.get("detail") or "")[:5000]
+        try:
+            local_result=_core_task(local_retry,timeout=420)
+            local_execution=local_result.get("execution") or {}
+            local_ar=local_execution.get("action_result") or {}
+            local_real=local_execution.get("mode")=="file_changes" and bool(local_ar.get("applied"))
+            local_tests=local_ar.get("tests") or []
+            local_tests_ok=all(x.get("ok") for x in local_tests)
+            local_text=(str(local_result.get("summary") or "")+"\n"+str(local_result.get("answer") or ""))
+            local_already=bool(re.search(r"DEJA_CONFORME\s*:",local_text,re.I))
+            local_blocked=(local_result.get("status")=="BLOQUE") or (not local_result.get("ok"))
+            # Préférer le résultat local s'il progresse réellement ou fournit
+            # une preuve exploitable. Ne jamais remplacer un résultat plus riche
+            # par un simple échec générique.
+            if local_real or local_already or (not local_blocked and local_text.strip()):
+                result=local_result
+                execution=local_execution
+                ar=local_ar
+                real=local_real
+                tests=local_tests
+                tests_ok=local_tests_ok
+                text=local_text
+                already=local_already
+                blocked=local_blocked
+        except Exception as local_exc:
+            reviews.append({
+                "profile":"local-fallback",
+                "ok":False,
+                "engine":"ollama",
+                "model":None,
+                "summary":type(local_exc).__name__+": "+str(local_exc)[:260],
+                "answer":"",
+            })
+
     # Une première analyse seule n'est pas un succès : une seule relance explicite.
     if not real and not already and not blocked:
         retry=dict(payload)
