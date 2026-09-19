@@ -2204,6 +2204,33 @@ while True:
             for issue in issues:
                 title=issue["title"].lower()
                 comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
+                if title.startswith("[bazor-room-control:status]"):
+                    mark="[BAZOR-ROOM-STATUS-DONE]"
+                    if mark in comments:
+                        continue
+                    data=_control_load()
+                    _,_,states=_task_state_snapshot("ai-room")
+                    ai_states={k:v for k,v in states.items() if str(k).upper().startswith("AIROOM-")}
+                    reply=(mark+"\n\n"+
+                           "CONTROL: "+json.dumps({
+                               "request_seq":data.get("request_seq"),
+                               "processed_seq":data.get("processed_seq"),
+                               "auto_mode":data.get("auto_mode"),
+                               "angry_mode":data.get("angry_mode"),
+                               "working":data.get("working"),
+                               "current_task":data.get("current_task"),
+                               "last_task":data.get("last_task"),
+                               "next_task":data.get("next_task"),
+                               "last_result_status":data.get("last_result_status"),
+                               "last_result_summary":data.get("last_result_summary"),
+                               "watcher_head":data.get("watcher_head"),
+                               "beta_ready":data.get("beta_ready"),
+                               "trio_ready":data.get("trio_ready")
+                           },ensure_ascii=False)+"\n"+
+                           "AIROOM_STATES: "+json.dumps(ai_states,ensure_ascii=False))
+                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
+                    print(f"[ROOM STATUS] #{issue['number']} snapshot returned")
+                    continue
                 if title.startswith("[bazor-room-control:auto]"):
                     mark="[BAZOR-ROOM-CONTROL-DONE]"
                     if mark in comments:
