@@ -1,6 +1,6 @@
 # BAZOR Encyclopédie — état de référence
 
-Version de référence : 2026-09-18
+Version de référence : 2026-09-19
 
 ## Règle de fonctionnement
 
@@ -9,6 +9,12 @@ Cette encyclopédie complète `bazor_registry.json`. Le registre est la source d
 Un statut **DONE/OK** n’est valide que si une preuve existe. Pour une tâche de correction de fichier, la preuve attendue est : fichier(s) réellement modifié(s) + tests automatiques réussis + sauvegarde/rapport Action Engine. Une simple analyse ne doit jamais être affichée comme une correction terminée.
 
 Toutes les modifications de BAZOR lui-même passent d’abord par une branche GitHub et la CI avant fusion. Pour les fichiers locaux hors dépôt GitHub, l’Action Engine doit prévalider les changements et conserver une sauvegarde réversible.
+
+### Règle obligatoire — synchronisation à chaque version
+
+Dès qu'une **version, build, patch, APK, installateur, ZIP livrable ou release** BAZOR est généré, l'Encyclopédie et le registre doivent être synchronisés **dans le même cycle de livraison**. Une version n'est pas considérée complètement livrée si sa version, ses changements, ses tests, ses chemins et ses limites réelles ne sont pas inscrits ici et/ou dans `bazor_registry.json`.
+
+Le mécanisme standard est `pc-relay/bazor_encyclopedia_sync.py`. Les générateurs/lanceurs BAZOR doivent l'appeler avec le composant et la version produite. La synchronisation doit être idempotente, journalisée et ne jamais supprimer l'historique des versions.
 
 ## Priorité actuelle : AI Simple Studio
 
@@ -46,9 +52,9 @@ Le Studio n’est déclaré opérationnel que lorsque les points suivants sont v
 7. Les erreurs ComfyUI/fetch/404 sont affichées avec leur vraie cause.
 8. La galerie distingue masquer, supprimer et récupérer.
 9. L’analyse post-génération produit un résultat traçable.
-10. La correction automatique est bornée à 10 tentatives et s’arrête correctement.
+10. La correction automatique s’arrête sur succès, stagnation, erreur technique répétée, annulation utilisateur ou contrainte réelle ; BAZOR n’impose pas de plafond artificiel fixe.
 11. Le diagnostic vers BAZOR remonte un paquet structuré sans secrets.
-12. La durée demandée d’une vidéo est limitée à 10 s maximum. Cela ne signifie pas que le calcul doit durer 10 s.
+12. La durée n’est pas bridée artificiellement : sur RTX 4060 8 Go, les segments courts (~6 s) sont privilégiés pour la stabilité et les durées longues sont construites séquentiellement (ex. film ~30 s = 5 × ~6 s).
 
 ## Bugs et demandes déjà rapportés
 
@@ -69,13 +75,13 @@ Le Studio n’est déclaré opérationnel que lorsque les points suivants sont v
 ### Interface et génération
 - Presets souhaités : Réaliste, Photo, Noir & Blanc, Corps entier.
 - Réglages optimisés automatiques.
-- Durée vidéo utilisateur <= 10 s.
+- Durée vidéo sans plafond produit arbitraire ; segmentation automatique selon les contraintes réelles du workflow/GPU.
 - Image + texte → image/vidéo.
 - Concaténation vidéo et reprise depuis la dernière image, à traiter après les P0/P1 de stabilité.
 
 ### Qualité
 - Analyse post-génération jugée incorrecte ou non concluante.
-- Correction automatique souhaitée avec maximum 10 tentatives.
+- Correction automatique sans plafond artificiel fixe ; arrêt intelligent sur succès, stagnation, répétition de la même erreur, contrainte réelle ou annulation.
 - Aucun score ne doit être affiché comme valide s’il n’est pas rattaché à une génération analysée.
 
 ### Galerie
@@ -207,3 +213,47 @@ Le registre central contient également AI Room, Wii Relay, BAZOR Watch, MODO Vi
 MODO Viewer et Festival restent marqués non exécutables par GO tant qu’aucune racine locale sûre n’est reliée à l’Action Engine.
 
 BAZOR Watch est désormais un projet séparé avec ses tâches USB/APK, BLE/watchdog, audio et diagnostic.
+
+
+## Coordination BAZOR Trio — GPT + Ollama + Mammouth
+
+Depuis le 19/09/2026, le mode de travail prioritaire pour Studio est :
+
+- **GPT** : coordinateur et arbitre final ;
+- **Ollama local** : audit du code réel présent sur le PC, sans dépendre d'un upload externe ;
+- **Mammouth** : seconde revue indépendante en ligne ;
+- **BAZOR** : orchestration, collecte du contexte local, journalisation et handoff.
+
+Le marqueur `[TO_BAZOR_TRIO]` demande une revue croisée. Un retour Trio n'est accepté comme livraison que s'il contient des fichiers réellement lus, l'avis Ollama, l'avis Mammouth, un patch candidat et un plan/résultat de tests. Un simple `STATUS: OK` vide vaut **NON LIVRÉ**.
+
+Le relay a été corrigé le 19/09/2026 pour envoyer les gros handoffs GitHub via **stdin JSON** au lieu de la ligne de commande Windows, afin d'éviter les blocages dus à la limite de taille de `CreateProcess`.
+
+
+
+## BAZOR AI Room — état et cible
+
+Référence connue : **ROOM v1.8.4**. Elle possède déjà historique JSONL, mémoire/brain, pièces jointes texte/code, workspaces, permissions, PANIC, diagnostic automatique, LOG GPT et clients GPT/Ollama/Mammouth.
+
+Cible de la prochaine mise à jour consolidée : **ROOM v1.9** avec :
+- import natif de conversation `.md/.jsonl` avec `conversation_id`, tags, auteurs et déduplication ;
+- vue d'état commune BAZOR Core / GPT / Ollama / Mammouth / bridges ;
+- accès direct Bibliothèque/Encyclopédie avec alerte de fraîcheur ;
+- handoff multi-IA normalisé ;
+- version/rollback/self-test avant remplacement ;
+- conservation intégrale de `data/` et de la mémoire.
+
+
+
+## Test réel Studio V3 — 19/09/2026 vers 14:38
+
+Un nouveau test utilisateur confirme :
+- ComfyUI connecté et `/api/health` retourne `ready=true` ;
+- checkpoints image visibles : `NoobAI-XL-v1.1.safetensors`, `sd_xl_base_1.0.safetensors` ;
+- `/object_info` répond correctement ;
+- Autopilot Chrome/CDP sait se rattacher et ouvrir le menu profil ;
+- **mais** le workflow H3 reste bloqué sur `réglage largeur/hauteur introuvable` ;
+- l'analyse post-génération affiche toujours `Failed to load image or audio file` ;
+- plusieurs jobs récents sont `error / Demande refusée` ou `lost`.
+
+Conclusion : la connectivité de base est saine, mais la chaîne de génération/QA Studio n'est pas encore certifiable. Les P0 Trio restent prioritaires.
+
