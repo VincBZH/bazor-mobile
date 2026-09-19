@@ -1,0 +1,92 @@
+name: Publish BAZOR Montre APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/watchapp/**"
+      - ".github/workflows/publish-watch-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bazor-watch-apk-publisher
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build watch APK
+        run: gradle -p android :watchapp:assembleDebug --no-daemon
+
+      - name: Publish APK and update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads
+          cp android/watchapp/build/outputs/apk/debug/watchapp-debug.apk downloads/BAZOR-Montre.apk
+
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+
+          build = Path("android/watchapp/build.gradle").read_text(encoding="utf-8")
+          code = int(re.search(r"versionCode\s+(\d+)", build).group(1))
+          name = re.search(r'versionName\s+"([^"]+)"', build).group(1)
+
+          data = {
+              "versionCode": code,
+              "versionName": name,
+              "apkUrl": "https://raw.githubusercontent.com/VincBZH/bazor-mobile/main/downloads/BAZOR-Montre.apk",
+              "notes": "Version stable publiee automatiquement depuis GitHub"
+          }
+          Path("watch-update.json").write_text(
+              json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8"
+          )
+          print(f"Publishing BAZOR Montre {name} ({code})")
+          PY
+
+      - name: Verify APK exists
+        run: |
+          test -s downloads/BAZOR-Montre.apk
+          ls -lh downloads/BAZOR-Montre.apk
+          cat watch-update.json
+
+      - name: Commit published APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "BAZOR Watch Publisher"
+          git config user.email "actions@users.noreply.github.com"
+          git add downloads/BAZOR-Montre.apk watch-update.json
+
+          if git diff --cached --quiet; then
+            echo "Nothing to publish."
+            exit 0
+          fi
+
+          VERSION=$(python3 -c 'import json; print(json.load(open("watch-update.json"))["versionName"])')
+          CODE=$(python3 -c 'import json; print(json.load(open("watch-update.json"))["versionCode"])')
+          git commit -m "Publish BAZOR Montre ${VERSION} (${CODE}) [skip ci]"
+          git push origin HEAD:main
