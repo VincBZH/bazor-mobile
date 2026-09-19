@@ -97,7 +97,7 @@ class H(BaseHTTPRequestHandler):
         p=self.path.split("?",1)[0]
         if p=="/":
             b=HTML.encode();self.send_response(200);self.send_header("Content-Type","text/html; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
-        if p=="/api/status":return self.sendj({"ok":True,"version":VERSION,"state":read_json(STATE,{ ,"bootstrap":bootstrap_status()}),"engines":engines()})
+        if p=="/api/status":return self.sendj({"ok":True,"version":VERSION,"state":read_json(STATE,{}),"engines":engines(),"bootstrap":bootstrap_status()})
         if p=="/api/context":return self.sendj({"ok":True,"bootstrap":bootstrap_status(),"current_state":read_json(CURRENT_STATE,{})})
         if p=="/api/projects":return self.sendj(read_json(PROJECTS,{"projects":[]}))
         if p=="/app.js":
