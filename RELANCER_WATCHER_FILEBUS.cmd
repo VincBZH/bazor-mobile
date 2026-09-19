@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
 title BAZOR - RELANCE WATCHER FILEBUS
 
@@ -83,20 +83,20 @@ for /f %%H in ('git rev-parse --short HEAD') do set "HEADSHA=%%H"
 where gh >nul 2>nul
 if not errorlevel 1 (
   set "REPORT=%TEMP%\bazor_filebus_report_%RANDOM%.txt"
-  >"%REPORT%" echo [BAZOR_VERSION_REPORT]
-  >>"%REPORT%" echo project: BAZOR FileBus
-  >>"%REPORT%" echo status: WATCHER_RESTARTED
-  >>"%REPORT%" echo commit: %HEADSHA%
-  >>"%REPORT%" echo runtime: watcher_process_alive
-  >>"%REPORT%" echo next: traitement automatique issues #3/#4 et diagnostic #103
-  >>"%REPORT%" echo note: FileBus non VERIFIE tant que les nonces ne sont pas publies.
-  gh issue comment 2 --repo VincBZH/projetWII-ai-relay --body-file "%REPORT%" >nul 2>&1
-  del /q "%REPORT%" >nul 2>&1
+  >"!REPORT!" echo [BAZOR_VERSION_REPORT]
+  >>"!REPORT!" echo project: BAZOR FileBus
+  >>"!REPORT!" echo status: WATCHER_RESTARTED
+  >>"!REPORT!" echo commit: %HEADSHA%
+  >>"!REPORT!" echo runtime: watcher_process_alive
+  >>"!REPORT!" echo next: traitement automatique FileBus et test strict Mammouth #6
+  >>"!REPORT!" echo note: FileBus non VERIFIE tant que les nonces ne sont pas publies.
+  gh issue comment 2 --repo VincBZH/projetWII-ai-relay --body-file "!REPORT!" >nul 2>&1
+  del /q "!REPORT!" >nul 2>&1
 )
 
 echo.
 echo [OK] Watcher relance sur commit %HEADSHA%.
-echo [OK] Il doit maintenant traiter #3, #4 et #103 automatiquement.
+echo [OK] Il doit maintenant traiter FileBus et le test Mammouth #6 automatiquement.
 echo [INFO] Ne ferme rien d'autre : Core/Studio/ComfyUI n'ont pas ete touches.
 echo.
 %SystemRoot%\System32\timeout.exe /t 8 /nobreak >nul
