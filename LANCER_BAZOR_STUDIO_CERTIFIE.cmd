@@ -19,6 +19,12 @@ if not exist "%SCRIPT%" (
   exit /b 2
 )
 
+if exist "%ROOT%\RELANCER_WATCHER_STUDIO.cmd" (
+  echo [STUDIO] Verification du watcher BAZOR...
+  call "%ROOT%\RELANCER_WATCHER_STUDIO.cmd"
+  if errorlevel 1 echo [INFO] Watcher non confirme, le lanceur Studio continue et gardera le diagnostic visible.
+)
+
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$script='%SCRIPT%';$py=$null;$launchArgs=@($script);" ^
   "$procs=Get-CimInstance Win32_Process -ErrorAction SilentlyContinue;" ^
