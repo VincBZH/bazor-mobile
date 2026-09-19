@@ -148,6 +148,18 @@ jobs:
           assert 'GO-LOCAL-RUNTIME-PROOF-RETRY' not in watcher, "watcher must not hardcode every GO suffix"
           print("Studio generic GO trigger OK")
           PY
+      - name: Studio GO auto regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          w=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
+          assert "attempts>=8" in w
+          assert "delay=min(1800,30*(2**max(0,attempts-1)))" in w
+          assert '"auto_go":True' in w
+          assert "[BAZOR-GO-AUTO]" in w
+          assert "Aucune action Vincent requise" in w
+          print("Studio GO auto retry OK")
+          PY
       - name: Mammouth task profile regression
         run: |
           python - <<'PY'
