@@ -295,3 +295,11 @@ GitHub reste un bus de coordination et de preuve ; aucun shell/exec/eval arbitra
 - Mémoire locale structurée par projet/conversation avec résumé, décisions, faits sourcés, tâches ouvertes et index.
 - À chaque build: Encyclopédie + Registry doivent être mis à jour ensemble avec version, changements, tests, preuves runtime et rollback.
 - Spécification: `bridge/AI_ROOM_TRIO_PROTOCOL.md`.
+
+
+<!-- BAZOR_VERSION:BAZOR AI ROOM TRIO SPEC::2.4.2 -->
+## BAZOR AI ROOM TRIO — spec réconciliée 2.4.2
+
+Référence canonique de conception : `bridge/BAZOR_AI_ROOM_TRIO_SPEC.md`.
+
+Principes ajoutés : versions séparées (app/protocole/registry/contrat), ports 8765/8775/8776/11434, identités persistantes par `agent_id`, bootstrap canonique, mémoire contextuelle sourcée, statuts unifiés, séparation `ROOM_CORE_DELIVERED` / `TRIO_READY`, récupération autonome bornée et interdiction de `DELIVERED` sans preuves runtime. Toute divergence entre spec et dépôt/runtime doit être déclarée `SPEC_DRIFT`.
