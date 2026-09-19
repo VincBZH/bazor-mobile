@@ -1,20 +1,20 @@
 plugins { id 'com.android.application' }
 
 android {
-    namespace 'com.bazor.watch'
+    namespace 'com.bazor.skyperelay'
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.bazor.montre"
+        applicationId "com.skype.raider"
         minSdk 26
         targetSdk 35
-        versionCode 8
-        versionName "1.4.1"
+        versionCode 1
+        versionName "1.0.0"
     }
 
     signingConfigs {
         stable {
-            storeFile file("bazor-watch.keystore")
+            storeFile file("../watchapp/bazor-watch.keystore")
             storePassword "bazor123"
             keyAlias "bazorwatch"
             keyPassword "bazor123"
