@@ -3,6 +3,7 @@ import os
 import py_compile
 import urllib.request
 
+import bazor_security
 import mammouth_client
 
 print("=" * 64)
@@ -12,10 +13,12 @@ print("=" * 64)
 here = os.path.dirname(os.path.abspath(__file__))
 core_path = os.path.join(here, "bazor_pc_relay_v3.py")
 client_path = os.path.join(here, "mammouth_client.py")
+security_path = os.path.join(here, "bazor_security.py")
 
 try:
     py_compile.compile(core_path, doraise=True)
     py_compile.compile(client_path, doraise=True)
+    py_compile.compile(security_path, doraise=True)
     print("Code Python   : OK")
 except Exception as exc:
     print("Code Python   : BLOQUE", exc)
