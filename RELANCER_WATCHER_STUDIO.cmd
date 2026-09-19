@@ -31,8 +31,9 @@ if not errorlevel 1 (
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$p=Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'bazor_github_watcher\.py' }; if($p){exit 0}else{exit 1}"
-if not errorlevel 1 exit /b 0
+  "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'bazor_github_watcher\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+
+%SystemRoot%\System32\timeout.exe /t 1 /nobreak >nul
 
 if not exist "%ROOT%\pc-relay\BAZOR_DATA\HUB_LOGS" mkdir "%ROOT%\pc-relay\BAZOR_DATA\HUB_LOGS" >nul 2>&1
 
