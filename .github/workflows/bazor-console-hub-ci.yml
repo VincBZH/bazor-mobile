@@ -145,7 +145,10 @@ jobs:
           from pathlib import Path
           watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
           assert 're.finditer(r"\\[FROM_GPT\\]\\[GO[^\\]]*\\]"' in watcher
-          assert 'GO-LOCAL-RUNTIME-PROOF-RETRY' not in watcher, "watcher must not hardcode every GO suffix"
+          # Vérifie le mécanisme générique lui-même, sans confondre commentaires
+          # explicatifs et logique exécutable.
+          block=watcher[watcher.index("go_positions=[m.start()"):watcher.index("last_go_pos=max(go_positions)")]
+          assert 'comments.rfind("[FROM_GPT][GO-' not in block
           print("Studio generic GO trigger OK")
           PY
       - name: Studio GO auto regression
