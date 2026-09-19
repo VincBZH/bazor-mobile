@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BAZOR AI ROOM V2</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>BAZOR AI ROOM <span>V2.4 Lite</span></h1>
+    <p>Vincent × BAZOR Core × GPT × Mammouth × Ollama</p>
+  </div>
+  <div id="globalState" class="pill">Initialisation…</div>
+</header>
+
+<main>
+<section class="panel">
+  <div class="panelTitle">
+    <h2>Moteurs</h2>
+    <div>
+      <label>Mode
+        <select id="mode">
+          <option value="auto">AUTO BAZOR</option>
+          <option value="gpt">GPT</option>
+          <option value="mammouth">Mammouth</option>
+          <option value="ollama">Ollama</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  <div class="engines">
+    <article><h3>GPT</h3><div id="gptState">…</div><small>coordination / synthèse</small></article>
+    <article><h3>Mammouth</h3><div id="mammouthState">…</div><small>complexité / secours / seconde lecture</small></article>
+    <article><h3>Ollama</h3><div id="ollamaState">…</div><small>local / gratuit / tâches simples</small></article>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panelTitle"><h2>Projet courant</h2><span id="progressText">0%</span></div>
+  <div class="progress"><div id="progressBar"></div></div>
+  <div id="projectCard" class="projectCard"></div>
+</section>
+
+<section class="panel">
+  <div class="panelTitle"><h2>Routeur</h2></div>
+  <div class="router">
+    <select id="taskClass">
+      <option value="simple">Simple</option>
+      <option value="local">Local</option>
+      <option value="architecture">Architecture</option>
+      <option value="synthesis">Synthèse</option>
+      <option value="arbitration">Arbitrage</option>
+      <option value="complex">Complexe</option>
+      <option value="second_opinion">Deuxième avis</option>
+    </select>
+    <button id="routeBtn">Choisir le moteur</button>
+    <div id="routeResult" class="result">—</div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panelTitle"><h2>Projets BAZOR</h2></div>
+  <div id="projects" class="projects"></div>
+</section>
+
+<section class="panel incident">
+  <div class="panelTitle"><h2>Sécurité / récupération</h2></div>
+  <p>Fichier incomplet, message sans handoff, crash, timeout ou état incohérent → <strong>DEFAULT_RECOVERY</strong>. Jamais de DONE sans preuve runtime.</p>
+</section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
