@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.19.1",
+  "version": "2026.09.19.2",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -38,7 +38,7 @@
           "id": "history",
           "name": "Historique des sessions",
           "order": 5,
-          "next": "Brancher l'historique réel des sessions BAZOR."
+          "next": "Brancher l'historique réel des sessions BAZOR et l'import natif de conversations .md/.jsonl avec conversation_id."
         },
         {
           "id": "logs",
@@ -51,6 +51,18 @@
           "name": "BAZOR Action Engine",
           "order": 7,
           "next": "Exécuter uniquement des tâches ayant une racine autorisée et un critère de réussite testable ; refuser proprement les tâches non reliées."
+        },
+        {
+          "id": "import-chat",
+          "name": "Import conversations",
+          "order": 8,
+          "next": "Importer .md/.jsonl dans une conversation séparée, avec auteurs, dates, tags, pièces jointes et déduplication."
+        },
+        {
+          "id": "knowledge-sync",
+          "name": "Bibliothèque / Encyclopédie synchronisée",
+          "order": 9,
+          "next": "Mettre à jour automatiquement l'Encyclopédie et le registre à chaque version/build/patch généré et afficher la fraîcheur dans ROOM."
         }
       ],
       "go_compatible": true,
@@ -61,7 +73,7 @@
       "name": "AI Simple Studio",
       "order": 2,
       "default_progress": 88,
-      "summary": "Studio local image/vidéo basé sur ComfyUI. PRIORITÉ: corriger les erreurs réelles de génération H3 observées le 19/09 puis exiger un test E2E avant de déclarer le Studio pleinement opérationnel.",
+      "summary": "Studio local image/vidéo basé sur ComfyUI. PRIORITÉ: Trio GPT + Ollama local + Mammouth pour corriger routage T2I, analyse média Ollama, mappings H3 et obtenir un test E2E réel avant certification.",
       "local_root": "C:\\AI\\SimpleStudioV2",
       "subprojects": [
         {
@@ -345,6 +357,27 @@
           "proof_required": "file_changes_and_tests"
         },
         {
+          "id": "STUDIO-P0-012",
+          "order": 7.3,
+          "priority": "P0",
+          "subproject": "comfy",
+          "title": "Routage strict T2I/I2I/T2V/I2V sans source fantôme",
+          "status": "TODO",
+          "action": "Inspecter le routage réel du Studio. Un job Texte→Image sans source doit utiliser une route image SDXL/NoobAI et ne jamais préparer une image de départ ni appeler H3 i2v. I2I/I2V exigent une source explicite. T2V ne doit pas hériter d'une ancienne source. Journaliser mode demandé, route, workflow, source_media et modèles injectés.",
+          "acceptance": [
+            "T2I sans source n'utilise jamais H3 i2v et ne prépare aucune image de départ.",
+            "Reprendre un prompt T2I ne réactive pas une ancienne source.",
+            "I2I/I2V refusent proprement l'absence de source.",
+            "Le job journalise route, workflow, source_media et modèles réellement utilisés."
+          ],
+          "dependencies": [],
+          "preferred_models": [
+            "qwen",
+            "claude"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
           "id": "STUDIO-P1-001",
           "order": 8,
           "priority": "P1",
@@ -393,13 +426,14 @@
           "order": 10,
           "priority": "P1",
           "subproject": "quality",
-          "title": "Correction automatique : maximum 10 tentatives, arrêt déterministe",
+          "title": "Correction automatique : arrêt intelligent sans bridage artificiel",
           "status": "TODO",
-          "action": "Inspecter la boucle d'auto-correction. Garantir un maximum strict de 10 tentatives, un arrêt immédiat sur succès, un arrêt sur erreur non récupérable, et un historique de chaque tentative. Éviter toute boucle infinie ou répétition identique.",
+          "action": "Inspecter la boucle d'auto-correction. Ne pas imposer de plafond produit fixe arbitraire. Arrêter sur succès, stagnation mesurée, répétition de la même erreur technique, erreur non récupérable, annulation utilisateur ou contrainte réelle de ressources. Journaliser chaque tentative et conserver le meilleur résultat.",
           "acceptance": [
-            "Jamais plus de 10 tentatives.",
+            "Aucune boucle infinie ni répétition identique silencieuse.",
             "Le compteur visible correspond au nombre réel de tentatives.",
-            "Chaque tentative a un résultat/raison et la boucle s'arrête sur succès."
+            "Chaque tentative a un résultat/raison et la boucle s'arrête sur succès, stagnation, erreur répétée, annulation ou contrainte réelle.",
+            "Le meilleur résultat reste conservé même si une tentative ultérieure est moins bonne."
           ],
           "dependencies": [
             "STUDIO-P1-002"
@@ -437,13 +471,14 @@
           "order": 12,
           "priority": "P1",
           "subproject": "presets",
-          "title": "Durée vidéo bornée à 10 s et réglages 8 Go sûrs",
+          "title": "Durée vidéo dynamique et segmentation sûre RTX 4060 8 Go",
           "status": "TODO",
-          "action": "Inspecter les contrôles de durée et réglages vidéo. La durée utilisateur doit être bornée à 10 secondes maximum. Les valeurs par défaut doivent viser la stabilité d'une RTX 4060 8 Go sans promettre un temps de calcul de 10 secondes.",
+          "action": "Inspecter les contrôles de durée et réglages vidéo. Ne pas imposer de plafond produit arbitraire. Pour les modèles/workflows qui ne supportent que des clips courts ou pour protéger 8 Go VRAM, segmenter automatiquement et séquentiellement. La cible film ~30 s utilise 5 segments d'environ 6 s avec continuité et concat contrôlée.",
           "acceptance": [
-            "Impossible de demander plus de 10 s depuis l'interface normale.",
-            "Les valeurs invalides sont ramenées ou refusées explicitement.",
-            "Le texte distingue durée de la vidéo et temps de calcul."
+            "Aucune limite artificielle générale à 10 s n'est imposée.",
+            "Les contraintes réelles du workflow/GPU sont expliquées et déclenchent une segmentation/fallback explicite.",
+            "Un film ~30 s peut être construit séquentiellement sans parallélisme lourd.",
+            "Le texte distingue durée du média et temps de calcul."
           ],
           "dependencies": [
             "STUDIO-P0-004"
@@ -496,6 +531,75 @@
           "preferred_models": [
             "qwen",
             "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P1-007",
+          "order": 15,
+          "priority": "P1",
+          "subproject": "h3",
+          "title": "Film ~30 s : 5 × ~6 s avec continuité et concat",
+          "status": "TODO",
+          "action": "Construire un pipeline séquentiel de 5 segments d'environ 6 s. Extraire la dernière frame de N comme référence de N+1, contrôler les coutures, homogénéiser résolution/fps/codec/timebase, concaténer et conserver segments + master. Prévoir CONTINUER LA VIDÉO.",
+          "acceptance": [
+            "Les segments sont générés séquentiellement.",
+            "La dernière frame de N devient la référence de N+1.",
+            "Les paramètres techniques des segments sont homogènes avant concat.",
+            "Le master final est lisible et l'historique conserve segments, seeds et master."
+          ],
+          "dependencies": [
+            "STUDIO-P0-011"
+          ],
+          "preferred_models": [
+            "qwen",
+            "claude"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P1-008",
+          "order": 16,
+          "priority": "P1",
+          "subproject": "diag",
+          "title": "Exporter rapport bug multi-destinations",
+          "status": "TODO",
+          "action": "Ajouter EXPORTER RAPPORT BUG : capture de la fenêtre active, manifest, job/workflow effectif, logs filtrés, état ComfyUI/Ollama/FFmpeg pertinent, previews, redaction secrets, ZIP local et envoi structuré vers BAZOR/Ollama/GPT/Mammouth/Tous selon disponibilité.",
+          "acceptance": [
+            "Le ZIP est produit même si une destination externe échoue.",
+            "Les secrets sont masqués.",
+            "Le rapport contient route/workflow/modèles/seed/logs/erreurs du job.",
+            "Les destinations confirmées et échouées sont indiquées sans faux succès."
+          ],
+          "dependencies": [
+            "STUDIO-P0-001"
+          ],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_and_tests"
+        },
+        {
+          "id": "STUDIO-P1-009",
+          "order": 17,
+          "priority": "P1",
+          "subproject": "quality",
+          "title": "UX génération/source masquables + aide seed",
+          "status": "TODO",
+          "action": "Permettre de masquer/réafficher la zone de génération sans interrompre le job, masquer/réafficher l'aperçu de source sans retirer la source du workflow, et fournir une aide flottante seed (aléatoire/fixe/précédente/manuelle/série) avec préférences persistantes.",
+          "acceptance": [
+            "Masquer la génération ne modifie pas le job.",
+            "Masquer la source conserve source_media=true et la référence workflow.",
+            "Les stratégies de seed sont expliquées et journalisées.",
+            "Les préférences sont restaurées après redémarrage."
+          ],
+          "dependencies": [
+            "STUDIO-P0-001"
+          ],
+          "preferred_models": [
+            "qwen",
+            "mistral"
           ],
           "proof_required": "file_changes_and_tests"
         }
@@ -763,5 +867,7 @@
       "go_reason": "Aucune racine locale BAZOR Festival reliée : GO ne peut pas appliquer de modification réelle."
     }
   ],
-  "knowledge_base": "BAZOR_ENCYCLOPEDIA.md"
+  "knowledge_base": "BAZOR_ENCYCLOPEDIA.md",
+  "encyclopedia_updated_at": "2026-09-19",
+  "encyclopedia_sync_required": true
 }
