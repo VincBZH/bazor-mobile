@@ -1,6 +1,7 @@
 import json, subprocess, time, urllib.request, os, sys, re, concurrent.futures
 
-REPO="VincBZH/bazor-mobile"\nCOORD_REPO="VincBZH/projetWII-ai-relay"
+REPO="VincBZH/bazor-mobile"
+COORD_REPO="VincBZH/projetWII-ai-relay"
 CORE="http://127.0.0.1:8775/api/v1/chat"
 CORE_HEALTH="http://127.0.0.1:8775/api/v1/security/status"
 CORE_FAILS=0
@@ -8,7 +9,8 @@ PENDING_CORE_RESTART=False
 POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 DIAG_MARK="[BAZOR-DIAG-DONE]"
-MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"\nFILEBUS_MARK="[BAZOR-FILEBUS-DONE]"
+MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
+FILEBUS_MARK="[BAZOR-FILEBUS-DONE]"
 TASK_MARK="[BAZOR-TASK-DONE]"
 QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 CERTIFY_MARK="[BAZOR-CERTIFY-DONE]"
