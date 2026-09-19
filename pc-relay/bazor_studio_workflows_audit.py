@@ -10,7 +10,7 @@ def main():
     if not TARGET.exists():
         raise SystemExit("missing:"+str(TARGET))
     lines=TARGET.read_text(encoding="utf-8",errors="replace").splitlines()
-    ranges=[(1,80),(180,340)]
+    ranges=[(1,80),(80,180),(180,340)]
     excerpts=[]
     for a,b in ranges:
         block=[]
