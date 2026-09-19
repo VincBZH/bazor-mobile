@@ -1,0 +1,62 @@
+name: Publish BAZOR C28 Skype Relay
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/watchrelay/**"
+      - "android/settings.gradle"
+      - ".github/workflows/publish-watch-relay.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bazor-c28-relay-publisher
+  cancel-in-progress: true
+
+jobs:
+  build-relay:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build relay APK
+        run: gradle -p android :watchrelay:assembleDebug --no-daemon
+
+      - name: Publish relay APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads
+          cp android/watchrelay/build/outputs/apk/debug/watchrelay-debug.apk downloads/BAZOR-C28-Relay-Skype.apk
+          test -s downloads/BAZOR-C28-Relay-Skype.apk
+          ls -lh downloads/BAZOR-C28-Relay-Skype.apk
+
+          git config user.name "BAZOR C28 Relay Publisher"
+          git config user.email "actions@users.noreply.github.com"
+          git add downloads/BAZOR-C28-Relay-Skype.apk
+
+          if git diff --cached --quiet; then
+            echo "Relay APK already current."
+            exit 0
+          fi
+
+          git commit -m "Publish BAZOR C28 Skype Relay [skip ci]"
+          git push origin HEAD:main
