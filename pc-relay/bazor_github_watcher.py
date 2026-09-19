@@ -567,6 +567,101 @@ def _task_update_mobile(project, task, status, summary, result=None, reviews=Non
     except Exception as exc:
         print("[TASK STATE WARN]",type(exc).__name__,str(exc)[:180])
 
+def _studio_p0_post_reviews(project, task, sub, base_prompt, execution_result):
+    """Après une preuve locale, faire une revue croisée Claude/Gemini puis arbitrage GPT.
+    Aucun reviewer externe n'écrit directement dans les fichiers.
+    """
+    execution=execution_result.get("execution") or {}
+    ar=execution.get("action_result") or {}
+    proof={
+        "engine":execution_result.get("engine"),
+        "model":execution_result.get("model"),
+        "summary":str(execution_result.get("summary") or "")[:1200],
+        "files":ar.get("files") or [],
+        "tests":ar.get("tests") or [],
+        "preflight":ar.get("preflight"),
+        "report_file":ar.get("report_file"),
+        "backup_dir":ar.get("backup_dir"),
+    }
+    proof_text=json.dumps(proof,ensure_ascii=False,separators=(",",":"))[:8000]
+    review_prompt=(
+        "REVUE POST-PATCH STUDIO V4. Ne modifie rien. Vérifie uniquement la preuve locale et le contexte réel. "
+        "Réponds avec VERDICT: PASS ou VERDICT: BLOCK, puis BLOCKERS: et TESTS_MANQUANTS:. "
+        "Ne bloque pas pour une simple préférence de style.\n\n"
+        + base_prompt + "\n\nPREUVE_LOCALE:\n" + proof_text
+    )
+
+    def ask(profile):
+        payload={
+            "project_id":project.get("id"),
+            "subproject_name":"Revue post-patch "+str(task.get("id")),
+            "task":review_prompt,
+            "current_progress":0,"repair":False,"previous":"",
+            "provider":"mammouth","mammouth_profile":profile,"apply_actions":False,
+        }
+        try:
+            rv=_core_task(payload,timeout=260)
+            ans=str(rv.get("answer") or rv.get("summary") or "").strip()
+            return {
+                "profile":profile,"ok":bool(rv.get("ok") and ans),
+                "engine":rv.get("engine"),"model":rv.get("model"),
+                "answer":ans[:5000],
+            }
+        except Exception as exc:
+            return {"profile":profile,"ok":False,"engine":"mammouth","model":None,
+                    "answer":"","error":type(exc).__name__+": "+str(exc)[:300]}
+
+    reviewers=[]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        futs={p:pool.submit(ask,p) for p in ("claude","gemini")}
+        for p in ("claude","gemini"):
+            try: reviewers.append(futs[p].result())
+            except Exception as exc:
+                reviewers.append({"profile":p,"ok":False,"engine":"mammouth","model":None,
+                                  "answer":"","error":type(exc).__name__+": "+str(exc)[:300]})
+
+    useful="\n\n".join(
+        "REVUE "+str(r.get("profile"))+" / "+str(r.get("model") or "?")+":\n"+str(r.get("answer") or "")
+        for r in reviewers if r.get("ok")
+    )
+    arbiter_prompt=(
+        "ARBITRAGE FINAL STUDIO V4. Tu es le reviewer GPT. Aucun accès shell, aucune écriture. "
+        "Décide si la preuve locale + les revues permettent d'accepter la tâche. "
+        "Réponds strictement avec VERDICT: PASS ou VERDICT: BLOCK, puis BLOCKERS: et NEXT:. "
+        "Un avis externe indisponible ne doit pas bloquer si les tests déterministes et le runtime sont suffisants.\n\n"
+        + base_prompt + "\n\nPREUVE_LOCALE:\n" + proof_text + "\n\n"
+        + (useful or "AUCUNE_REVUE_EXTERNE_EXPLOITABLE")
+    )
+    arb_payload={
+        "project_id":project.get("id"),
+        "subproject_name":"Arbitrage GPT "+str(task.get("id")),
+        "task":arbiter_prompt,
+        "current_progress":0,"repair":False,"previous":"",
+        "provider":"mammouth","mammouth_profile":"gpt","apply_actions":False,
+    }
+    try:
+        arb=_core_task(arb_payload,timeout=260)
+        arb_answer=str(arb.get("answer") or arb.get("summary") or "").strip()
+        arb_ok=bool(arb.get("ok") and arb_answer)
+    except Exception as exc:
+        arb={"ok":False,"engine":"mammouth","model":"gpt-5.6-sol"}
+        arb_answer=""
+        arb_ok=False
+        arb["error"]=type(exc).__name__+": "+str(exc)[:300]
+
+    verdict=None
+    if arb_ok:
+        m=re.search(r"VERDICT\s*:\s*(PASS|BLOCK)",arb_answer,re.I)
+        verdict=(m.group(1).upper() if m else None)
+
+    return {
+        "reviewers":reviewers,
+        "arbiter":{
+            "ok":arb_ok,"engine":arb.get("engine"),"model":arb.get("model"),
+            "answer":arb_answer[:6000],"verdict":verdict,"error":arb.get("error")
+        }
+    }
+
 def _run_registry_task(task_id):
     project,task,sub=_registry_task(task_id)
     if project.get("go_compatible") is False:
@@ -722,11 +817,54 @@ def _run_registry_task(task_id):
         already=bool(re.search(r"DEJA_CONFORME\s*:",text,re.I))
         blocked=(result.get("status")=="BLOQUE") or (not result.get("ok"))
 
-    if real and tests_ok:
+    trio_review=None
+    if studio_p0_fast and ((real and tests_ok) or (already and not blocked)):
+        trio_review=_studio_p0_post_reviews(project,task,sub,base_prompt,result)
+        reviews.extend(trio_review.get("reviewers") or [])
+        arb=(trio_review.get("arbiter") or {})
+        reviews.append({
+            "profile":"gpt-arbiter","ok":bool(arb.get("ok")),
+            "engine":arb.get("engine"),"model":arb.get("model"),
+            "summary":("VERDICT: "+str(arb.get("verdict") or "INCONNU"))[:300],
+            "answer":str(arb.get("answer") or "")[:3500],
+        })
+
+        # Un seul cycle de réparation locale si GPT identifie un bloqueur réel.
+        if arb.get("verdict")=="BLOCK":
+            repair_payload=dict(payload)
+            repair_payload["repair"]=True
+            repair_payload["previous"]=str(arb.get("answer") or "")[:5000]
+            repair_payload["task"]=base_prompt+"\n\nREVUE GPT À CORRIGER:\n"+str(arb.get("answer") or "")[:5000]
+            try:
+                repaired=_core_task(repair_payload,timeout=300)
+                rex=repaired.get("execution") or {}
+                rar=rex.get("action_result") or {}
+                rreal=rex.get("mode")=="file_changes" and bool(rar.get("applied"))
+                rtests=rar.get("tests") or []
+                rtests_ok=all(x.get("ok") for x in rtests)
+                rtext=(str(repaired.get("summary") or "")+"\n"+str(repaired.get("answer") or ""))
+                ralready=bool(re.search(r"DEJA_CONFORME\s*:",rtext,re.I))
+                rblocked=(repaired.get("status")=="BLOQUE") or (not repaired.get("ok"))
+                if (rreal and rtests_ok) or (ralready and not rblocked):
+                    result=repaired; execution=rex; ar=rar
+                    real=rreal; tests=rtests; tests_ok=rtests_ok
+                    text=rtext; already=ralready; blocked=rblocked
+                    trio_review=_studio_p0_post_reviews(project,task,sub,base_prompt,result)
+                    reviews.extend(trio_review.get("reviewers") or [])
+                    arb=(trio_review.get("arbiter") or {})
+            except Exception as repair_exc:
+                blocked=True
+                reviews.append({"profile":"local-repair","ok":False,"engine":"ollama","model":None,
+                                "summary":type(repair_exc).__name__+": "+str(repair_exc)[:300],"answer":""})
+
+    final_arb=(trio_review or {}).get("arbiter") or {}
+    arb_blocks=(final_arb.get("verdict")=="BLOCK")
+
+    if real and tests_ok and not arb_blocks:
         task_status="DONE"; summary=str(result.get("summary") or "Correction appliquée et testée")
-    elif already and not blocked:
+    elif already and not blocked and not arb_blocks:
         task_status="VERIFIE"; summary=str(result.get("summary") or "Déjà conforme vérifié")
-    elif blocked:
+    elif blocked or arb_blocks:
         task_status="BLOCKED"; summary=str(result.get("summary") or result.get("detail") or "Blocage")
     else:
         task_status="ANALYSE_SEULE"; summary="ANALYSE SEULE — aucune modification prouvée"
