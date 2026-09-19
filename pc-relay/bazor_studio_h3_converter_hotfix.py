@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -114,14 +115,28 @@ def sha256(data):
 def candidate_bytes(original):
     newline = "\r\n" if b"\r\n" in original else "\n"
     text = original.decode("utf-8")
-    if OLD not in text:
-        if NEW in text:
-            return original, False, "already_patched"
-        raise RuntimeError("expected_api_graph_block_not_found")
-    patched = text.replace(OLD, NEW, 1)
+    normalized = text.replace("\r\n", "\n")
+
+    # Already patched, irrespective of surrounding comments/whitespace.
+    if "ComfyUI UI workflow format" in normalized and "fallback_widget_fields" in normalized:
+        return original, False, "already_patched"
+
+    # Replace the whole _api_graph function by structure, not by an exact text
+    # blob. The live Studio can contain tiny comment/spacing changes between
+    # versions, which must not make the deterministic hotfix fail.
+    m = re.search(
+        r"(?ms)^def _api_graph\(graph\):\n.*?(?=^def [A-Za-z_]\w*\(|\Z)",
+        normalized,
+    )
+    if not m:
+        raise RuntimeError("api_graph_function_not_found")
+
+    candidate = normalized[:m.start()] + NEW.rstrip() + "\n\n" + normalized[m.end():]
+    if candidate == normalized:
+        return original, False, "no_change"
     if newline == "\r\n":
-        patched = patched.replace("\r\n", "\n").replace("\n", "\r\n")
-    return patched.encode("utf-8"), True, "patched"
+        candidate = candidate.replace("\n", "\r\n")
+    return candidate.encode("utf-8"), True, "patched"
 
 def load_module(path):
     spec = importlib.util.spec_from_file_location("bazor_workflows_candidate", str(path))
