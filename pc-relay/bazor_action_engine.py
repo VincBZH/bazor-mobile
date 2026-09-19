@@ -124,13 +124,16 @@ class ActionEngine:
     def context_for_project(self, project_id, max_files=24, max_chars=76000, focus=""):
         aliases = self.available_roots(project_id)
         candidates = []
+        focus_text = str(focus or "").lower()
         focus_tokens = {
-            x for x in re.findall(r"[a-z0-9_.-]{3,}", str(focus or "").lower())
+            x for x in re.findall(r"[a-z0-9_.-]{3,}", focus_text)
             if x not in {
                 "pour","avec","dans","sans","une","des","les","sur","que","qui",
                 "the","and","with","from","this","that","task","bazor","done"
             }
         }
+        routing_terms = ("t2i","i2i","t2v","i2v","source_media","workflow","requested_mode","effective_mode","route")
+        routing_focus = sum(1 for x in routing_terms if x in focus_text) >= 2
         started = time.monotonic()
         deadline = started + MAX_CONTEXT_SCAN_SECONDS
         scanned_files = 0
@@ -191,14 +194,23 @@ class ActionEngine:
                             elif norm in rel_text or alt in rel_text:
                                 focus_score += 4
 
-                        # Score léger sur le CONTENU, borné à 48 KiB pour éviter
-                        # d'alourdir le scan. Les tokens très spécifiques au routage
-                        # (t2i/i2i/t2v/i2v/source_media/workflow) doivent gagner
-                        # nettement sur des fichiers génériques "model/checkpoint".
+                        # Score sur le CONTENU, borné à 64 KiB.
                         try:
-                            sample = p.read_bytes()[:49152].decode("utf-8", errors="ignore").lower()
+                            sample = p.read_bytes()[:65536].decode("utf-8", errors="ignore").lower()
                         except Exception:
                             sample = ""
+
+                        matched_routing = sum(1 for x in routing_terms if x in sample or x in rel_text)
+
+                        # Pour une tâche de routage Studio (P0-012), ne pas laisser
+                        # entrer des fichiers sans signal de routage. C'est volontairement
+                        # déterministe: un script récent de checkpoint/model setup ne doit
+                        # plus pouvoir devenir le contexte principal par simple récence.
+                        if routing_focus:
+                            noise_name = any(x in rel_text for x in ("checkpoint","model_setup","download_model","repair_model"))
+                            if matched_routing == 0 or (noise_name and matched_routing < 2):
+                                continue
+
                         for token in focus_tokens:
                             if len(token) < 3:
                                 continue
@@ -206,18 +218,13 @@ class ActionEngine:
                             if hits:
                                 specific = any(ch.isdigit() for ch in token) or token in {
                                     "source_media","workflow","route","routing","routage",
-                                    "t2i","i2i","t2v","i2v","analyser","analyse"
+                                    "t2i","i2i","t2v","i2v","analyser","analyse",
+                                    "requested_mode","effective_mode"
                                 }
-                                focus_score += min(30, hits * (6 if specific else 2))
+                                focus_score += min(36, hits * (7 if specific else 2))
 
-                        # Bonus de cohérence Studio P0-012 : si la tâche mentionne
-                        # plusieurs modes, privilégier fortement les fichiers qui
-                        # parlent eux aussi de plusieurs modes / source_media.
-                        routing_terms = ("t2i","i2i","t2v","i2v","source_media","workflow")
-                        requested_routing = sum(1 for x in routing_terms if x in str(focus or "").lower())
-                        matched_routing = sum(1 for x in routing_terms if x in sample or x in rel_text)
-                        if requested_routing >= 3:
-                            focus_score += matched_routing * 12
+                        if routing_focus:
+                            focus_score += matched_routing * 20
 
                         candidates.append((focus_score, st.st_mtime, alias, root, p))
 
@@ -264,6 +271,8 @@ class ActionEngine:
             "scan_ms": scan_ms,
             "scanned_files": scanned_files,
             "scan_limited": scan_limited,
+            "routing_focus": routing_focus,
+            "routing_context_ok": (bool(files) if routing_focus else True),
         }
 
     def parse_actions(self, answer):
