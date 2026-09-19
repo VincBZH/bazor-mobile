@@ -19,6 +19,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 STUDIO = Path(r"C:\AI\SimpleStudioV2")
 COMFY = Path(r"C:\AI\ComfyUI\ComfyUI_windows_portable\ComfyUI")
 ADB = Path(os.environ.get("LOCALAPPDATA", "")) / "BAZOR" / "Android" / "platform-tools" / "adb.exe"
+E2E_PROOF = DATA_DIR / "STUDIO_E2E" / "latest.json"
 
 EXPECTED_MODELS = [
     "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors",
@@ -308,6 +309,28 @@ def adb_checks(results):
     except Exception as exc:
         results.append(check("ADB_DEVICE","Téléphone ADB autorisé",False,"P2",f"{type(exc).__name__}: {exc}"))
 
+def e2e_proof_check(results, max_age_hours=12):
+    try:
+        data=json.loads(E2E_PROOF.read_text(encoding="utf-8"))
+        age=time.time()-E2E_PROOF.stat().st_mtime
+        ok=bool(data.get("ok")) and age <= max_age_hours*3600
+        detail=("Preuve E2E valide" if ok else "Preuve E2E absente, échouée ou trop ancienne")
+        results.append(check(
+            "STUDIO_E2E_REAL_GENERATION",
+            "Génération E2E réelle Studio → ComfyUI → média",
+            ok,"P0",
+            detail+f" • âge={age/3600:.2f}h",
+            {"proof":data,"path":str(E2E_PROOF)}
+        ))
+    except Exception as exc:
+        results.append(check(
+            "STUDIO_E2E_REAL_GENERATION",
+            "Génération E2E réelle Studio → ComfyUI → média",
+            False,"P0",
+            "Aucune preuve E2E réelle disponible: "+type(exc).__name__+": "+str(exc),
+            {"path":str(E2E_PROOF)}
+        ))
+
 def action_engine_selftest(results):
     try:
         sys.path.insert(0,str(ROOT/"pc-relay"))
@@ -389,6 +412,7 @@ def run_full():
 
     ui_feature_checks(results)
     action_engine_selftest(results)
+    e2e_proof_check(results)
     ollama_matrix(results)
     mammouth_matrix(results)
     adb_checks(results)
