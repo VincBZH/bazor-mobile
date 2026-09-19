@@ -670,6 +670,44 @@ def _studio_next_task(task_id):
     }
     return chain.get(str(task_id or "").upper())
 
+def _studio_protocol_actions(task_id,result):
+    """Interprète uniquement des règles locales statiques ; aucune commande n'est exécutée."""
+    proto_dir=os.path.join(ROOT,"pc-relay","studio_v4_protocol")
+    proto_file=os.path.join(proto_dir,"protocol.py")
+    rules_file=os.path.join(proto_dir,"rules.json")
+    if not (os.path.exists(proto_file) and os.path.exists(rules_file)):
+        return []
+    try:
+        import importlib.util
+        spec=importlib.util.spec_from_file_location("bazor_studio_v4_protocol",proto_file)
+        mod=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        rules=mod.load_json(rules_file)
+        ex=(result or {}).get("execution") or {}
+        ar=ex.get("action_result") or {}
+        tests=ar.get("tests") or []
+        ctx={
+            "task_id":str(task_id or "").upper(),
+            "task_status":str((result or {}).get("task_status") or ""),
+            "proof":{
+                "preflight_ok":bool((ar.get("preflight") or {}).get("ok")),
+                "tests_ok":bool(tests) and all(bool(x.get("ok")) for x in tests),
+                "files_count":len(ar.get("files") or []),
+            },
+        }
+        return mod.run_rules(rules,ctx)
+    except Exception as exc:
+        print("[PROTOCOL WARN]",type(exc).__name__,str(exc)[:240])
+        return []
+
+def _studio_protocol_next_task(task_id,result):
+    for action in _studio_protocol_actions(task_id,result):
+        if action.get("action")=="handoff":
+            nxt=str(action.get("next_task") or "").strip().upper()
+            if nxt in ("STUDIO-P0-010","STUDIO-P0-011"):
+                return nxt
+    return None
+
 def _ensure_next_task_issue(current_task_id):
     next_id=_studio_next_task(current_task_id)
     if not next_id:
@@ -1189,11 +1227,19 @@ while True:
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
                         print(f"[OK TASK] #{issue['number']} {task_id} -> {result.get('task_status')}")
                         if result.get("task_status") in ("DONE","VERIFIE"):
-                            next_issue=_ensure_next_task_issue(task_id)
-                            if next_issue:
-                                chain_msg="[BAZOR-AUTOCHAIN]\n\nÉtape suivante créée automatiquement: #"+str(next_issue)+" • "+str(_studio_next_task(task_id))
+                            protocol_next=_studio_protocol_next_task(task_id,result)
+                            expected_next=_studio_next_task(task_id)
+                            if protocol_next and protocol_next==expected_next:
+                                next_issue=_ensure_next_task_issue(task_id)
+                                if next_issue:
+                                    chain_msg="[BAZOR-AUTOCHAIN]\n\nProtocole validé : preflight + tests OK. Étape suivante créée automatiquement: #"+str(next_issue)+" • "+str(protocol_next)
+                                    try:
+                                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",chain_msg])
+                                    except Exception:
+                                        pass
+                            else:
                                 try:
-                                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",chain_msg])
+                                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","[BAZOR-AUTOCHAIN-BLOCKED]\n\nAucun handoff : le protocole local n'a pas validé preflight + tests."])
                                 except Exception:
                                     pass
                     except Exception as task_exc:
