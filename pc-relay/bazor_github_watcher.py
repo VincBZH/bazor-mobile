@@ -793,6 +793,24 @@ while True:
                             lines.append("  BAD "+str(x.get("input"))+": "+str(x.get("bad"))+" -> "+str(x.get("replacement"))+" @ node "+str(x.get("node_id")))
                         for x in (wf.get("dimensions") or [])[:12]:
                             lines.append("  DIM node "+str(x.get("node_id"))+" "+str(x.get("class_type"))+"."+str(x.get("input"))+"="+str(x.get("value")))
+                        graph=wf.get("ui_graph") or {}
+                        if graph.get("format")=="ui":
+                            lines.append("  UI GRAPH nodes="+str(len(graph.get("nodes") or []))+" links="+str(len(graph.get("links") or [])))
+                            interesting=[]
+                            keys=("clip","vae","unet","latent","video","image","size","resolution","width","height","empty","sampler","save","preview","h3")
+                            for node in graph.get("nodes") or []:
+                                blob=(" ".join([str(node.get("type") or ""),str(node.get("title") or "")])).lower()
+                                if any(k in blob for k in keys):
+                                    interesting.append(node)
+                            for node in interesting[:40]:
+                                widgets=node.get("widgets_values")
+                                if isinstance(widgets,list):
+                                    widgets=widgets[:12]
+                                lines.append("  NODE "+str(node.get("id"))+" "+str(node.get("type"))+" title="+str(node.get("title") or "")+" widgets="+json.dumps(widgets,ensure_ascii=False)[:900])
+                                if node.get("inputs"):
+                                    lines.append("    IN "+json.dumps(node.get("inputs"),ensure_ascii=False,separators=(",",":"))[:1000])
+                                if node.get("outputs"):
+                                    lines.append("    OUT "+json.dumps(node.get("outputs"),ensure_ascii=False,separators=(",",":"))[:1000])
                     for rf in refs[:12]:
                         lines.append("REF "+str(rf.get("path")))
                         for ln in (rf.get("lines") or [])[:8]:
