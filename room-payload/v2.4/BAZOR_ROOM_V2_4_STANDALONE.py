@@ -13,6 +13,7 @@ CONTEXT=ROOT/"context"
 IDENTITIES=CONTEXT/"IDENTITIES.json"
 CURRENT_STATE=CONTEXT/"CURRENT_STATE.json"
 CONTEXT_INDEX=CONTEXT/"index.json"
+CONTROL=ROOT/"control.json"
 
 HTML=r'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BAZOR AI ROOM</title>
 <style>
@@ -29,6 +30,51 @@ HTML=r'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="
 async function j(u,o){let r=await fetch(u,o);return r.json()}function c(v){return v===true?'ok':v===false?'bad':'unknown'}function l(v){return v===true?'● DISPONIBLE':v===false?'● INDISPONIBLE':'● À VÉRIFIER'}
 async function refresh(){let s=await j('/api/status'),p=s.state?.project||{};state.textContent=(p.delivery_state||p.status||'BOOTSTRAP').toUpperCase();let n=Number(p.progress_percent||0);pct.textContent=n+'%';bar.style.width=n+'%';project.innerHTML='<b>'+(p.name||p.id||'BAZOR AI ROOM')+'</b><br>État : '+(p.delivery_state||p.status||'—')+'<br>Tâche : '+(p.current_task||'—')+'<br>Suite : '+(p.next_task||'—');for(let k of ['gpt','mammouth','ollama']){let e=s.engines?.[k]||{},el=document.getElementById(k);el.textContent=l(e.available);el.className=c(e.available)}let ps=await j('/api/projects');projects.innerHTML=(ps.projects||[]).map(x=>'<div class="card"><b>'+x.name+'</b><div>'+x.status+'</div><small>'+x.next_step+'</small></div>').join('')||'<div class="card">Aucun projet</div>'}
 go.onclick=async()=>{let body={task_class:kind.value},m=mode.value;if(m!=='auto')body.manual=m;let r=await j('/api/route',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});route.textContent=r.selected?'Moteur choisi : '+r.selected:'Aucun moteur prouvé disponible'};refresh().catch(e=>state.textContent='ERREUR UI');setInterval(()=>refresh().catch(()=>{}),10000)
+</script></body></html>'''
+
+CONTROL_HTML=r'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BAZOR AI ROOM — CONTROL</title>
+<style>
+:root{font-family:Inter,Segoe UI,Arial,sans-serif;background:#050910;color:#eef7ff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#11294c 0,#07101d 45%,#04070c 100%);min-height:100vh}.wrap{max-width:980px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center}.title{font-size:26px;font-weight:800}.sub{color:#8fa9c7;margin-top:5px}.live{padding:10px 14px;border:1px solid #2a5c8f;border-radius:999px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}.card{background:#0a1627;border:1px solid #1a416a;border-radius:16px;padding:16px}.label{color:#91a7c0;font-size:12px;text-transform:uppercase}.value{font-size:20px;font-weight:800;margin-top:7px;word-break:break-word}.ok{color:#76f1a5}.wait{color:#ffd56c}.bad{color:#ff8383}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}button{border:0;border-radius:16px;padding:20px;font-size:19px;font-weight:900;cursor:pointer}.go{background:#0b6fc2;color:white}.angry{background:#8f1e2d;color:white}.log{white-space:pre-wrap;background:#06101c;border:1px solid #193c61;border-radius:14px;padding:14px;min-height:120px;margin-top:16px;color:#cfe8ff}.small{font-size:12px;color:#8ea4bc;margin-top:10px}@media(max-width:760px){.grid,.buttons{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}</style></head><body><div class="wrap">
+<div class="top"><div><div class="title">BAZOR AI ROOM — PANNEAU DE CONTRÔLE</div><div class="sub">Ici tu vois si ça travaille vraiment, la dernière preuve, et tu peux forcer la suite.</div></div><div id="live" class="live wait">CHARGEMENT…</div></div>
+<div class="grid">
+<div class="card"><div class="label">Watcher</div><div id="watcher" class="value">—</div></div>
+<div class="card"><div class="label">Tâche courante</div><div id="task" class="value">—</div></div>
+<div class="card"><div class="label">Mode</div><div id="mode" class="value">—</div></div>
+<div class="card"><div class="label">Dernière action</div><div id="action" class="value">—</div></div>
+<div class="card"><div class="label">Dernier résultat</div><div id="result" class="value">—</div></div>
+<div class="card"><div class="label">Dernière preuve</div><div id="proof" class="value">—</div></div>
+</div>
+<div class="buttons">
+<button class="go" onclick="send('go')">▶ GO — CONTINUE MAINTENANT</button>
+<button class="angry" onclick="send('angry')">😡 JE SUIS EN COLÈRE — AUTO TOTAL</button>
+</div>
+<div id="log" class="log">En attente du premier état…</div>
+<div class="small">Le bouton colère active AUTO TOTAL et demande la poursuite automatique des tâches BAZOR AI ROOM prédéfinies. Aucun shell distant libre n’est exécuté.</div>
+</div><script>
+async function api(u,o){let r=await fetch(u,o);let t=await r.text();try{return JSON.parse(t)}catch(e){return {ok:false,error:t}}}
+function esc(v){return String(v??'—')}
+async function refresh(){
+  let s=await api('/api/control/status');
+  let c=s.control||{}, now=Math.floor(Date.now()/1000), seen=Number(c.watcher_last_seen_epoch||0), age=seen?now-seen:999999;
+  let active=!!c.working || age<25;
+  live.textContent=c.working?'● TRAVAIL EN COURS':(age<25?'● WATCHER ACTIF':'● PAS DE PREUVE RÉCENTE');
+  live.className='live '+(c.working||age<25?'ok':'bad');
+  watcher.textContent=seen?(age+' s depuis heartbeat'):'Aucun heartbeat';
+  watcher.className='value '+(age<25?'ok':'bad');
+  task.textContent=esc(c.current_task||c.last_task);
+  mode.textContent=(c.auto_mode?'AUTO TOTAL':'MANUEL')+(c.angry_mode?' • 😡 PRIORITÉ MAX':'');
+  mode.className='value '+(c.auto_mode?'ok':'wait');
+  action.textContent=esc(c.last_action||c.request_action);
+  result.textContent=esc(c.last_result_status||c.last_result_summary);
+  result.className='value '+(c.last_result_status==='VERIFIE'||c.last_result_status==='DONE'?'ok':(c.last_result_status==='BLOCKED'?'bad':'wait'));
+  proof.textContent=esc(c.last_proof||'—');
+  log.textContent=JSON.stringify(c,null,2);
+}
+async function send(action){
+  let r=await api('/api/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+  await refresh();
+}
+refresh();setInterval(refresh,2000);
 </script></body></html>'''
 
 REQUIRED=["message_id","timestamp_local","timestamp_utc","project_id","project_name","project_version","bazor_version","task_id","parent_task_id","source_agent","target_agent","status","progress_percent","summary","files","tests","errors","next_step","handoff_logic"]
@@ -54,6 +100,32 @@ def bootstrap_status():
       "agent_ids":sorted(agents.keys()),
       "protected_categories":index.get("protected_categories",[]) if isinstance(index,dict) else []
     }
+
+def control_state():
+    data=read_json(CONTROL,{})
+    if not isinstance(data,dict): data={}
+    data.setdefault("request_seq",0)
+    data.setdefault("processed_seq",0)
+    data.setdefault("auto_mode",False)
+    data.setdefault("angry_mode",False)
+    data.setdefault("working",False)
+    return data
+
+def control_request(action):
+    action=str(action or "").strip().lower()
+    if action not in {"go","angry"}:
+        return {"ok":False,"error":"invalid_control_action"}
+    data=control_state()
+    data["request_seq"]=int(data.get("request_seq") or 0)+1
+    data["request_action"]=action
+    data["request_at"]=datetime.now(timezone.utc).isoformat()
+    data["go_requested"]=True
+    if action=="angry":
+        data["angry_mode"]=True
+        data["auto_mode"]=True
+        data["priority"]="MAX_AUTOMATION"
+    CONTROL.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding="utf-8")
+    return {"ok":True,"control":data}
 
 def probe(url,timeout=1.5):
     if not url:return {"available":None,"reason":"not_configured"}
@@ -97,8 +169,11 @@ class H(BaseHTTPRequestHandler):
         p=self.path.split("?",1)[0]
         if p=="/":
             b=HTML.encode();self.send_response(200);self.send_header("Content-Type","text/html; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
+        if p=="/control":
+            b=CONTROL_HTML.encode();self.send_response(200);self.send_header("Content-Type","text/html; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
         if p=="/api/status":return self.sendj({"ok":True,"version":VERSION,"state":read_json(STATE,{}),"engines":engines(),"bootstrap":bootstrap_status()})
         if p=="/api/context":return self.sendj({"ok":True,"bootstrap":bootstrap_status(),"current_state":read_json(CURRENT_STATE,{})})
+        if p=="/api/control/status":return self.sendj({"ok":True,"control":control_state()})
         if p=="/api/projects":return self.sendj(read_json(PROJECTS,{"projects":[]}))
         if p=="/app.js":
             b=b"// BAZOR AI ROOM 2.4.2 - UI JavaScript is embedded in / for standalone reliability.\n";self.send_response(200);self.send_header("Content-Type","application/javascript; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
@@ -112,6 +187,8 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             ref=incident("invalid_json",str(e));return self.sendj({"ok":False,"error":"invalid_json","incident":ref},400)
         if self.path=="/api/route":return self.sendj({"ok":True,**route(str(data.get("task_class","simple")),data.get("manual"))})
+        if self.path=="/api/control":
+            result=control_request(data.get("action"));return self.sendj(result,200 if result.get("ok") else 400)
         self.sendj({"ok":False,"error":"not_found"},404)
     def log_message(self,fmt,*args):print("[ROOM]",fmt%args)
 
