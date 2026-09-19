@@ -1444,6 +1444,19 @@ def _task_retry_allowed(issue_number, task_id, comments):
     state=_task_retry_load()
     key="issue#"+str(issue_number)+":"+str(task_id).upper()
     slot=state.get(key) or {}
+
+    # A GO explicite de GPT ajouté APRES le dernier résultat du même ticket
+    # doit permettre un nouvel essai sur ce ticket sans recréer d'issue.
+    # On ne contourne pas DONE/VERIFIE (géré plus haut).
+    last_done_pos=max(comments.rfind("[BAZOR-TASK-DONE]"),comments.rfind("[BAZOR-TASK-START]"))
+    last_go_pos=max(
+        comments.rfind("[FROM_GPT][GO-AFTER-RUNTIME-GATE]"),
+        comments.rfind("[FROM_GPT][CONTINUE-NOW]"),
+        comments.rfind("[FROM_GPT][RUN_NOW]")
+    )
+    if last_go_pos > last_done_pos:
+        return True
+
     try:
         current_head=(_git("rev-parse","HEAD").stdout or "").strip()
     except Exception:
@@ -2408,6 +2421,11 @@ while True:
                         except Exception:
                             watcher_sha="unknown"
                         reply+="\nWatcher commit: "+watcher_sha
+                        try:
+                            core_sig=_core_runtime_signature()
+                        except Exception:
+                            core_sig=""
+                        reply+="\nCore runtime signature: "+(core_sig or "missing")
                         if result.get("task_status")=="ANALYSE_SEULE":
                             reply+="\nRéponse moteur (extrait): "+str(result.get("answer") or "")[:2200]
                         if result.get("task_status")=="BLOCKED":
