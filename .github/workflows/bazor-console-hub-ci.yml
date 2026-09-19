@@ -200,6 +200,22 @@ jobs:
             ],
             "links":[[3,2,0,8,0,"CLIP"],[4,4,0,8,1,"VAE"],[16,14,0,15,0,"IMAGE"]]
           }
+          # The live Studio can have harmless spacing/comment changes around
+          # _api_graph. candidate_bytes must replace by function structure, not
+          # by exact source text.
+          live_variant=(
+              "def _api_graph(graph):\n"
+              "    # live comment differs\n"
+              "    current=graph\n"
+              "    return current\n\n"
+              "def _next():\n"
+              "    return 1\n"
+          ).encode("utf-8")
+          candidate,changed,state=h.candidate_bytes(live_variant)
+          assert changed and state=="patched"
+          assert b"fallback_widget_fields" in candidate
+          assert b"def _next():" in candidate
+          compile(candidate.decode("utf-8"),"<candidate>","exec")
           api=conv(ui)
           assert api["1"]["inputs"]["unet_name"]=="minimax_h3_fl2va_pruned_w4a8_mixed.safetensors"
           assert api["8"]["inputs"]["width"]==608 and api["8"]["inputs"]["height"]==352
