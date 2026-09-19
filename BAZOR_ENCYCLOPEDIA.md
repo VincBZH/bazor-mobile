@@ -257,3 +257,12 @@ Un nouveau test utilisateur confirme :
 
 Conclusion : la connectivité de base est saine, mais la chaîne de génération/QA Studio n'est pas encore certifiable. Les P0 Trio restent prioritaires.
 
+
+
+<!-- BAZOR_VERSION:BAZOR Studio V4 Trio Chain::2026.09.19.3 -->
+### BAZOR Studio V4 Trio Chain — 2026.09.19.3
+- Généré : 2026-09-19
+- Statut : PATCH
+- Changements : chaîne autonome Studio P0 = Ollama local → revues Mammouth Claude/Gemini → arbitrage GPT-5.6 Sol → au besoin une réparation locale → nouvelle revue.
+- Sécurité : aucune revue externe n'écrit directement ; Action Engine, sandbox, tests et rollback restent obligatoires.
+- Limite : indisponibilité d'un reviewer externe ne bloque pas un résultat local déterministe suffisamment prouvé.
