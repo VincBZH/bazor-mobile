@@ -579,7 +579,13 @@ def _run_registry_task(task_id):
         _task_update_mobile(project,task,"BLOCKED",detail)
         return {"ok":False,"task_status":"BLOCKED","error":"dependencies_not_done","detail":detail}
 
-    _task_update_mobile(project,task,"RUNNING","Tâche autonome démarrée • secondes lectures Mammouth en cours")
+    studio_p0_fast=(project.get("id")=="simple-studio" and task.get("priority")=="P0")
+    _task_update_mobile(
+        project,task,"RUNNING",
+        "Tâche Studio P0 locale démarrée • Ollama + Action Engine"
+        if studio_p0_fast else
+        "Tâche autonome démarrée • secondes lectures Mammouth en cours"
+    )
     criteria="\n".join(f"{i+1}. {x}" for i,x in enumerate(task.get("acceptance") or []))
     base_prompt=(
         "TÂCHE BAZOR PRÉDÉFINIE "+str(task.get("id"))+" — "+str(task.get("title"))+"\n"
@@ -591,7 +597,9 @@ def _run_registry_task(task_id):
     )
 
     reviews=[]
-    profiles=[str(x).lower() for x in (task.get("preferred_models") or []) if str(x).strip()]
+    # Fast-path Studio P0 : aucune revue externe avant l'exécution locale.
+    # Elles pourront être faites après une preuve locale, sans bloquer le patch.
+    profiles=[] if studio_p0_fast else [str(x).lower() for x in (task.get("preferred_models") or []) if str(x).strip()]
     profiles=profiles[:2 if task.get("priority")=="P0" else 1]
 
     def one_review(profile):
@@ -638,7 +646,7 @@ def _run_registry_task(task_id):
     # Studio P0 doit commencer localement: le code cible vit sur le PC et
     # Ollama + Action Engine peuvent lire/preflight/tester sans dépendre d'un
     # fournisseur externe. Les revues Mammouth restent consultatives.
-    execution_provider="ollama" if (project.get("id")=="simple-studio" and task.get("priority")=="P0") else "auto"
+    execution_provider="ollama" if studio_p0_fast else "auto"
     payload={
         "project_id":project.get("id"),
         "subproject_name":str(task.get("id"))+" / "+str(sub.get("name") or task.get("subproject") or "Studio"),
@@ -646,7 +654,8 @@ def _run_registry_task(task_id):
         "current_progress":0,"repair":False,"previous":"",
         "provider":execution_provider,"apply_actions":True,
     }
-    result=_core_task(payload,timeout=420)
+    task_timeout=300 if studio_p0_fast else 420
+    result=_core_task(payload,timeout=task_timeout)
     execution=result.get("execution") or {}
     ar=execution.get("action_result") or {}
     real=execution.get("mode")=="file_changes" and bool(ar.get("applied"))
@@ -660,7 +669,7 @@ def _run_registry_task(task_id):
     # modification/preflight, ne pas arrêter une tâche Studio exécutable.
     # Rejouer une fois avec Ollama local, qui possède l'accès au contexte local
     # via BAZOR Core/Action Engine. Les tests/preflight restent l'arbitre final.
-    if blocked and not real and not already:
+    if blocked and not real and not already and not studio_p0_fast:
         local_retry=dict(payload)
         local_retry["provider"]="ollama"
         local_retry["repair"]=True
@@ -699,7 +708,7 @@ def _run_registry_task(task_id):
             })
 
     # Une première analyse seule n'est pas un succès : une seule relance explicite.
-    if not real and not already and not blocked:
+    if not real and not already and not blocked and not studio_p0_fast:
         retry=dict(payload)
         retry["repair"]=True
         retry["previous"]=str(result.get("answer") or "")[:5000]
