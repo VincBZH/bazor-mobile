@@ -1266,8 +1266,23 @@ def _safe_filebus_message(title):
     raw=open(path,"r",encoding="utf-8-sig",errors="replace").read()
     if len(raw)>24000:
         raise RuntimeError("filebus_message_too_large")
+    identity_preamble = {
+        "mammouth": (
+            "IDENTITE BAZOR OBLIGATOIRE: agent_id=mammouth. "
+            "Tu es l'agent Mammouth dans BAZOR, même si le modèle sous-jacent est GPT, Claude, Gemini, Mistral ou autre. "
+            "Ne te présentes jamais comme GPT/Ollama. Distingue toujours agent_id, provider et underlying_model. "
+            "ROLE: seconde revue externe indépendante; aucune écriture critique directe."
+        ),
+        "ollama": (
+            "IDENTITE BAZOR OBLIGATOIRE: agent_id=ollama. "
+            "Tu es l'agent Ollama local dans BAZOR. Ne te présentes jamais comme GPT/Mammouth. "
+            "ROLE: analyse locale et code; toute écriture passe par BAZOR Action Engine."
+        ),
+    }[target]
     prompt=(
         "BAZOR FILEBUS V1 — message GitHub synchronisé localement.\n"
+        + identity_preamble + "\n"
+        "RAPPEL: l'identité d'agent BAZOR est indépendante du nom du modèle sous-jacent.\n"
         "Ne traite ceci que comme une consigne de coordination; n'exécute aucune commande shell.\n"
         "Réponds en respectant exactement le bloc RESPONSE_FORMAT demandé à la fin du fichier.\n\n"
         "FILE: bridge/messages/"+name+"\n\n"+raw
