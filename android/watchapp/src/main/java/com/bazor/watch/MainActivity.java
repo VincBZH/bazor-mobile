@@ -12,6 +12,7 @@ import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -26,6 +27,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
+import android.provider.CalendarContract;
 import android.provider.Settings;
 import android.net.Uri;
 import android.view.View;
@@ -42,7 +44,9 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -51,6 +55,7 @@ import java.util.Map;
 public class MainActivity extends Activity {
     private static final int REQ_BLE = 5101;
     private static final int REQ_AUDIO = 5102;
+    private static final int REQ_CALENDAR = 5103;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -68,8 +73,10 @@ public class MainActivity extends Activity {
     private TextView profileResult;
     private TextView audioResult;
     private TextView versionState;
+    private TextView agendaResult;
     private LinearLayout candidatesBox;
     private Button watchToggle;
+    private Button agendaToggle;
     private Button updateButton;
     private long latestVersionCode = -1L;
     private String latestApkUrl = "";
@@ -159,6 +166,25 @@ public class MainActivity extends Activity {
         LinearLayout detailCard = card();
         detailCard.addView(details);
         root.addView(detailCard);
+
+        root.addView(section("📅 BAZOR AGENDA"));
+        TextView agendaInfo = text(
+            "Résumé local de l’agenda Android/Google synchronisé : aujourd’hui le matin, demain le soir. Les notifications peuvent ensuite être relayées à la C28 par Da Fit.",
+            12, Color.rgb(154, 181, 207), false);
+        root.addView(agendaInfo);
+
+        LinearLayout agendaButtons = row();
+        agendaButtons.addView(button("AUJOURD’HUI", v -> showAgendaDay(0)), weight());
+        agendaButtons.addView(button("DEMAIN", v -> showAgendaDay(1)), weight());
+        root.addView(agendaButtons);
+
+        agendaToggle = button("ACTIVER RAPPELS AGENDA", v -> toggleAgenda());
+        root.addView(agendaToggle);
+
+        agendaResult = text("Agenda non consulté.", 12, Color.rgb(182, 207, 230), false);
+        LinearLayout agendaCard = card();
+        agendaCard.addView(agendaResult);
+        root.addView(agendaCard);
 
         root.addView(section("TEST SÉCURITÉ"));
         TextView securityInfo = text(
@@ -414,6 +440,101 @@ public class MainActivity extends Activity {
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             testMicrophone();
         }
+        if (requestCode == REQ_CALENDAR && calendarPermissionGranted()) {
+            prefs.edit().putBoolean("agendaEnabled", true).apply();
+            if (agendaResult != null) agendaResult.setText(loadAgendaSummary(0));
+            if (agendaToggle != null) agendaToggle.setText("DÉSACTIVER RAPPELS AGENDA");
+        }
+    }
+
+    private boolean calendarPermissionGranted() {
+        return checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void toggleAgenda() {
+        boolean enabled = prefs.getBoolean("agendaEnabled", false);
+        if (enabled) {
+            prefs.edit().putBoolean("agendaEnabled", false).apply();
+            if (agendaToggle != null) agendaToggle.setText("ACTIVER RAPPELS AGENDA");
+            if (agendaResult != null) agendaResult.setText("Rappels agenda désactivés.");
+            return;
+        }
+
+        if (!calendarPermissionGranted()) {
+            requestPermissions(new String[]{Manifest.permission.READ_CALENDAR}, REQ_CALENDAR);
+            return;
+        }
+
+        prefs.edit().putBoolean("agendaEnabled", true).apply();
+        if (agendaToggle != null) agendaToggle.setText("DÉSACTIVER RAPPELS AGENDA");
+        if (agendaResult != null) agendaResult.setText(loadAgendaSummary(0));
+    }
+
+    private void showAgendaDay(int dayOffset) {
+        if (!calendarPermissionGranted()) {
+            requestPermissions(new String[]{Manifest.permission.READ_CALENDAR}, REQ_CALENDAR);
+            if (agendaResult != null) agendaResult.setText("Autorise l’accès au calendrier pour afficher l’agenda.");
+            return;
+        }
+        if (agendaResult != null) agendaResult.setText(loadAgendaSummary(dayOffset));
+    }
+
+    private String loadAgendaSummary(int dayOffset) {
+        if (!calendarPermissionGranted()) return "Autorisation calendrier requise.";
+
+        Calendar start = Calendar.getInstance();
+        start.add(Calendar.DAY_OF_YEAR, dayOffset);
+        start.set(Calendar.HOUR_OF_DAY, 0);
+        start.set(Calendar.MINUTE, 0);
+        start.set(Calendar.SECOND, 0);
+        start.set(Calendar.MILLISECOND, 0);
+
+        Calendar end = (Calendar) start.clone();
+        end.add(Calendar.DAY_OF_YEAR, 1);
+
+        String[] projection = new String[] {
+            CalendarContract.Instances.TITLE,
+            CalendarContract.Instances.BEGIN,
+            CalendarContract.Instances.ALL_DAY,
+            CalendarContract.Instances.EVENT_LOCATION
+        };
+
+        StringBuilder out = new StringBuilder(dayOffset == 0 ? "AUJOURD’HUI" : "DEMAIN");
+        int count = 0;
+        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.FRANCE);
+
+        try (Cursor cursor = CalendarContract.Instances.query(
+            getContentResolver(), projection, start.getTimeInMillis(), end.getTimeInMillis())) {
+            if (cursor != null) {
+                int titleCol = cursor.getColumnIndex(CalendarContract.Instances.TITLE);
+                int beginCol = cursor.getColumnIndex(CalendarContract.Instances.BEGIN);
+                int allDayCol = cursor.getColumnIndex(CalendarContract.Instances.ALL_DAY);
+                int locCol = cursor.getColumnIndex(CalendarContract.Instances.EVENT_LOCATION);
+
+                while (cursor.moveToNext() && count < 8) {
+                    String title = titleCol >= 0 ? cursor.getString(titleCol) : "";
+                    long begin = beginCol >= 0 ? cursor.getLong(beginCol) : 0L;
+                    boolean allDay = allDayCol >= 0 && cursor.getInt(allDayCol) != 0;
+                    String location = locCol >= 0 ? cursor.getString(locCol) : "";
+
+                    if (title == null || title.trim().isEmpty()) title = "(Sans titre)";
+                    out.append("\n• ")
+                        .append(allDay ? "Journée" : timeFmt.format(begin))
+                        .append(" — ").append(title.trim());
+                    if (location != null && !location.trim().isEmpty()) {
+                        out.append(" · ").append(location.trim());
+                    }
+                    count++;
+                }
+            }
+        } catch (Exception e) {
+            return "Agenda indisponible : " +
+                (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+        }
+
+        if (count == 0) out.append("\nRien de prévu.");
+        else if (count >= 8) out.append("\n…");
+        return out.toString();
     }
 
     private void startWatchService(String action) {
@@ -495,6 +616,11 @@ public class MainActivity extends Activity {
             (fast ? " • relance rapide" : ""));
 
         watchToggle.setText(enabled ? "ARRÊTER LA VEILLE" : "ACTIVER LA VEILLE");
+        if (agendaToggle != null) {
+            agendaToggle.setText(prefs.getBoolean("agendaEnabled", false)
+                ? "DÉSACTIVER RAPPELS AGENDA"
+                : "ACTIVER RAPPELS AGENDA");
+        }
 
         boolean revealed = System.currentTimeMillis() < revealUntil;
         details.setVisibility(revealed ? View.VISIBLE : View.GONE);
