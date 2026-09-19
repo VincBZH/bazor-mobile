@@ -77,6 +77,10 @@ class H(BaseHTTPRequestHandler):
             b=HTML.encode();self.send_response(200);self.send_header("Content-Type","text/html; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
         if p=="/api/status":return self.sendj({"ok":True,"version":VERSION,"state":read_json(STATE,{}),"engines":engines()})
         if p=="/api/projects":return self.sendj(read_json(PROJECTS,{"projects":[]}))
+        if p=="/app.js":
+            b=b"// BAZOR AI ROOM 2.4.1 - UI JavaScript is embedded in / for standalone reliability.\n";self.send_response(200);self.send_header("Content-Type","application/javascript; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
+        if p=="/style.css":
+            b=b"/* BAZOR AI ROOM 2.4.1 - UI CSS is embedded in / for standalone reliability. */\n";self.send_response(200);self.send_header("Content-Type","text/css; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
         if p=="/health":return self.sendj({"ok":True,"version":VERSION})
         self.send_error(404)
     def do_POST(self):
