@@ -2148,6 +2148,28 @@ while True:
             for issue in issues:
                 title=issue["title"].lower()
                 comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
+                if title.startswith("[bazor-room-control:auto]"):
+                    mark="[BAZOR-ROOM-CONTROL-DONE]"
+                    if mark in comments:
+                        continue
+                    data=_control_load()
+                    data["auto_mode"]=True
+                    data["angry_mode"]=True
+                    data["request_seq"]=int(data.get("request_seq") or 0)+1
+                    data["request_action"]="auto_tick"
+                    data["request_at"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+                    data["go_requested"]=True
+                    data["last_action"]="AUTO TOTAL REMOTE SAFE"
+                    _control_save(data)
+                    reply=(mark+"\n\n"+
+                           "AUTO_MODE: true\n"+
+                           "ANGRY_MODE: true\n"+
+                           "REQUEST_SEQ: "+str(data.get("request_seq"))+"\n"+
+                           "NEXT_TASK: "+str(_control_next_airoom_task() or "none")+"\n"+
+                           "WATCHER_COMMIT: "+str(LAST_HEAD or _git("rev-parse","HEAD").stdout.strip()))
+                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
+                    print(f"[ROOM CONTROL AUTO] #{issue['number']} AUTO TOTAL armed")
+                    continue
                 if title.startswith("[bazor-v3-beta]"):
                     if V3_BETA_MARK in comments and "Statut: V3_BETA_READY" in comments:
                         continue
