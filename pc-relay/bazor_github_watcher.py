@@ -10,7 +10,8 @@ POLL=10
 MARK="[BAZOR-WATCHER-DONE]"
 DIAG_MARK="[BAZOR-DIAG-DONE]"
 MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
-FILEBUS_MARK="[BAZOR-FILEBUS-DONE]"\nFILEBUS_BLOCKED_MARK="[BAZOR-FILEBUS-BLOCKED]"
+FILEBUS_MARK="[BAZOR-FILEBUS-DONE]"
+FILEBUS_BLOCKED_MARK="[BAZOR-FILEBUS-BLOCKED]"
 TASK_MARK="[BAZOR-TASK-DONE]"
 QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 CERTIFY_MARK="[BAZOR-CERTIFY-DONE]"
@@ -413,10 +414,10 @@ def gh(args):
     if p.returncode: raise RuntimeError(p.stderr.strip() or p.stdout.strip())
     return p.stdout
 
-def core_chat(text):
+def core_chat(text, timeout=180):
     data=json.dumps({"text":text,"target":"ollama","room":"GITHUB QUEUE"}).encode("utf-8")
     req=urllib.request.Request(CORE,data=data,headers={"Content-Type":"application/json"},method="POST")
-    with urllib.request.urlopen(req,timeout=180) as r:
+    with urllib.request.urlopen(req,timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
 def _parse_mammouth_issue(title, body):
@@ -1063,7 +1064,7 @@ def _safe_filebus_message(title):
         "FILE: bridge/messages/"+name+"\n\n"+raw
     )
     if target=="ollama":
-        result=core_chat(prompt)
+        result=core_chat(prompt,timeout=45)
     else:
         payload={
             "project_id":"simple-studio",
