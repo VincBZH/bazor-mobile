@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.19.4",
+  "version": "2026.09.19.5",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -75,13 +75,14 @@
           "subproject": "core",
           "title": "Déployer BAZOR AI ROOM V2.4 dans la racine locale autorisée",
           "status": "TODO",
-          "action": "Lire le vrai contenu de %LOCALAPPDATA%\\\\BazorAIROOM et le dossier bazor_room_v2 synchronisé depuis le dépôt local bazor-mobile si présent. Préserver les fichiers existants par backup. Installer uniquement les fichiers nécessaires de BAZOR AI ROOM V2.4 dans la racine ai_room via BAZOR Action Engine: serveur, interface statique, validateur, orchestrateur, rules/state/handoff/message_contract/projects. Ne supprimer aucun secret ni configuration locale. Corriger les chemins d'import pour Windows. Aucun shell/exec arbitraire reçu de GitHub.",
+          "action": "Lire `room-payload/v2.4/BAZOR_ROOM_V2_4_STANDALONE.py` dans la racine bazor_repo et le vrai contenu de %LOCALAPPDATA%\\\\BazorAIROOM. Via BAZOR Action Engine uniquement, sauvegarder l'existant puis créer/remplacer `%LOCALAPPDATA%\\\\BazorAIROOM\\\\app.py` avec le contenu exact du payload standalone. Préserver les fichiers locaux non ciblés. Si state.json ou projects.json sont absents, créer des versions minimales valides; s'ils existent, ne pas écraser leur contenu utile. Aucun shell/exec/eval arbitraire reçu de GitHub.",
           "acceptance": [
+            "Le payload source room-payload/v2.4/BAZOR_ROOM_V2_4_STANDALONE.py est réellement lu.",
             "Le preflight sandbox Action Engine est PASS.",
-            "Les fichiers Python modifiés/créés passent py_compile dans le sandbox.",
-            "Les fichiers JSON modifiés/créés sont syntaxiquement valides.",
-            "La racine locale AI Room contient une seule version cible V2.4 sans écrasement non sauvegardé.",
-            "Un backup/rollback est disponible.",
+            "Le futur app.py passe py_compile dans le sandbox.",
+            "L'ancien app.py est sauvegardé si présent.",
+            "Le nouveau app.py est écrit uniquement après preflight PASS.",
+            "Un backup/rollback et un rapport Action Engine existent.",
             "Le rapport final liste FILES_READ, FILES_CHANGED, PREFLIGHT, TESTS, BACKUP et REPORT."
           ],
           "dependencies": [],
