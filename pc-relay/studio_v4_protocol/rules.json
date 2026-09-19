@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "p0-012-next",
+      "SI": {"ET": [
+        {"field": "task_id", "op": "eq", "value": "STUDIO-P0-012"},
+        {"field": "task_status", "op": "in", "value": ["DONE", "VERIFIE"]},
+        {"field": "proof.preflight_ok", "op": "eq", "value": true},
+        {"field": "proof.tests_ok", "op": "eq", "value": true}
+      ]},
+      "ALORS": [
+        {"action": "status", "value": "VALIDATED"},
+        {"action": "handoff", "next_task": "STUDIO-P0-010"}
+      ]
+    },
+    {
+      "id": "p0-010-next",
+      "SI": {"ET": [
+        {"field": "task_id", "op": "eq", "value": "STUDIO-P0-010"},
+        {"field": "task_status", "op": "in", "value": ["DONE", "VERIFIE"]},
+        {"field": "proof.preflight_ok", "op": "eq", "value": true},
+        {"field": "proof.tests_ok", "op": "eq", "value": true}
+      ]},
+      "ALORS": [
+        {"action": "handoff", "next_task": "STUDIO-P0-011"}
+      ]
+    },
+    {
+      "id": "block-no-proof",
+      "SI": {"OU": [
+        {"field": "task_status", "op": "in", "value": ["BLOCKED", "ANALYSE_SEULE"]},
+        {"field": "proof.tests_ok", "op": "eq", "value": false}
+      ]},
+      "ALORS": [
+        {"action": "decision", "value": "STOP"},
+        {"action": "note", "value": "Aucune étape suivante sans preuve déterministe."}
+      ]
+    }
+  ]
+}
