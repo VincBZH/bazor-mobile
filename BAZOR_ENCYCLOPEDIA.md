@@ -180,6 +180,26 @@ Cette file ne transmet aucune commande shell depuis GitHub et ne permet pas d’
 
 Le contexte donné aux IA n’est plus choisi uniquement selon la date de modification des fichiers. Le moteur donne maintenant un score supérieur aux chemins correspondant aux mots de la tâche exacte. Une tâche H3 privilégie donc les workflows/fichiers H3 ; une tâche launcher/démarrage privilégie les lanceurs correspondants. Les dossiers runtime, logs, sauvegardes et sandboxes sont exclus du scan.
 
+## Incident réel Studio — 2026-09-19
+
+Une génération réelle depuis l'interface a démontré que la qualification précédente 47/47 couvrait **configuration, services, syntaxe et connectivité**, mais pas encore une génération vidéo complète de bout en bout. La certification ne doit plus employer le mot 100% opérationnel tant qu'un smoke test E2E réel n'a pas produit un média.
+
+Erreurs ComfyUI observées sur la chaîne MiniMax H3 active :
+
+- CLIP rejeté : `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`; options réellement offertes : `qwen3vl_4b_int8_convrot.safetensors`, `umt5_xxl_fp8_e4m3fn_scaled.safetensors`.
+- VAE rejeté : `minimax_h3_video_vae_fp16.safetensors`; option H3 vidéo réellement offerte : `minimax_h3_video_vae_int8_convrot.safetensors`.
+- UNET rejeté : `minimax_h3_fl2va_pruned_int8_convrot.safetensors`; option H3 réellement offerte : `minimax_h3_fl2va_pruned_w4a8_mixed.safetensors`.
+- Le Studio affiche aussi : `Workflow MiniMax H3 incompatible : réglage largeur/hauteur introuvable`. Le mapping UI → workflow doit être dérivé des vrais nœuds/champs du workflow actif, sans node_id inventé.
+- L'analyse du rendu échoue avec `Failed to load image or audio file`. Le chemin vision doit transmettre un média réellement accessible au moteur local (fichier/base64/blob selon l'API), et non une URL locale que le moteur ne sait pas charger.
+
+Tâches ajoutées au registre :
+- `STUDIO-P0-008` : aligner les loaders CLIP/VAE/UNET.
+- `STUDIO-P0-009` : réparer le mapping largeur/hauteur.
+- `STUDIO-P0-010` : réparer le chargement média pour l'analyse vision.
+- `STUDIO-P0-011` : imposer une génération E2E sûre avant certification complète.
+
+Règle de certification mise à jour : les contrôles statiques/runtime peuvent être verts sans que la génération soit réellement utilisable. Une preuve E2E réelle est obligatoire avant d'afficher **pleinement opérationnel / 100%**.
+
 ## Autres projets BAZOR
 
 Le registre central contient également AI Room, Wii Relay, BAZOR Watch, MODO Viewer, BAZOR Tools, Security et Festival.
