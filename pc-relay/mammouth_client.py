@@ -166,6 +166,44 @@ def _parse_api_json(body):
         raise
 
 
+def _content_text(value):
+    """Normalise les formats OpenAI texte, liste de parties ou objet imbrique."""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        return "\n".join(filter(None, (_content_text(item) for item in value))).strip()
+    if isinstance(value, dict):
+        for key in ("text", "output_text", "content", "value"):
+            text = _content_text(value.get(key))
+            if text:
+                return text
+    return ""
+
+
+def _extract_answer(data):
+    if not isinstance(data, dict):
+        return ""
+    choices = data.get("choices") or []
+    if choices and isinstance(choices[0], dict):
+        choice = choices[0]
+        message = choice.get("message") or {}
+        candidates = [
+            message.get("content") if isinstance(message, dict) else None,
+            message.get("refusal") if isinstance(message, dict) else None,
+            choice.get("text"),
+            (choice.get("delta") or {}).get("content") if isinstance(choice.get("delta"), dict) else None,
+        ]
+        for candidate in candidates:
+            text = _content_text(candidate)
+            if text:
+                return text
+    for key in ("output_text", "answer", "response", "content", "output"):
+        text = _content_text(data.get(key))
+        if text:
+            return text
+    return ""
+
+
 def chat(text, task_kind="general", profile=None, max_tokens=3000):
     key = os.getenv("MAMMOUTH_API_KEY", "").strip()
     selected_profile = profile or choose_profile(task_kind)
@@ -240,18 +278,38 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
                 "budget": budget_status(),
             }
         data = _parse_api_json(body)
+        if not isinstance(data, dict):
+            raise ValueError("mammouth_response_not_object")
         choice = (data.get("choices") or [{}])[0]
-        message = choice.get("message") or {}
         actual_model = data.get("model") or model
         usage = data.get("usage") or {}
         estimated_cost = _estimate_cost(actual_model, usage)
         _record_usage(actual_model, usage, estimated_cost)
+        answer = _extract_answer(data)
+        if not answer:
+            diagnostic = {
+                "response_keys": sorted(data.keys()),
+                "choice_keys": sorted(choice.keys()) if isinstance(choice, dict) else [],
+                "finish_reason": choice.get("finish_reason") if isinstance(choice, dict) else None,
+                "usage": usage,
+            }
+            return {
+                "ok": False,
+                "error": "mammouth_empty_answer",
+                "provider": "mammouth",
+                "profile": selected_profile,
+                "model": actual_model,
+                "message": "Mammouth a repondu sans texte exploitable: " + json.dumps(diagnostic, ensure_ascii=False)[:500],
+                "usage": usage,
+                "estimated_cost_usd": None if estimated_cost is None else round(estimated_cost, 6),
+                "budget": budget_status(),
+            }
         return {
             "ok": True,
             "provider": "mammouth",
             "profile": selected_profile,
             "model": actual_model,
-            "answer": (message.get("content") or "").strip(),
+            "answer": answer,
             "usage": usage,
             "estimated_cost_usd": None if estimated_cost is None else round(estimated_cost, 6),
             "budget": budget_status(),
