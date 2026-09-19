@@ -711,8 +711,23 @@ def _studio_protocol_next_task(task_id,result):
                 return nxt
     return None
 
-def _ensure_next_task_issue(current_task_id):
-    next_id=_studio_next_task(current_task_id)
+def _registry_next_task(task_id):
+    """Retourne la prochaine tâche du même projet selon l'ordre du registre.
+    Aucune instruction GitHub libre n'est interprétée.
+    """
+    try:
+        project, task, _ = _registry_task(task_id)
+        tasks=sorted(project.get("tasks") or [], key=lambda x:int(x.get("order") or 9999))
+        current=str(task.get("id") or "").upper()
+        for i,item in enumerate(tasks):
+            if str(item.get("id") or "").upper()==current:
+                return str(tasks[i+1].get("id") or "").upper() if i+1 < len(tasks) else None
+    except Exception as exc:
+        print("[AUTOCHAIN NEXT WARN]",type(exc).__name__,str(exc)[:240])
+    return None
+
+def _ensure_next_task_issue(current_task_id, next_id=None):
+    next_id=str(next_id or _registry_next_task(current_task_id) or "").strip().upper()
     if not next_id:
         return None
     try:
@@ -724,13 +739,21 @@ def _ensure_next_task_issue(current_task_id):
         for item in existing:
             if str(item.get("title") or "").lower().startswith(needle):
                 return int(item.get("number"))
-        title="[bazor-task:"+next_id+"] AUTOCHAIN V4"
+        title="[bazor-task:"+next_id+"] AUTOCHAIN"
         body=(
-            "AUTOCHAIN BAZOR V4.\n\n"
+            "AUTOCHAIN BAZOR.\n\n"
             "Tâche précédente validée: "+str(current_task_id)+".\n"
             "Exécuter maintenant la tâche prédéfinie "+next_id+" du registre BAZOR.\n"
             "Aucune commande shell libre n'est autorisée. Preflight, tests, preuves runtime "
-            "et rollback restent obligatoires."
+            "et rollback restent obligatoires.\n\n"
+            "[BAZOR_NEXT]\n"
+            "task_id: "+next_id+"\n"
+            "status: START\n"
+            "next_step: execute_registry_task\n"
+            "on_success: autochain_next_registry_task\n"
+            "on_failure: DEFAULT_RECOVERY\n"
+            "on_exception: DEFAULT_RECOVERY\n"
+            "[/BAZOR_NEXT]"
         )
         raw=gh(["issue","create","--repo",REPO,"--title",title,"--body",body])
         m=re.search(r"/issues/(\d+)",str(raw))
@@ -1329,21 +1352,49 @@ while True:
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
                         print(f"[OK TASK] #{issue['number']} {task_id} -> {result.get('task_status')}")
                         if result.get("task_status") in ("DONE","VERIFIE"):
-                            protocol_next=_studio_protocol_next_task(task_id,result)
-                            expected_next=_studio_next_task(task_id)
-                            if protocol_next and protocol_next==expected_next:
-                                next_issue=_ensure_next_task_issue(task_id)
+                            # Studio conserve sa porte logique spécialisée.
+                            studio_expected=_studio_next_task(task_id)
+                            if studio_expected:
+                                protocol_next=_studio_protocol_next_task(task_id,result)
+                                next_id=protocol_next if protocol_next==studio_expected else None
+                            else:
+                                # Tous les autres projets utilisent l'ordre prédéfini du registre.
+                                next_id=_registry_next_task(task_id)
+
+                            if next_id:
+                                next_issue=_ensure_next_task_issue(task_id,next_id)
                                 if next_issue:
-                                    chain_msg="[BAZOR-AUTOCHAIN]\n\nProtocole validé : preflight + tests OK. Étape suivante créée automatiquement: #"+str(next_issue)+" • "+str(protocol_next)
+                                    chain_msg=(
+                                        "[BAZOR-AUTOCHAIN]\n\n"
+                                        "Étape validée avec preuves. Étape suivante créée automatiquement: #"
+                                        +str(next_issue)+" • "+str(next_id)+"\n\n"
+                                        "[BAZOR_NEXT]\n"
+                                        "task_id: "+str(next_id)+"\n"
+                                        "status: START\n"
+                                        "next_step: execute_registry_task\n"
+                                        "on_success: autochain_next_registry_task\n"
+                                        "on_failure: DEFAULT_RECOVERY\n"
+                                        "on_exception: DEFAULT_RECOVERY\n"
+                                        "[/BAZOR_NEXT]"
+                                    )
                                     try:
                                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",chain_msg])
                                     except Exception:
                                         pass
                             else:
+                                # Fin de chaîne = succès possible; absence de preuve = blocage.
                                 try:
-                                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","[BAZOR-AUTOCHAIN-BLOCKED]\n\nAucun handoff : le protocole local n'a pas validé preflight + tests."])
+                                    project, task, _ = _registry_task(task_id)
+                                    ordered=sorted(project.get("tasks") or [], key=lambda x:int(x.get("order") or 9999))
+                                    is_last=bool(ordered) and str(ordered[-1].get("id") or "").upper()==str(task_id).upper()
                                 except Exception:
-                                    pass
+                                    is_last=False
+                                if not is_last:
+                                    try:
+                                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",
+                                            "[BAZOR-AUTOCHAIN-BLOCKED]\n\nAucune étape suivante autorisée. DEFAULT_RECOVERY requis; ne pas demander Vincent sauf NEEDS_HUMAN réel."])
+                                    except Exception:
+                                        pass
                     except Exception as task_exc:
                         detail=(type(task_exc).__name__+": "+str(task_exc))[:1200]
                         try:
