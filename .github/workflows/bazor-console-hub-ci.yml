@@ -11,6 +11,7 @@ on:
       - "pc-relay/bazor_studio_qualifier.py"
       - "pc-relay/bazor_h3_connection_audit.py"
       - "pc-relay/bazor_studio_workflows_audit.py"
+      - "pc-relay/bazor_studio_h3_converter_hotfix.py"
       - "bazor_registry.json"
       - "index.html"
       - "BAZOR_ENCYCLOPEDIA.md"
@@ -41,6 +42,7 @@ jobs:
             pc-relay/bazor_action_engine.py \
             pc-relay/bazor_h3_connection_audit.py \
             pc-relay/bazor_studio_workflows_audit.py \
+            pc-relay/bazor_studio_h3_converter_hotfix.py \
             pc-relay/mammouth_client.py
       - name: Validate mobile UI JavaScript
         run: |
@@ -169,6 +171,44 @@ jobs:
           assert 'worker_kwargs["request_id"] = rid' in src
           assert 'result = start_mobile_task(request_id, **kwargs)' in src
           print("Mobile task async regression OK")
+          PY
+      - name: H3 UI-to-API hotfix regression
+        run: |
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          spec=importlib.util.spec_from_file_location("hotfix","pc-relay/bazor_studio_h3_converter_hotfix.py")
+          h=importlib.util.module_from_spec(spec); spec.loader.exec_module(h)
+          ns={}; exec(h.NEW,ns)
+          conv=ns["_api_graph"]
+          ui={
+            "nodes":[
+              {"id":1,"type":"UNETLoader","inputs":[],"widgets_values":["minimax_h3_fl2va_pruned_w4a8_mixed.safetensors","default"]},
+              {"id":8,"type":"MiniMaxH3ImageToVideo","inputs":[
+                {"name":"clip","type":"CLIP","link":3},
+                {"name":"vae","type":"VAE","link":4},
+                {"name":"prompt","type":"STRING","link":None,"widget":{"name":"prompt"}},
+                {"name":"width","type":"INT","link":None,"widget":{"name":"width"}},
+                {"name":"height","type":"INT","link":None,"widget":{"name":"height"}},
+                {"name":"length","type":"INT","link":None,"widget":{"name":"length"}}],
+               "widgets_values":["test",608,352,124]},
+              {"id":15,"type":"CreateVideo","inputs":[
+                {"name":"images","type":"IMAGE","link":16},
+                {"name":"audio","type":"AUDIO","link":None},
+                {"name":"fps","type":"FLOAT","link":None,"widget":{"name":"fps"}}],
+               "widgets_values":[24.0]}
+            ],
+            "links":[[3,2,0,8,0,"CLIP"],[4,4,0,8,1,"VAE"],[16,14,0,15,0,"IMAGE"]]
+          }
+          api=conv(ui)
+          assert api["1"]["inputs"]["unet_name"]=="minimax_h3_fl2va_pruned_w4a8_mixed.safetensors"
+          assert api["8"]["inputs"]["width"]==608 and api["8"]["inputs"]["height"]==352
+          assert api["8"]["inputs"]["length"]==124
+          assert api["15"]["inputs"]["fps"]==24.0 and "audio" not in api["15"]["inputs"]
+          watcher=Path("pc-relay/bazor_github_watcher.py").read_text(encoding="utf-8")
+          assert "[bazor-hotfix:h3-ui-api]" in watcher
+          assert "_run_h3_converter_hotfix" in watcher
+          print("H3 UI-to-API hotfix regression OK")
           PY
       - name: Studio workflows audit regression
         run: |
