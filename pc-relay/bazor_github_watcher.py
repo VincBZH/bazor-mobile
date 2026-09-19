@@ -783,10 +783,10 @@ def _run_registry_task(task_id):
         _task_update_mobile(project,task,"BLOCKED",detail)
         return {"ok":False,"task_status":"BLOCKED","error":"dependencies_not_done","detail":detail}
 
-    studio_p0_fast=(project.get("id")=="simple-studio" and task.get("priority")=="P0")
+    studio_p0_fast=(project.get("id") in ("simple-studio","ai-room") and task.get("priority")=="P0")
     _task_update_mobile(
         project,task,"RUNNING",
-        "Tâche Studio P0 locale démarrée • Ollama + Action Engine"
+        "Tâche P0 locale démarrée • Ollama + Action Engine"
         if studio_p0_fast else
         "Tâche autonome démarrée • secondes lectures Mammouth en cours"
     )
