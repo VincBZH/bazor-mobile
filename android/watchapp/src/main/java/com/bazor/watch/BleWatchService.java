@@ -17,20 +17,25 @@ import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.provider.CalendarContract;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class BleWatchService extends Service {
@@ -39,7 +44,10 @@ public class BleWatchService extends Service {
     public static final String ACTION_STOP = "com.bazor.watch.STOP";
 
     private static final String CHANNEL = "bazor_watch_link";
+    private static final String AGENDA_CHANNEL = "bazor_agenda";
     private static final int NOTIF_ID = 7001;
+    private static final int AGENDA_TODAY_ID = 7101;
+    private static final int AGENDA_TOMORROW_ID = 7102;
     private static final long LOST_AFTER_MS = 10_000L;
     private static final long CANDIDATE_TTL_MS = 30_000L;
 
@@ -56,6 +64,7 @@ public class BleWatchService extends Service {
     private boolean lowLatency = false;
     private boolean outageOpen = false;
     private long lastPublish = 0L;
+    private long lastAgendaCheck = 0L;
 
     private final ScanCallback callback = new ScanCallback() {
         @Override public void onScanResult(int callbackType, ScanResult result) { handleResult(result); }
@@ -104,6 +113,7 @@ public class BleWatchService extends Service {
         @Override public void run() {
             evaluateLink();
             publishCandidates();
+            checkAgendaReminders();
             handler.postDelayed(this, 1000L);
         }
     };
@@ -392,9 +402,118 @@ public class BleWatchService extends Service {
             NotificationChannel channel = new NotificationChannel(
                 CHANNEL, "BAZOR Watch", NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("Surveillance locale des micro-coupures Bluetooth.");
+
+            NotificationChannel agenda = new NotificationChannel(
+                AGENDA_CHANNEL, "BAZOR Agenda", NotificationManager.IMPORTANCE_DEFAULT);
+            agenda.setDescription("Résumé aujourd’hui / demain destiné au téléphone et à la montre.");
+
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm != null) nm.createNotificationChannel(channel);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
+                nm.createNotificationChannel(agenda);
+            }
         }
+    }
+
+    private void checkAgendaReminders() {
+        long nowMs = System.currentTimeMillis();
+        if (nowMs - lastAgendaCheck < 60_000L) return;
+        lastAgendaCheck = nowMs;
+
+        if (!prefs.getBoolean("agendaEnabled", false)) return;
+        if (checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) return;
+
+        Calendar now = Calendar.getInstance();
+        int hour = now.get(Calendar.HOUR_OF_DAY);
+        int morningHour = prefs.getInt("agendaMorningHour", 8);
+        int eveningHour = prefs.getInt("agendaEveningHour", 20);
+        String key = new SimpleDateFormat("yyyyMMdd", Locale.FRANCE).format(now.getTime());
+
+        if (hour >= morningHour && hour < 12 &&
+            !key.equals(prefs.getString("agendaTodaySent", ""))) {
+            sendAgendaNotification(0, "Aujourd’hui", AGENDA_TODAY_ID);
+            prefs.edit().putString("agendaTodaySent", key).apply();
+        }
+
+        if (hour >= eveningHour && hour < 23 &&
+            !key.equals(prefs.getString("agendaTomorrowSent", ""))) {
+            sendAgendaNotification(1, "Demain", AGENDA_TOMORROW_ID);
+            prefs.edit().putString("agendaTomorrowSent", key).apply();
+        }
+    }
+
+    private void sendAgendaNotification(int dayOffset, String label, int notificationId) {
+        String summary = loadAgendaSummary(dayOffset);
+
+        Intent open = new Intent(this, MainActivity.class);
+        PendingIntent pi = PendingIntent.getActivity(
+            this, notificationId, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? new Notification.Builder(this, AGENDA_CHANNEL)
+            : new Notification.Builder(this);
+
+        Notification notification = b
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("BAZOR Agenda • " + label)
+            .setContentText(summary.replace("\n", " • "))
+            .setStyle(new Notification.BigTextStyle().bigText(summary))
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .build();
+
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm != null) nm.notify(notificationId, notification);
+    }
+
+    private String loadAgendaSummary(int dayOffset) {
+        Calendar start = Calendar.getInstance();
+        start.add(Calendar.DAY_OF_YEAR, dayOffset);
+        start.set(Calendar.HOUR_OF_DAY, 0);
+        start.set(Calendar.MINUTE, 0);
+        start.set(Calendar.SECOND, 0);
+        start.set(Calendar.MILLISECOND, 0);
+
+        Calendar end = (Calendar) start.clone();
+        end.add(Calendar.DAY_OF_YEAR, 1);
+
+        String[] projection = new String[] {
+            CalendarContract.Instances.TITLE,
+            CalendarContract.Instances.BEGIN,
+            CalendarContract.Instances.ALL_DAY
+        };
+
+        StringBuilder out = new StringBuilder();
+        int count = 0;
+        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.FRANCE);
+
+        try (Cursor cursor = CalendarContract.Instances.query(
+            getContentResolver(), projection, start.getTimeInMillis(), end.getTimeInMillis())) {
+            if (cursor != null) {
+                int titleCol = cursor.getColumnIndex(CalendarContract.Instances.TITLE);
+                int beginCol = cursor.getColumnIndex(CalendarContract.Instances.BEGIN);
+                int allDayCol = cursor.getColumnIndex(CalendarContract.Instances.ALL_DAY);
+
+                while (cursor.moveToNext() && count < 6) {
+                    String title = titleCol >= 0 ? cursor.getString(titleCol) : "";
+                    long begin = beginCol >= 0 ? cursor.getLong(beginCol) : 0L;
+                    boolean allDay = allDayCol >= 0 && cursor.getInt(allDayCol) != 0;
+                    if (title == null || title.trim().isEmpty()) title = "(Sans titre)";
+
+                    if (count > 0) out.append("\n");
+                    out.append(allDay ? "Journée" : timeFmt.format(begin))
+                        .append(" — ").append(title.trim());
+                    count++;
+                }
+            }
+        } catch (Exception e) {
+            return "Agenda indisponible";
+        }
+
+        if (count == 0) return "Rien de prévu.";
+        if (count >= 6) out.append("\n…");
+        return out.toString();
     }
 
     private Notification notification(String text) {
