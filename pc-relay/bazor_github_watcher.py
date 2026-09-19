@@ -831,10 +831,92 @@ def _run_airoom_p0_001_deterministic(project, task):
     except Exception as exc:
         return {"ok":False,"task_status":"BLOCKED","error":"airoom_deterministic_exception","detail":type(exc).__name__+": "+str(exc)[:500]}
 
+def _run_airoom_p0_002_deterministic(project, task):
+    """Valide et relance le runtime ROOM 8765 avec preuves HTTP réelles."""
+    try:
+        from bazor_action_engine import ActionEngine
+        payload_path=os.path.join(ROOT,"room-payload","v2.4","BAZOR_ROOM_V2_4_STANDALONE.py")
+        localapp=os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"),"AppData","Local")
+        room_root=os.path.join(localapp,"BazorAIROOM")
+        app_path=os.path.join(room_root,"app.py")
+        if not os.path.exists(payload_path) or not os.path.exists(app_path):
+            return {"ok":False,"task_status":"BLOCKED","error":"room_files_missing","detail":f"payload={os.path.exists(payload_path)} app={os.path.exists(app_path)}"}
+
+        source=open(payload_path,"r",encoding="utf-8").read()
+        current=open(app_path,"r",encoding="utf-8",errors="strict").read()
+        ar={"ok":True,"applied":False,"reason":"already_conform","preflight":{"ok":True},"tests":[],"files":[]}
+        if source!=current:
+            engine=ActionEngine(os.path.join(ROOT,"pc-relay","BAZOR_DATA"))
+            ar=engine.apply("ai-room",[{"op":"replace","root":"ai_room","path":"app.py","find":current,"replace":source,"expected_count":1}],request_id="AIROOM-P0-002_SYNC")
+            if not ar.get("ok"):
+                return {"ok":False,"task_status":"BLOCKED","error":"runtime_sync_failed","detail":str(ar.get("detail") or ar.get("error") or "")[:500],
+                        "execution":{"mode":"file_changes","action_result":ar}}
+
+        def get(path, timeout=4):
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:8765"+path,timeout=timeout) as r:
+                    raw=r.read()
+                    return {"ok":200 <= r.status < 300,"http":r.status,"body":raw.decode("utf-8","replace")}
+            except Exception as exc:
+                return {"ok":False,"http":None,"error":type(exc).__name__+": "+str(exc)[:240]}
+
+        status=get("/api/status")
+        needs_restart=not status.get("ok")
+        if status.get("ok"):
+            try:
+                sj=json.loads(status.get("body") or "{}")
+                needs_restart=not (sj.get("ok") is True and str(sj.get("version") or "").startswith("2.4"))
+            except Exception:
+                needs_restart=True
+
+        if needs_restart:
+            if os.name=="nt":
+                escaped=app_path.replace("\\","\\\\")
+                ps=f"""Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -and $_.CommandLine -match 'BazorAIROOM\\\\app.py' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}"""
+                subprocess.run(["powershell","-NoProfile","-Command",ps],capture_output=True,text=True,timeout=12,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+                time.sleep(1)
+            log_path=os.path.join(room_root,"room.log")
+            log=open(log_path,"a",encoding="utf-8",buffering=1)
+            flags=(getattr(subprocess,"CREATE_NO_WINDOW",0)|getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0)) if os.name=="nt" else 0
+            subprocess.Popen([sys.executable,app_path],cwd=room_root,stdout=log,stderr=subprocess.STDOUT,creationflags=flags)
+            for _ in range(20):
+                time.sleep(0.5)
+                if get("/health",2).get("ok"):
+                    break
+
+        checks={}
+        for path in ("/","/app.js","/style.css","/api/status","/api/projects","/health"):
+            checks[path]=get(path)
+        try:
+            status_json=json.loads(checks["/api/status"].get("body") or "{}") if checks["/api/status"].get("ok") else {}
+            projects_json=json.loads(checks["/api/projects"].get("body") or "{}") if checks["/api/projects"].get("ok") else {}
+        except Exception as exc:
+            return {"ok":False,"task_status":"BLOCKED","error":"runtime_json_invalid","detail":type(exc).__name__+": "+str(exc)[:240],"runtime_checks":checks}
+
+        root_ok=checks["/"].get("ok") and "BAZOR AI ROOM" in (checks["/"].get("body") or "")
+        json_ok=status_json.get("ok") is True and isinstance(projects_json,dict)
+        assets_ok=checks["/app.js"].get("ok") and checks["/style.css"].get("ok")
+        all_ok=bool(root_ok and json_ok and assets_ok and checks["/health"].get("ok"))
+
+        return {
+            "ok":all_ok,
+            "task_status":"VERIFIE" if all_ok else "BLOCKED",
+            "summary":"Runtime ROOM 8765 validé avec preuves HTTP." if all_ok else "Runtime ROOM 8765 non conforme.",
+            "engine":"runtime_probe",
+            "model":"deterministic",
+            "reviews":[],
+            "runtime_checks":{k:{"ok":v.get("ok"),"http":v.get("http"),"error":v.get("error")} for k,v in checks.items()},
+            "execution":{"mode":"runtime_validation","action_result":ar}
+        }
+    except Exception as exc:
+        return {"ok":False,"task_status":"BLOCKED","error":"airoom_runtime_exception","detail":type(exc).__name__+": "+str(exc)[:500]}
+
 def _run_registry_task(task_id):
     project,task,sub=_registry_task(task_id)
     if str(task.get("id") or "").upper()=="AIROOM-P0-001":
         return _run_airoom_p0_001_deterministic(project,task)
+    if str(task.get("id") or "").upper()=="AIROOM-P0-002":
+        return _run_airoom_p0_002_deterministic(project,task)
     if project.get("go_compatible") is False:
         return {"ok":False,"task_status":"BLOCKED","error":"project_not_executable","detail":project.get("go_reason") or ""}
 
