@@ -844,10 +844,34 @@ def _run_airoom_p0_002_deterministic(project, task):
 
         source=open(payload_path,"r",encoding="utf-8").read()
         current=open(app_path,"r",encoding="utf-8",errors="strict").read()
-        ar={"ok":True,"applied":False,"reason":"already_conform","preflight":{"ok":True},"tests":[],"files":[]}
+        actions=[]
         if source!=current:
+            actions.append({"op":"replace","root":"ai_room","path":"app.py","find":current,"replace":source,"expected_count":1})
+
+        # Synchroniser les catégories canoniques de contexte via Action Engine.
+        payload_context=os.path.join(ROOT,"room-payload","v2.4","context")
+        for rel in ("IDENTITIES.json","index.json"):
+            src=os.path.join(payload_context,rel)
+            dst=os.path.join(room_root,"context",rel)
+            if os.path.exists(src):
+                desired=open(src,"r",encoding="utf-8").read()
+                if os.path.exists(dst):
+                    existing=open(dst,"r",encoding="utf-8",errors="strict").read()
+                    if existing!=desired:
+                        actions.append({"op":"replace","root":"ai_room","path":"context/"+rel,"find":existing,"replace":desired,"expected_count":1})
+                else:
+                    actions.append({"op":"create","root":"ai_room","path":"context/"+rel,"content":desired})
+
+        # CURRENT_STATE contient de l'état vivant : créer seulement s'il est absent.
+        src_state=os.path.join(payload_context,"CURRENT_STATE.json")
+        dst_state=os.path.join(room_root,"context","CURRENT_STATE.json")
+        if os.path.exists(src_state) and not os.path.exists(dst_state):
+            actions.append({"op":"create","root":"ai_room","path":"context/CURRENT_STATE.json","content":open(src_state,"r",encoding="utf-8").read()})
+
+        ar={"ok":True,"applied":False,"reason":"already_conform","preflight":{"ok":True},"tests":[],"files":[]}
+        if actions:
             engine=ActionEngine(os.path.join(ROOT,"pc-relay","BAZOR_DATA"))
-            ar=engine.apply("ai-room",[{"op":"replace","root":"ai_room","path":"app.py","find":current,"replace":source,"expected_count":1}],request_id="AIROOM-P0-002_SYNC")
+            ar=engine.apply("ai-room",actions,request_id="AIROOM-P0-002_SYNC")
             if not ar.get("ok"):
                 return {"ok":False,"task_status":"BLOCKED","error":"runtime_sync_failed","detail":str(ar.get("detail") or ar.get("error") or "")[:500],
                         "execution":{"mode":"file_changes","action_result":ar}}
@@ -887,7 +911,7 @@ def _run_airoom_p0_002_deterministic(project, task):
                     break
 
         checks={}
-        for path in ("/","/app.js","/style.css","/api/status","/api/projects","/health"):
+        for path in ("/","/app.js","/style.css","/api/status","/api/context","/api/projects","/health"):
             checks[path]=get(path)
         try:
             status_json=json.loads(checks["/api/status"].get("body") or "{}") if checks["/api/status"].get("ok") else {}
@@ -898,7 +922,14 @@ def _run_airoom_p0_002_deterministic(project, task):
         root_ok=checks["/"].get("ok") and "BAZOR AI ROOM" in (checks["/"].get("body") or "")
         json_ok=status_json.get("ok") is True and isinstance(projects_json,dict)
         assets_ok=checks["/app.js"].get("ok") and checks["/style.css"].get("ok")
-        all_ok=bool(root_ok and json_ok and assets_ok and checks["/health"].get("ok"))
+        context_ok=False
+        if checks["/api/context"].get("ok"):
+            try:
+                cj=json.loads(checks["/api/context"].get("body") or "{}")
+                context_ok=bool((cj.get("bootstrap") or {}).get("ready_for_chat"))
+            except Exception:
+                context_ok=False
+        all_ok=bool(root_ok and json_ok and assets_ok and context_ok and checks["/health"].get("ok"))
 
         return {
             "ok":all_ok,
