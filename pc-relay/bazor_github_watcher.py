@@ -1206,7 +1206,45 @@ def _process_filebus_repo(repo_name):
                 expected=m_nonce.group(0) if m_nonce else None
             except Exception:
                 expected=None
-            passed=bool(answer.strip()) and (not expected or expected in answer)
+            def _provider_success(payload, target_name):
+                if not isinstance(payload, dict):
+                    return False
+                # Le wrapper /api/v1/task peut rester ok=True alors que le provider a échoué.
+                # On exige donc un succès explicite du moteur réel.
+                if target_name == "mammouth":
+                    nested = payload.get("mammouth")
+                    if isinstance(nested, dict):
+                        return nested.get("ok") is True and nested.get("content_valid", True) is not False
+                    # Certains chemins task renvoient le provider à plat.
+                    if payload.get("provider") == "mammouth":
+                        return payload.get("ok") is True and payload.get("content_valid", True) is not False
+                    # Réponse async/task enveloppée.
+                    inner = payload.get("result")
+                    if isinstance(inner, dict):
+                        nested = inner.get("mammouth")
+                        if isinstance(nested, dict):
+                            return nested.get("ok") is True and nested.get("content_valid", True) is not False
+                        if inner.get("provider") == "mammouth":
+                            return inner.get("ok") is True and inner.get("content_valid", True) is not False
+                    return False
+                if target_name == "ollama":
+                    nested = payload.get("ollama")
+                    if isinstance(nested, dict):
+                        return nested.get("ok") is True
+                    if payload.get("provider") == "ollama":
+                        return payload.get("ok") is True
+                    inner = payload.get("result")
+                    if isinstance(inner, dict):
+                        nested = inner.get("ollama")
+                        if isinstance(nested, dict):
+                            return nested.get("ok") is True
+                        if inner.get("provider") == "ollama":
+                            return inner.get("ok") is True
+                    return False
+                return False
+
+            provider_ok=_provider_success(result,target)
+            passed=provider_ok and bool(answer.strip()) and (not expected or expected in answer)
             mark=FILEBUS_MARK if passed else FILEBUS_BLOCKED_MARK
             status="VERIFIE" if passed else "BLOCKED"
             reply=(
@@ -1215,6 +1253,7 @@ def _process_filebus_repo(repo_name):
                 "TARGET: "+target+"\n"
                 "FILE: bridge/messages/"+name+"\n"
                 "STATUS: "+status+"\n"
+                +"PROVIDER_OK: "+("true" if provider_ok else "false")+"\n"
                 +(("EXPECTED_NONCE: "+expected+"\n") if expected else "")
                 +"\n"+answer
             )
