@@ -283,3 +283,15 @@ Règle de récupération :
 fichier/message incomplet, handoff absent, crash, timeout, réponse provider vide ou état incohérent => `DEFAULT_RECOVERY`, incident horodaté, pas de `DONE`, retry transitoire unique, puis changement de provider ou mise en file d'attente.
 
 GitHub reste un bus de coordination et de preuve ; aucun shell/exec/eval arbitraire reçu depuis GitHub n'est autorisé.
+
+
+<!-- BAZOR_VERSION:BAZOR AI ROOM TRIO::2026.09.19.1 -->
+## BAZOR AI ROOM TRIO — GPT • Ollama • Mammouth
+
+- Nom officiel: **BAZOR AI ROOM TRIO — GPT • Ollama • Mammouth**.
+- Un seul canal utilisateur; aucune copie manuelle entre IA.
+- Identités strictes: GPT=coordinateur/arbitre, Ollama=local/technique, Mammouth=seconde lecture externe, BAZOR Core=orchestration/sécurité.
+- Bootstrap contexte obligatoire au début de chaque nouvelle conversation/journée: identités, état courant, Encyclopédie, Registry, résumé projet, handoffs FileBus, capacités réelles.
+- Mémoire locale structurée par projet/conversation avec résumé, décisions, faits sourcés, tâches ouvertes et index.
+- À chaque build: Encyclopédie + Registry doivent être mis à jour ensemble avec version, changements, tests, preuves runtime et rollback.
+- Spécification: `bridge/AI_ROOM_TRIO_PROTOCOL.md`.
