@@ -59,14 +59,14 @@ echo [3/5] Fermeture de l'ancien watcher uniquement...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'bazor_github_watcher\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 
-timeout /t 1 /nobreak >nul
+%SystemRoot%\System32\timeout.exe /t 1 /nobreak >nul
 
 echo [4/5] Demarrage watcher corrige...
 if not exist "%ROOT%\pc-relay\BAZOR_DATA\HUB_LOGS" mkdir "%ROOT%\pc-relay\BAZOR_DATA\HUB_LOGS" >nul 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$p=(Get-Command pythonw.exe -ErrorAction SilentlyContinue); if($p){Start-Process -FilePath $p.Source -ArgumentList '"%WATCHER%"' -WorkingDirectory '%ROOT%' -WindowStyle Hidden} else {Start-Process -FilePath 'python.exe' -ArgumentList '"%WATCHER%"' -WorkingDirectory '%ROOT%' -WindowStyle Hidden}" 
 
-timeout /t 4 /nobreak >nul
+%SystemRoot%\System32\timeout.exe /t 4 /nobreak >nul
 
 echo [5/5] Controle processus...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
@@ -82,14 +82,16 @@ for /f %%H in ('git rev-parse --short HEAD') do set "HEADSHA=%%H"
 
 where gh >nul 2>nul
 if not errorlevel 1 (
-  gh issue comment 2 --repo VincBZH/projetWII-ai-relay --body "[BAZOR_VERSION_REPORT]^
-
-project: BAZOR FileBus^
-status: WATCHER_RESTARTED^
-commit: %HEADSHA%^
-runtime: watcher_process_alive^
-next: traitement automatique issues #3/#4 et diagnostic #103^
-note: FileBus non VERIFIE tant que les nonces ne sont pas publies." >nul 2>&1
+  set "REPORT=%TEMP%\bazor_filebus_report_%RANDOM%.txt"
+  >"%REPORT%" echo [BAZOR_VERSION_REPORT]
+  >>"%REPORT%" echo project: BAZOR FileBus
+  >>"%REPORT%" echo status: WATCHER_RESTARTED
+  >>"%REPORT%" echo commit: %HEADSHA%
+  >>"%REPORT%" echo runtime: watcher_process_alive
+  >>"%REPORT%" echo next: traitement automatique issues #3/#4 et diagnostic #103
+  >>"%REPORT%" echo note: FileBus non VERIFIE tant que les nonces ne sont pas publies.
+  gh issue comment 2 --repo VincBZH/projetWII-ai-relay --body-file "%REPORT%" >nul 2>&1
+  del /q "%REPORT%" >nul 2>&1
 )
 
 echo.
@@ -97,5 +99,5 @@ echo [OK] Watcher relance sur commit %HEADSHA%.
 echo [OK] Il doit maintenant traiter #3, #4 et #103 automatiquement.
 echo [INFO] Ne ferme rien d'autre : Core/Studio/ComfyUI n'ont pas ete touches.
 echo.
-timeout /t 8 /nobreak >nul
+%SystemRoot%\System32\timeout.exe /t 8 /nobreak >nul
 exit /b 0
