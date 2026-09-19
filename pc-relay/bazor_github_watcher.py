@@ -24,6 +24,7 @@ LAST_HEAD=None
 HUB_LOG_DIR=os.path.join(ROOT,"pc-relay","BAZOR_DATA","HUB_LOGS")
 CORE_LOG=os.path.join(HUB_LOG_DIR,"core.log")
 WATCHER_LOCK_PORT=8791
+AIROOM_CONTROL_FILE=os.path.join(os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"),"AppData","Local"),"BazorAIROOM","control.json")
 _WATCHER_LOCK=None
 
 def _single_instance():
@@ -1454,6 +1455,133 @@ def _process_filebus_repo(repo_name):
                 pass
             print(f"[BLOQUE FILEBUS] {repo_name}#{issue['number']} {detail}")
 
+def _control_load():
+    try:
+        if not os.path.exists(AIROOM_CONTROL_FILE):
+            return {"request_seq":0,"processed_seq":0,"auto_mode":False,"angry_mode":False,"working":False}
+        data=json.load(open(AIROOM_CONTROL_FILE,"r",encoding="utf-8"))
+        return data if isinstance(data,dict) else {}
+    except Exception:
+        return {}
+
+def _control_save(data):
+    try:
+        os.makedirs(os.path.dirname(AIROOM_CONTROL_FILE),exist_ok=True)
+        tmp=AIROOM_CONTROL_FILE+".tmp"
+        with open(tmp,"w",encoding="utf-8") as h:
+            json.dump(data,h,ensure_ascii=False,indent=2)
+        os.replace(tmp,AIROOM_CONTROL_FILE)
+        return True
+    except Exception as exc:
+        print("[CONTROL WARN]",type(exc).__name__,str(exc)[:240])
+        return False
+
+def _control_heartbeat(extra=None):
+    data=_control_load()
+    data["watcher_last_seen_epoch"]=int(time.time())
+    data["watcher_last_seen"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+    data["watcher_head"]=LAST_HEAD or (_git("rev-parse","HEAD").stdout.strip()[:12] if os.path.exists(os.path.join(ROOT,".git")) else None)
+    if isinstance(extra,dict):
+        data.update(extra)
+    _control_save(data)
+
+def _control_next_airoom_task():
+    try:
+        reg=json.load(open(os.path.join(ROOT,"bazor_registry.json"),"r",encoding="utf-8"))
+        project=next((p for p in reg.get("projects",[]) if p.get("id")=="ai-room"),None)
+        if not project:
+            return None
+        _,_,states=_task_state_snapshot("ai-room")
+        ordered=sorted(project.get("tasks") or [],key=lambda x:int(x.get("order") or 9999))
+        for task in ordered:
+            tid=str(task.get("id") or "").upper()
+            st=str((states.get(tid) or {}).get("status") or "")
+            if st in ("DONE","VERIFIE"):
+                continue
+            deps=task.get("dependencies") or []
+            if all(str((states.get(str(d).upper()) or {}).get("status") or "") in ("DONE","VERIFIE") for d in deps):
+                return tid
+        return None
+    except Exception as exc:
+        print("[CONTROL SELECT WARN]",type(exc).__name__,str(exc)[:240])
+        return None
+
+def _control_result_proof(result):
+    if not isinstance(result,dict):
+        return ""
+    if result.get("runtime_checks"):
+        return json.dumps(result.get("runtime_checks"),ensure_ascii=False,separators=(",",":"))[:2200]
+    ex=result.get("execution") or {}
+    ar=ex.get("action_result") or {}
+    if ar:
+        return json.dumps({
+            "preflight":ar.get("preflight"),
+            "files":ar.get("files"),
+            "tests":ar.get("tests"),
+            "backup_dir":ar.get("backup_dir"),
+            "report_file":ar.get("report_file")
+        },ensure_ascii=False,separators=(",",":"))[:2200]
+    return str(result.get("detail") or result.get("error") or "")[:2200]
+
+def _control_process_request():
+    data=_control_load()
+    req=int(data.get("request_seq") or 0)
+    done=int(data.get("processed_seq") or 0)
+    if req<=done or not data.get("go_requested"):
+        return
+    auto=bool(data.get("auto_mode"))
+    data.update({
+        "working":True,
+        "last_action":data.get("request_action") or "go",
+        "started_at":time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "last_result_status":"RUNNING",
+        "last_result_summary":"Exécution réelle démarrée par le panneau de contrôle."
+    })
+    _control_save(data)
+    max_steps=4 if auto else 1
+    steps=0
+    try:
+        while steps<max_steps:
+            tid=_control_next_airoom_task()
+            if not tid:
+                data["last_result_status"]="VERIFIE"
+                data["last_result_summary"]="Aucune tâche AI ROOM restante selon l'état local."
+                data["current_task"]=None
+                break
+            data["current_task"]=tid
+            data["last_task"]=tid
+            data["watcher_last_seen_epoch"]=int(time.time())
+            data["watcher_last_seen"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+            _control_save(data)
+            result=_run_registry_task(tid)
+            steps+=1
+            status=str(result.get("task_status") or ("VERIFIE" if result.get("ok") else "BLOCKED"))
+            data["last_result_status"]=status
+            data["last_result_summary"]=str(result.get("summary") or result.get("detail") or result.get("error") or "")[:1200]
+            data["last_proof"]=_control_result_proof(result)
+            data["last_finished_at"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+            _control_save(data)
+            if status not in ("DONE","VERIFIE"):
+                break
+            if not auto:
+                break
+        if auto and data.get("last_result_status") in ("DONE","VERIFIE"):
+            nxt=_control_next_airoom_task()
+            data["next_task"]=nxt
+            if nxt:
+                data["last_result_summary"]=(data.get("last_result_summary") or "")+" • AUTO TOTAL prêt à enchaîner "+nxt
+    except Exception as exc:
+        data["last_result_status"]="BLOCKED"
+        data["last_result_summary"]=type(exc).__name__+": "+str(exc)[:1000]
+        data["last_proof"]=data["last_result_summary"]
+    finally:
+        data["processed_seq"]=req
+        data["go_requested"]=False
+        data["working"]=False
+        data["watcher_last_seen_epoch"]=int(time.time())
+        data["watcher_last_seen"]=time.strftime("%Y-%m-%dT%H:%M:%S")
+        _control_save(data)
+
 def answer_text(result):
     for section in ("mammouth","ollama"):
         o=result.get(section) or {}
@@ -1501,6 +1629,8 @@ while True:
     try:
         safe_update()
         ensure_core_alive()
+        _control_heartbeat()
+        _control_process_request()
         _process_filebus_repo(COORD_REPO)
         try:
             issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
