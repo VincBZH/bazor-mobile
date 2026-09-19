@@ -12,6 +12,7 @@ MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
 TASK_MARK="[BAZOR-TASK-DONE]"
 QUALIFY_MARK="[BAZOR-QUALIFY-DONE]"
 CERTIFY_MARK="[BAZOR-CERTIFY-DONE]"
+H3_AUDIT_MARK="[BAZOR-H3-AUDIT-DONE]"
 ROOT=os.path.abspath(os.path.join(os.path.dirname(__file__),".."))
 PENDING_RESTART_FILE=os.path.join(ROOT,"pc-relay","BAZOR_DATA","pending_core_restart.flag")
 LAST_HEAD=None
@@ -716,6 +717,22 @@ def _run_studio_certified_test():
         return {"ok":False,"returncode":97,"stdout":"","stderr":type(exc).__name__+": "+str(exc)}
 
 
+def _run_h3_connection_audit():
+    script=os.path.join(ROOT,"pc-relay","bazor_h3_connection_audit.py")
+    if not os.path.exists(script):
+        return {"ok":False,"error":"audit_missing"}
+    flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
+    try:
+        cp=subprocess.run([sys.executable,script],cwd=ROOT,capture_output=True,text=True,encoding="utf-8",errors="replace",timeout=180,creationflags=flags)
+    except Exception as exc:
+        return {"ok":False,"error":type(exc).__name__,"detail":str(exc)[:800]}
+    latest=os.path.join(ROOT,"pc-relay","BAZOR_DATA","H3_CONNECTION_AUDIT","latest.json")
+    try:
+        data=json.load(open(latest,"r",encoding="utf-8"))
+    except Exception as exc:
+        return {"ok":False,"error":"report_unreadable","detail":str(exc)[:800],"stdout":cp.stdout[-3000:],"stderr":cp.stderr[-2000:]}
+    return {"ok":cp.returncode==0,"report":data,"stdout":cp.stdout[-3000:],"stderr":cp.stderr[-2000:]}
+
 def answer_text(result):
     for section in ("mammouth","ollama"):
         o=result.get(section) or {}
@@ -752,6 +769,40 @@ while True:
                     reply=DIAG_MARK+"\n\n"+diagnostic_summary(force_usb=("usb" in body),task_smoke=("task-smoke" in body or "task smoke" in body))
                     gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     print(f"[OK DIAG] #{issue['number']} diagnostic retourne dans GitHub.")
+                    continue
+                if title.startswith("[bazor-h3-audit]"):
+                    if H3_AUDIT_MARK in comments:
+                        continue
+                    result=_run_h3_connection_audit()
+                    report=result.get("report") or {}
+                    workflows=report.get("workflows") or []
+                    bad=sum(len(x.get("bad_values") or []) for x in workflows)
+                    dims=sum(len(x.get("dimensions") or []) for x in workflows)
+                    refs=report.get("active_refs") or []
+                    lines=[
+                        H3_AUDIT_MARK,"","**BAZOR H3 — audit connexions**","",
+                        "Statut: "+("PASS" if result.get("ok") else "FAIL"),
+                        f"Workflows H3: {len(workflows)}",
+                        f"Valeurs loader invalides trouvées dans workflow: {bad}",
+                        f"Champs dimensions détectés: {dims}",
+                        f"Fichiers Studio liés: {len(refs)}",""
+                    ]
+                    for wf in workflows[:5]:
+                        lines.append("Workflow: "+str(wf.get("path")))
+                        for x in wf.get("bad_values") or []:
+                            lines.append("  BAD "+str(x.get("input"))+": "+str(x.get("bad"))+" -> "+str(x.get("replacement"))+" @ node "+str(x.get("node_id")))
+                        for x in (wf.get("dimensions") or [])[:12]:
+                            lines.append("  DIM node "+str(x.get("node_id"))+" "+str(x.get("class_type"))+"."+str(x.get("input"))+"="+str(x.get("value")))
+                    for rf in refs[:12]:
+                        lines.append("REF "+str(rf.get("path")))
+                        for ln in (rf.get("lines") or [])[:8]:
+                            lines.append("  L"+str(ln.get("line"))+": "+str(ln.get("text")))
+                    if result.get("stderr"):
+                        lines += ["","stderr:",str(result.get("stderr"))[-1500:]]
+                    try:
+                        gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","\n".join(lines)[:12000]])
+                    except Exception:
+                        pass
                     continue
                 if title.startswith("[bazor-certify:studio]"):
                     if CERTIFY_MARK in comments:
