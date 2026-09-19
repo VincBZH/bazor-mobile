@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
-VERSION="3.0.0-beta.1"
+VERSION="3.0.0-beta.2"
 ROOT=Path(__file__).resolve().parent
 STATE=ROOT/"state.json"
 PROJECTS=ROOT/"projects.json"
