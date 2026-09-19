@@ -4,16 +4,20 @@ from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
-VERSION="2.4.1"
+VERSION="2.4.2"
 ROOT=Path(__file__).resolve().parent
 STATE=ROOT/"state.json"
 PROJECTS=ROOT/"projects.json"
 INCIDENTS=ROOT/"incidents"
+CONTEXT=ROOT/"context"
+IDENTITIES=CONTEXT/"IDENTITIES.json"
+CURRENT_STATE=CONTEXT/"CURRENT_STATE.json"
+CONTEXT_INDEX=CONTEXT/"index.json"
 
 HTML=r'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BAZOR AI ROOM</title>
 <style>
 :root{font-family:Inter,Segoe UI,Arial,sans-serif;background:#07101d;color:#eaf4ff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#10284b 0,#07101d 45%,#040912 100%);min-height:100vh}header{display:flex;justify-content:space-between;gap:18px;align-items:center;padding:26px 30px;border-bottom:1px solid #1b416b;background:#07101ddd;position:sticky;top:0}h1{margin:0;font-size:24px}h1 span{font-size:13px;color:#72d0ff}header p{margin:5px 0 0;color:#91a9c7}.pill{border:1px solid #2c649b;border-radius:999px;padding:9px 13px}main{max-width:1160px;margin:22px auto;padding:0 18px 50px;display:grid;gap:16px}.panel{border:1px solid #1b416b;border-radius:18px;background:#0b1728ee;padding:18px;box-shadow:0 15px 35px #0005}.head{display:flex;justify-content:space-between;align-items:center;gap:14px}.head h2{margin:0 0 14px;font-size:18px}.eng{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card,.project{padding:15px;border:1px solid #1c3d65;border-radius:13px;background:#09182a}.ok{color:#77efa7}.bad{color:#ff8f8f}.unknown{color:#ffd67a}.progress{height:10px;border-radius:99px;background:#06101d;overflow:hidden;border:1px solid #17395f}.progress div{height:100%;background:linear-gradient(90deg,#35a7ff,#80e8ff);width:0}.router{display:grid;grid-template-columns:220px 180px 1fr;gap:10px}select,button{background:#0a213a;color:#eef7ff;border:1px solid #2a598b;border-radius:10px;padding:10px}button{background:#0d568b;font-weight:700;cursor:pointer}.result{border:1px dashed #2a598b;border-radius:10px;padding:10px}.projects{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.note{color:#9eb4ce}@media(max-width:800px){header{flex-direction:column;align-items:flex-start}.eng,.projects,.router{grid-template-columns:1fr}}
-</style></head><body><header><div><h1>BAZOR AI ROOM <span>V2.4.1</span></h1><p>Vincent × BAZOR Core × GPT × Mammouth × Ollama</p></div><div id="state" class="pill">Démarrage…</div></header>
+</style></head><body><header><div><h1>BAZOR AI ROOM <span>V2.4.2</span></h1><p>Vincent × BAZOR Core × GPT × Mammouth × Ollama</p></div><div id="state" class="pill">Démarrage…</div></header>
 <main>
 <section class="panel"><div class="head"><h2>Moteurs</h2><select id="mode"><option value="auto">AUTO BAZOR</option><option value="gpt">GPT</option><option value="mammouth">Mammouth</option><option value="ollama">Ollama</option></select></div><div class="eng"><div class="card"><b>GPT</b><div id="gpt">…</div><small>coordination / synthèse</small></div><div class="card"><b>Mammouth</b><div id="mammouth">…</div><small>complexité / secours</small></div><div class="card"><b>Ollama</b><div id="ollama">…</div><small>local / gratuit</small></div></div></section>
 <section class="panel"><div class="head"><h2>Projet courant</h2><span id="pct">0%</span></div><div class="progress"><div id="bar"></div></div><div id="project" class="project"></div></section>
@@ -32,6 +36,24 @@ REQUIRED=["message_id","timestamp_local","timestamp_utc","project_id","project_n
 def read_json(path,default):
     try:return json.loads(path.read_text(encoding="utf-8"))
     except Exception:return default
+
+def bootstrap_status():
+    identities=read_json(IDENTITIES,{})
+    current=read_json(CURRENT_STATE,{})
+    index=read_json(CONTEXT_INDEX,{})
+    agents=(identities.get("agents") or {}) if isinstance(identities,dict) else {}
+    required_agents={"gpt","ollama","mammouth","bazor_core"}
+    identities_ok=required_agents.issubset(set(agents.keys()))
+    provenance_ok=isinstance(index,dict) and bool(index.get("required_provenance"))
+    return {
+      "identities_loaded":identities_ok,
+      "current_state_loaded":bool(current),
+      "memory_index_loaded":bool(index),
+      "provenance_schema_loaded":provenance_ok,
+      "ready_for_chat":bool(identities_ok and current and provenance_ok),
+      "agent_ids":sorted(agents.keys()),
+      "protected_categories":index.get("protected_categories",[]) if isinstance(index,dict) else []
+    }
 
 def probe(url,timeout=1.5):
     if not url:return {"available":None,"reason":"not_configured"}
@@ -68,19 +90,20 @@ def incident(kind,message,extra=None):
     return str(p)
 
 class H(BaseHTTPRequestHandler):
-    server_version="BAZORRoom/2.4.1"
+    server_version="BAZORRoom/2.4.2"
     def sendj(self,x,status=200):
         b=json.dumps(x,ensure_ascii=False,indent=2).encode();self.send_response(status);self.send_header("Content-Type","application/json; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b)
     def do_GET(self):
         p=self.path.split("?",1)[0]
         if p=="/":
             b=HTML.encode();self.send_response(200);self.send_header("Content-Type","text/html; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
-        if p=="/api/status":return self.sendj({"ok":True,"version":VERSION,"state":read_json(STATE,{}),"engines":engines()})
+        if p=="/api/status":return self.sendj({"ok":True,"version":VERSION,"state":read_json(STATE,{ ,"bootstrap":bootstrap_status()}),"engines":engines()})
+        if p=="/api/context":return self.sendj({"ok":True,"bootstrap":bootstrap_status(),"current_state":read_json(CURRENT_STATE,{})})
         if p=="/api/projects":return self.sendj(read_json(PROJECTS,{"projects":[]}))
         if p=="/app.js":
-            b=b"// BAZOR AI ROOM 2.4.1 - UI JavaScript is embedded in / for standalone reliability.\n";self.send_response(200);self.send_header("Content-Type","application/javascript; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
+            b=b"// BAZOR AI ROOM 2.4.2 - UI JavaScript is embedded in / for standalone reliability.\n";self.send_response(200);self.send_header("Content-Type","application/javascript; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
         if p=="/style.css":
-            b=b"/* BAZOR AI ROOM 2.4.1 - UI CSS is embedded in / for standalone reliability. */\n";self.send_response(200);self.send_header("Content-Type","text/css; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
+            b=b"/* BAZOR AI ROOM 2.4.2 - UI CSS is embedded in / for standalone reliability. */\n";self.send_response(200);self.send_header("Content-Type","text/css; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b);return
         if p=="/health":return self.sendj({"ok":True,"version":VERSION})
         self.send_error(404)
     def do_POST(self):
