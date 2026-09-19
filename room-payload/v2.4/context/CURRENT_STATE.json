@@ -1,0 +1,26 @@
+{
+  "schema": "bazor.current_state/1.0",
+  "project_id": "bazor-ai-room-v2-lite",
+  "room_core_delivered": false,
+  "trio_ready": false,
+  "task_state": "RUNNING",
+  "product_state": "BUILDING",
+  "bootstrap": {
+    "identities_loaded": false,
+    "rules_loaded": false,
+    "message_contract_loaded": false,
+    "registry_loaded": false,
+    "encyclopedia_loaded": false,
+    "project_context_loaded": false,
+    "conversation_context_loaded": false,
+    "runtime_capabilities_checked": false
+  },
+  "provenance": {
+    "source_agent": "gpt",
+    "source_file": "bridge/BAZOR_AI_ROOM_TRIO_SPEC.md",
+    "source_message_id": null,
+    "verified_by": [],
+    "confidence": "unknown",
+    "last_verified_at": null
+  }
+}
