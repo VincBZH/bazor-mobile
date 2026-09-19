@@ -1404,6 +1404,14 @@ def _task_retry_allowed(issue_number, task_id, comments):
     state=_task_retry_load()
     key="issue#"+str(issue_number)+":"+str(task_id).upper()
     slot=state.get(key) or {}
+    try:
+        current_head=(_git("rev-parse","HEAD").stdout or "").strip()
+    except Exception:
+        current_head=""
+    # Un correctif de code change la situation: l'ancien backoff ne doit pas
+    # retarder le premier essai avec le nouveau runtime.
+    if current_head and slot.get("head") and slot.get("head")!=current_head:
+        return True
     attempts=int(slot.get("attempts") or 0)
     next_epoch=int(slot.get("next_epoch") or 0)
     if attempts>=5:
@@ -1415,13 +1423,19 @@ def _task_retry_note(issue_number, task_id, task_status):
         return
     state=_task_retry_load()
     key="issue#"+str(issue_number)+":"+str(task_id).upper()
+    try:
+        current_head=(_git("rev-parse","HEAD").stdout or "").strip()
+    except Exception:
+        current_head=""
     if str(task_status or "").upper() in ("DONE","VERIFIE"):
-        state[key]={"attempts":0,"next_epoch":0,"last":"success"}
+        state[key]={"attempts":0,"next_epoch":0,"last":"success","head":current_head}
     elif str(task_status or "").upper() in ("ANALYSE_SEULE","BLOCKED"):
         prev=state.get(key) or {}
-        attempts=int(prev.get("attempts") or 0)+1
+        # Après un nouveau commit chargé, on repart à une première tentative
+        # plutôt que d'hériter des échecs de l'ancienne version.
+        attempts=(0 if current_head and prev.get("head")!=current_head else int(prev.get("attempts") or 0))+1
         delay=min(1800,90*(2**max(0,attempts-1)))
-        state[key]={"attempts":attempts,"next_epoch":int(time.time())+delay,"last":str(task_status)}
+        state[key]={"attempts":attempts,"next_epoch":int(time.time())+delay,"last":str(task_status),"head":current_head}
     _task_retry_save(state)
 
 def _filebus_retry_load():
