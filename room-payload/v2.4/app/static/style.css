@@ -1,0 +1,16 @@
+:root{font-family:Inter,Segoe UI,Arial,sans-serif;background:#08101d;color:#eaf4ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#10284b 0,#08101d 42%,#050a12 100%);min-height:100vh}
+header{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:28px 32px;border-bottom:1px solid #1c3558;background:rgba(5,10,18,.76);backdrop-filter:blur(12px);position:sticky;top:0;z-index:2}
+h1{margin:0;font-size:24px;letter-spacing:.4px}h1 span{color:#63c7ff;font-size:14px}header p{margin:6px 0 0;color:#93a9c5}
+main{max-width:1180px;margin:24px auto;padding:0 20px 50px;display:grid;gap:18px}
+.panel{background:rgba(12,24,42,.92);border:1px solid #1b416b;border-radius:18px;padding:20px;box-shadow:0 14px 36px rgba(0,0,0,.23)}
+.panelTitle{display:flex;justify-content:space-between;align-items:center;gap:16px}.panelTitle h2{margin:0 0 14px;font-size:18px}
+.pill{padding:9px 13px;border:1px solid #275a8f;border-radius:999px;background:#0b1e34}
+.engines,.projects{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.engines article,.projectCard,.projects article{border:1px solid #1a3b62;border-radius:14px;padding:16px;background:#0a182a}
+.engines h3{margin:0 0 8px}.engines small{color:#8198b5}.ok{color:#75f0a3}.bad{color:#ff8f8f}.unknown{color:#ffd67c}
+select,button{border:1px solid #2b5988;border-radius:10px;background:#0b2038;color:#eef7ff;padding:10px 12px}
+button{cursor:pointer;background:#0d4f80;font-weight:700}button:hover{background:#12649e}
+.progress{height:11px;background:#07111f;border-radius:999px;overflow:hidden;border:1px solid #16375d}.progress>div{height:100%;width:0;background:linear-gradient(90deg,#32a3ff,#7ce7ff);transition:width .3s}
+.projectCard{margin-top:14px}.router{display:grid;grid-template-columns:220px 180px 1fr;gap:12px;align-items:center}.result{min-height:42px;border:1px dashed #2b5685;border-radius:10px;padding:10px 12px}
+.projects article h3{margin:0 0 8px}.projects article p{margin:5px 0;color:#9fb5d0}.incident{border-color:#6f5521}
+@media(max-width:800px){header{align-items:flex-start;flex-direction:column}.engines,.projects{grid-template-columns:1fr}.router{grid-template-columns:1fr}}
