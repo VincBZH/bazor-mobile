@@ -525,9 +525,29 @@ public class MainActivity extends Activity {
             .build();
 
         nm.notify(C28_TEST_NOTIFICATION_ID, n);
+
+        boolean skypeRelay = relayToC28(
+            "BAZOR TEST C28",
+            "Si ce message apparaît sur la montre, le relais Skype/Da Fit fonctionne.");
+
         if (agendaResult != null) {
-            agendaResult.setText(
-                "Notification TEST C28 envoyée au téléphone. Si elle reste uniquement sur le téléphone, active « Autres / Others » dans Da Fit > Notifications.");
+            agendaResult.setText(skypeRelay
+                ? "Test envoyé par BAZOR + canal Skype de compatibilité. Dans Da Fit, active Skype dans les applications de notifications si nécessaire."
+                : "Test BAZOR envoyé, mais le relais Skype de compatibilité n’est pas installé.");
+        }
+    }
+
+    private boolean relayToC28(String title, String text) {
+        try {
+            getPackageManager().getPackageInfo("com.skype.raider", 0);
+            Intent relay = new Intent("com.bazor.montre.RELAY_TO_C28");
+            relay.setPackage("com.skype.raider");
+            relay.putExtra("title", title == null ? "BAZOR" : title);
+            relay.putExtra("text", text == null ? "" : text);
+            sendBroadcast(relay);
+            return true;
+        } catch (Exception ignored) {
+            return false;
         }
     }
 
