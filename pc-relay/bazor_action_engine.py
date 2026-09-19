@@ -132,8 +132,15 @@ class ActionEngine:
                 "the","and","with","from","this","that","task","bazor","done"
             }
         }
-        routing_terms = ("t2i","i2i","t2v","i2v","source_media","workflow","requested_mode","effective_mode","route")
-        routing_focus = sum(1 for x in routing_terms if x in focus_text) >= 2
+        routing_terms = (
+            "t2i","i2i","t2v","i2v","source_media","workflow",
+            "requested_mode","effective_mode","route",
+            "text_to_image","text-to-image","image_to_image","image-to-image",
+            "text_to_video","text-to-video","image_to_video","image-to-video",
+            "generation_mode","input_image","source_image"
+        )
+        force_routing = "studio-p0-012" in focus_text
+        routing_focus = force_routing or sum(1 for x in routing_terms if x in focus_text) >= 2
         started = time.monotonic()
         deadline = started + MAX_CONTEXT_SCAN_SECONDS
         scanned_files = 0
@@ -207,8 +214,22 @@ class ActionEngine:
                         # déterministe: un script récent de checkpoint/model setup ne doit
                         # plus pouvoir devenir le contexte principal par simple récence.
                         if routing_focus:
-                            noise_name = any(x in rel_text for x in ("checkpoint","model_setup","download_model","repair_model"))
-                            if matched_routing == 0 or (noise_name and matched_routing < 2):
+                            noise_name = any(x in rel_text for x in (
+                                "checkpoint","model_setup","model_cli","download_model","repair_model",
+                                "reparermodeles","reparer_modeles","reparer_studio","reparerstudio",
+                                "backups/","backup/"
+                            ))
+                            semantic_generation = any(x in sample or x in rel_text for x in (
+                                "generate","generation","prompt","source image","input image",
+                                "image_to_video","image-to-video","text_to_video","text-to-video",
+                                "image_to_image","image-to-image","text_to_image","text-to-image",
+                                "comfyui","workflow","requested_mode","effective_mode"
+                            ))
+                            # STUDIO-P0-012: fail closed on model/checkpoint/repair/backup code.
+                            # A candidate needs a real routing/generation signal, not recency.
+                            if noise_name:
+                                continue
+                            if matched_routing == 0 and not semantic_generation:
                                 continue
 
                         for token in focus_tokens:
