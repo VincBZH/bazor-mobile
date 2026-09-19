@@ -1,0 +1,81 @@
+{
+  "schema_version": "2.3-lite",
+  "from": "gpt",
+  "to": [
+    "bazor_core",
+    "mammouth",
+    "ollama",
+    "gpt"
+  ],
+  "project": "bazor-ai-room-v2-lite",
+  "project_version": "2.3-lite",
+  "bazor_version": "2.3-lite",
+  "status": "partial",
+  "progress_percent": 40,
+  "summary": "Ajout de la machine d'état de livraison: PROTOCOL_READY -> CODE_PATCHED -> CI_PASS -> RUNTIME_PASS -> DELIVERED, avec gates stricts et blocage automatique si une preuve manque.",
+  "files_changed": [
+    "bazor_room_v2/rules.json",
+    "bazor_room_v2/state.json",
+    "bazor_room_v2/message_contract.json",
+    "bazor_room_v2/MESSAGE_TEMPLATE.md",
+    "bazor_room_v2/handoff.json"
+  ],
+  "tests": [
+    {
+      "name": "github_message_contract_defined",
+      "result": "PASS"
+    },
+    {
+      "name": "missing_instruction_routes_to_recovery",
+      "result": "PASS"
+    },
+    {
+      "name": "project_version_progress_required",
+      "result": "PASS"
+    },
+    {
+      "name": "runtime_validator_local",
+      "result": "NOT_RUN"
+    },
+    {
+      "name": "delivery_state_machine_defined",
+      "result": "PASS"
+    },
+    {
+      "name": "downstream_stage_gates_defined",
+      "result": "PASS"
+    }
+  ],
+  "decisions": [
+    "Tout message de coordination GitHub doit contenir [BAZOR_MESSAGE]...[/BAZOR_MESSAGE].",
+    "Projet, version, tâche, statut et progression sont obligatoires.",
+    "handoff_logic est obligatoire.",
+    "Message incomplet/mal formé => DEFAULT_RECOVERY.",
+    "DEFAULT_RECOVERY journalise heure, version, projet, tâche, ref fichier/commentaire, commit, provider/modèle, erreur et dernière étape réussie.",
+    "DONE interdit sans tests/preuves valides.",
+    "La présence du protocole ne prouve jamais la livraison du produit.",
+    "Les étapes aval sont bloquées tant que leurs prérequis ne sont pas prouvés.",
+    "DELIVERED est impossible sans runtime + preuves + handoff/message valides."
+  ],
+  "known_issues": [
+    "Le validateur doit encore être implémenté dans le runtime local AI ROOM.",
+    "Les IA externes ne peuvent être techniquement forcées que par rejet/normalisation de leurs messages non conformes côté BAZOR."
+  ],
+  "next_step": "Implémenter ces gates dans le runtime local AI ROOM puis vérifier que les états se mettent à jour automatiquement selon preuves réelles.",
+  "handoff_logic": [
+    "IF github_message_block_missing == true OR required_field_missing == true THEN status=RECOVERING AND route_to=DEFAULT_RECOVERY",
+    "IF project_ref_missing == true OR version_missing == true OR progress_missing == true THEN github_message_valid=false",
+    "IF github_message_valid == false THEN log incident with timestamp/version/project/task/ref/error AND do_not_mark_done",
+    "IF transient_error == true AND attempt < 1 THEN retry_same_provider_once",
+    "IF identical_error_count >= 2 THEN stop_identical_retry AND try_alternate_provider",
+    "IF alternate_provider_unavailable == true AND ollama_compatible == true THEN route_to=ollama",
+    "IF no_compatible_provider == true THEN status=QUEUED",
+    "IF runtime_test == PASS AND evidence_present == true AND github_message_valid == true THEN advance=true",
+    "IF protocol_ready == true AND code_patched == false THEN delivery_state=PROTOCOL_READY",
+    "IF code_patched == true AND ci_pass == false THEN delivery_state=CODE_PATCHED",
+    "IF ci_pass == true AND runtime_pass == false THEN delivery_state=CI_PASS",
+    "IF runtime_pass == true AND evidence_present == true AND handoff_valid == true AND github_message_valid == true THEN delivery_state=RUNTIME_PASS",
+    "IF all_required_artifacts_verified == true AND runtime_pass == true AND evidence_present == true THEN delivery_state=DELIVERED",
+    "IF prerequisite_missing == true THEN block_downstream_stage"
+  ]
+}
