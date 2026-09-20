@@ -94,6 +94,74 @@ def _scan_file(path, max_hits=36):
         return {"exists": True, "path": path, "error": type(exc).__name__ + ":" + str(exc)[:180]}
 
 
+
+def _context_snippets(path, markers=None, radius=10, max_blocks=16):
+    markers = markers or (
+        "function payload", "const payload", "payload()", "restore", "studio2-draft",
+        "localStorage.getItem", "localStorage.setItem", "formRestored", "async function submit",
+        "function submit", "/api/jobs", "pendingRequest", "selectedResult", "showAsset("
+    )
+    if not os.path.exists(path):
+        return []
+    try:
+        lines = open(path, "r", encoding="utf-8", errors="replace").read().splitlines()
+    except Exception:
+        return []
+    blocks=[]
+    seen=set()
+    low=[x.lower() for x in lines]
+    for marker in markers:
+        m=marker.lower()
+        for i,line in enumerate(low):
+            if m in line:
+                start=max(0,i-radius); end=min(len(lines),i+radius+1)
+                key=(start,end)
+                if key in seen:
+                    continue
+                seen.add(key)
+                block=[]
+                for j in range(start,end):
+                    block.append({"line":j+1,"text":_redact(lines[j])[:1200]})
+                blocks.append({"marker":marker,"start":start+1,"end":end,"lines":block})
+                if len(blocks)>=max_blocks:
+                    return blocks
+    return blocks
+
+
+def _studio_jobs():
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8191/api/jobs", timeout=3.5) as r:
+            raw=r.read(512000)
+        data=json.loads(raw.decode("utf-8","replace"))
+    except Exception as exc:
+        return {"error":type(exc).__name__+":"+_redact(str(exc))[:240]}
+    rows=data
+    if isinstance(data,dict):
+        for key in ("jobs","items","results"):
+            if isinstance(data.get(key),list):
+                rows=data.get(key)
+                break
+    if not isinstance(rows,list):
+        return {"shape":type(rows).__name__,"keys":list(data.keys())[:40] if isinstance(data,dict) else []}
+    out=[]
+    for j in rows[-12:]:
+        if not isinstance(j,dict):
+            continue
+        p=j.get("params") if isinstance(j.get("params"),dict) else {}
+        out.append({
+            "id":j.get("id") or j.get("job_id"),
+            "prompt_id":j.get("prompt_id"),
+            "status":j.get("status") or j.get("state"),
+            "mode":p.get("mode") or j.get("mode"),
+            "prompt":_redact(p.get("prompt") or j.get("prompt"))[:1800],
+            "negative":_redact(p.get("negative") or j.get("negative"))[:900],
+            "asset_id":p.get("asset_id") or j.get("asset_id"),
+            "source_media":p.get("source_media") or j.get("source_media"),
+            "output":j.get("output") or j.get("result") or j.get("media"),
+            "created":j.get("created") or j.get("created_at"),
+        })
+    return out
+
 def _http_probe(url, timeout=2.2):
     started = time.monotonic()
     try:
@@ -319,6 +387,8 @@ def build_report(issue_number, task_id, phase):
         "watcher_head": head,
         "ports": _ports(),
         "studio_probes": probes,
+        "studio_jobs": _studio_jobs(),
+        "frontend_context": _context_snippets(os.path.join(app, "static", "app.js")),
         "comfy": _comfy_history(),
         "files": files,
         "logs": _logs(studio),
@@ -345,6 +415,11 @@ def _markdown(report):
         "- ports: " + json.dumps(report.get("ports") or [], ensure_ascii=False, separators=(",", ":"))[:1800],
         "- Studio probes: " + json.dumps(report.get("studio_probes") or {}, ensure_ascii=False, separators=(",", ":"))[:2200],
         "",
+        "**Studio /api/jobs - params reels**",
+        "~~~json",
+        json.dumps(report.get("studio_jobs") or [], ensure_ascii=False, indent=2)[:4800],
+        "~~~",
+        "",
         "**ComfyUI - jobs recents / prompt reel recu**",
         "~~~json",
         json.dumps(((report.get("comfy") or {}).get("recent") or []), ensure_ascii=False, indent=2)[:5200],
@@ -357,6 +432,11 @@ def _markdown(report):
         for hit in (info.get("hits") or [])[:12]:
             lines.append("  - L" + str(hit.get("line")) + ": " + str(hit.get("text") or "")[:420])
 
+    lines += ["", "**Contexte frontend cible**"]
+    for block in (report.get("frontend_context") or [])[:8]:
+        lines.append("- marker="+str(block.get("marker"))+" lines="+str(block.get("start"))+"-"+str(block.get("end")))
+        for row in (block.get("lines") or []):
+            lines.append("  L"+str(row.get("line"))+": "+str(row.get("text") or "")[:700])
     lines += ["", "**Logs Studio recents**"]
     for row in (report.get("logs") or [])[:4]:
         lines.append("- " + str(row.get("name") or "?") + " size=" + str(row.get("size") or 0))
