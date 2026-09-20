@@ -741,7 +741,7 @@
             "python_targeted": 30,
             "python_regression": 33,
             "javascript_scenarios": 13,
-            "windows_stop_scenarios": "13 isolated scenarios; CI pending; first 10 already passed on Windows PowerShell 5.1"
+            "windows_stop_scenarios": "13 passed in Windows PowerShell 5.1 CI; system interactions mocked"
           },
           "reported_blocker": "Preflight passed, Stop-Process access denied before application file writes. Added standard UAC stop-only helper; runtime not confirmed.",
           "related_tasks": [
@@ -761,7 +761,23 @@
             "Child mode and complete master workflow not delivered"
           ],
           "auto_execute": false,
-          "archive_sha256": "ce6491bf5f0963fe0e05e177ae6dd72f2bad4b774396fc4f5e1b218b86586a30"
+          "archive_sha256": "ce6491bf5f0963fe0e05e177ae6dd72f2bad4b774396fc4f5e1b218b86586a30",
+          "ci_evidence": {
+            "status": "PASSED",
+            "tested_commit": "5ad802628dd05a16c7e60b6400eb4d4e0591afa4",
+            "workflow_url": "https://github.com/VincBZH/bazor-mobile/actions/runs/35513252810",
+            "archive_sha256": "ce6491bf5f0963fe0e05e177ae6dd72f2bad4b774396fc4f5e1b218b86586a30",
+            "installer_sha256": "34f63027ed4a5fddb4d5d72426f3559dac0205329597a78f400c59136c9a4fcd",
+            "python_targeted": 30,
+            "python_regression": 33,
+            "javascript_scenarios": 13,
+            "windows_powershell_51_scenarios": 13,
+            "windows_system_calls": "MOCKED",
+            "uac_real": false,
+            "gpu_real": false,
+            "browser_visual": false,
+            "global_console_hub_gate": "Unchanged launcher assertion fails; no automatic merge"
+          }
         }
       }
     },
