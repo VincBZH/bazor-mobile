@@ -37,8 +37,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 
 if not exist "%ROOT%\pc-relay\BAZOR_DATA\HUB_LOGS" mkdir "%ROOT%\pc-relay\BAZOR_DATA\HUB_LOGS" >nul 2>&1
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$py=Get-Command pythonw.exe -ErrorAction SilentlyContinue; if($py){Start-Process -FilePath $py.Source -ArgumentList '\"%SUPERVISOR%\"' -WorkingDirectory '%ROOT%' -WindowStyle Hidden}else{Start-Process -FilePath 'python.exe' -ArgumentList '\"%SUPERVISOR%\"' -WorkingDirectory '%ROOT%' -WindowStyle Hidden}"
+set "PYRUN=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+if not exist "%PYRUN%" set "PYRUN=python.exe"
+start "" /min "%PYRUN%" "%SUPERVISOR%"
 
 %SystemRoot%\System32\timeout.exe /t 4 /nobreak >nul
 
