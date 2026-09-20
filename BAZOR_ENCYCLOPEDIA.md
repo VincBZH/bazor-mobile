@@ -303,3 +303,12 @@ GitHub reste un bus de coordination et de preuve ; aucun shell/exec/eval arbitra
 Référence canonique de conception : `bridge/BAZOR_AI_ROOM_TRIO_SPEC.md`.
 
 Principes ajoutés : versions séparées (app/protocole/registry/contrat), ports 8765/8775/8776/11434, identités persistantes par `agent_id`, bootstrap canonique, mémoire contextuelle sourcée, statuts unifiés, séparation `ROOM_CORE_DELIVERED` / `TRIO_READY`, récupération autonome bornée et interdiction de `DELIVERED` sans preuves runtime. Toute divergence entre spec et dépôt/runtime doit être déclarée `SPEC_DRIFT`.
+
+
+## Source disponible — Studio Session S2.2, 20 septembre 2026
+
+Handoff GPT : `studio-deliverables/session-s2/HANDOFF.json`. Archive complète, correctif lisible, installateur CMD et rapports dans ce dossier. Application `3.0.5-session-s2.2`. Il s’agit d’un candidat source, pas de la version runtime confirmée du PC.
+
+30 tests Python ciblés + 33 régressions et 13 scénarios JavaScript réussis localement. Dix scénarios Windows simulés sont ajoutés en CI. UAC réelle, génération GPU et rendu navigateur non confirmés. Le retour Windows utilisateur confirme seulement préflight réussi puis accès refusé lors de l’arrêt du Studio, avant écriture applicative. S2.2 ajoute un assistant UAC limité à l’arrêt du seul Studio identifié, et conserve le convertisseur H3 UI/API antérieur.
+
+Ce travail aide P0-001/002/008/009/010/012 sans les marquer DONE. Comparer aux fichiers locaux et au workflow actif ; conserver les garde-fous RESOURCE_PRESSURE. Les plafonds hérités (10 corrections/10 s par clip) ne satisfont pas les critères P1 d’arrêt intelligent et segmentation. Le README détaille les autres limites. Publication documentaire autorisée par Vincent ; aucun déclenchement de shell distant ni déploiement local impliqué.
