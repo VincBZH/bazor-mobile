@@ -177,7 +177,8 @@ def selftest():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--test-only", action="store_true", help="Ne lance rien et n'ouvre pas le navigateur.")
-    ap.add_argument("--force-qualify", action="store_true", help="Refait les 47 tests même si un rapport récent est vert.")
+    ap.add_argument("--force-qualify", action="store_true", help="Refait les tests même si un rapport récent est vert.")
+    ap.add_argument("--beta-open", action="store_true", help="Ouvre la bêta si ComfyUI + Studio répondent, sans exiger la preuve E2E finale.")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
     if os.environ.get("BAZOR_STUDIO_TEST_ONLY","").strip() == "1":
@@ -198,6 +199,18 @@ def main():
     if not (comfy and studio):
         emit("BLOQUE: services requis non prêts.")
         return 2
+
+    if args.beta_open:
+        runtime_ok, runtime = runtime_gate()
+        emit("Contrôle runtime bêta: " + json.dumps(runtime, ensure_ascii=False))
+        if not runtime_ok:
+            emit("BLOQUE: runtime bêta incomplet.")
+            return 2
+        emit("BETA NON CERTIFIÉE: services Studio + ComfyUI opérationnels. Preuve E2E finale encore requise pour livraison.")
+        if not args.test_only:
+            webbrowser.open("http://127.0.0.1:8191/")
+            emit("Bêta Studio ouverte dans le navigateur.")
+        return 0
 
     cached, detail = qualification_cached_ok()
     if args.force_qualify or not cached:
