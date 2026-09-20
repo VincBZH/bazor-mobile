@@ -22,6 +22,7 @@ Le dernier journal nomme `MinimaxHailuo03TextToVideoNode` avec `model.resolution
 - « Préparer pour le modèle » garde la demande d’origine et propose séparément un prompt anglais modifiable via Ollama. Ce prompt est utilisé seulement si la demande et le mode correspondent encore. Une réponse tardive périmée est écartée. La traduction n’est pas une garantie de fidélité visuelle.
 - « Prompt et paramètres du résultat » affiche et exporte les textes réellement présents dans le graphe soumis, la demande, les modèles, la graine, les réglages et le SHA-256 du graphe. Les anciens jobs utilisent leur graphe enregistré ; l’absence de graphe est signalée.
 - Déduction optionnelle par mots-clés pour cinq réglages : corps entier, debout, portrait, noir et blanc, cinématique. Elle ne télécharge pas de modèles, n’installe pas d’extensions et ne constitue pas le routeur maître complet demandé.
+- Les corrections visuelles restent dans le texte envoyé même lorsqu’elles suivent le bloc de styles du navigateur.
 - Les consignes « corps entier », « debout » et « naturel » ne réduisent plus une scène à un seul personnage ou à une seule action. La posture des autres sujets est préservée.
 
 Le workflow image fourni utilise SDXL avec un prompt français ; le résultat visible manque les sujets demandés. Aucun élément ne permet d’affirmer qu’une simple traduction corrigera tous les rendus. Le bouton d’analyse permet de comparer un résultat précis avec la demande ; une création terminée n’est pas automatiquement déclarée conforme.
@@ -78,9 +79,9 @@ La compatibilité de quantification, la version du nœud ClipProj et la mémoire
 
 ## Vérifications effectuées
 
-- 50 tests Python ciblés : références, modèles, adaptation 4B, médias en morceaux, vision, correspondance job/prompt, refus si GPU occupé, installation idempotente, sauvegarde et restauration.
+- 51 tests Python ciblés : références, modèles, adaptation 4B, médias en morceaux, vision, correspondance job/prompt, refus si GPU occupé, installation idempotente, sauvegarde et restauration.
 - 33 tests existants de workflow et API, sur moteur de test. La fixture expose maintenant `/api/show` et deux tests utilisent I2V pour vérifier une entrée image (une référence en T2V est désormais interdite).
-- 20 scénarios JavaScript unitaires : démarrage vierge, sélection explicite, désactivation de l’analyse sans rendu sélectionné, source selon le mode, reset et réponse d’analyse périmée.
+- 21 scénarios JavaScript unitaires : démarrage vierge, sélection explicite, désactivation de l’analyse sans rendu sélectionné, source selon le mode, reset et réponse d’analyse périmée.
 - Syntaxes Python et JavaScript vérifiées.
 - Aucun test de rendu IA réel. Aucun test d’exécution Windows du lanceur PowerShell dans cet environnement Linux.
 - Test navigateur préparé et ajouté à la CI S2.3 : Chromium indisponible localement. Consulter `CI_RESULT.json` dans le dépôt pour son exécution et le commit exact. Les interactions moteur sont simulées ; aucune qualité de rendu IA n’en découle.

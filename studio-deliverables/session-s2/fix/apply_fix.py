@@ -103,6 +103,10 @@ def preserve_converter(original, updated):
 
 def transform_scene_workflows(text):
     if 'BAZOR_SCENE_S23' in text:return text
+    tree=ast.parse(text);node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_prompt_without_browser_suffix')
+    lines=text.splitlines(keepends=True)
+    lines[node.lineno-1:node.end_lineno]=["def _prompt_without_browser_suffix(value):\n    parts=re.split(r'\\n\\s*\\[Style visuel\\]\\s*',str(value or ''),maxsplit=1)\n    base=parts[0].strip()\n    if len(parts)==2:\n        correction=re.search(r'\\n\\s*\\[Correction visuelle BAZOR\\]',parts[1])\n        if correction:base+='\\n\\n'+parts[1][correction.start():].strip()\n    return base\n"]
+    text=''.join(lines)
     text=replace(text,"base = _prompt_without_browser_suffix(p.get('prompt', ''))","base = p.get('prepared_prompt') or _prompt_without_browser_suffix(p.get('prompt', ''))")
     text=replace(text,"    return p\n","    return prompt_options(p,raw)\n")
     text=text.replace('show one adult subject head-to-toe','show every requested subject head-to-toe')
@@ -125,6 +129,8 @@ def transform_scene_studio(text):
     text=text.replace('one concise English visual generation prompt','one faithful English visual generation prompt')
     text=text.replace('Preserve their intent and subjects. ','Preserve every requested subject, their counts, actions, objects, and spatial relationships. Put the requested actors and actions first, background last. Never replace a populated scene with an empty interior. ')
     text=text.replace("'num_ctx':2048,'num_predict':350","'num_ctx':4096,'num_predict':700")
+    text=replace(text,"{'role':'user','content':p['prompt']}]},base=self.ollama,timeout=240)","{'role':'user','content':_prompt_without_browser_suffix(p['prompt'])}]},base=self.ollama,timeout=240)")
+    text=replace(text,'from workflows import parameters, build, choices, select_models, detect_profile, patch_h3_graph','from workflows import parameters, build, choices, select_models, detect_profile, patch_h3_graph, _prompt_without_browser_suffix')
     text=text.replace("'temperature':.5","'temperature':.2")
     text=replace(text,"    @routes.get('/api/workflow/{key}')", "    @routes.get('/api/recipe/{key}')\n    async def recipe(r):\n        key=r.match_info['key'];job=studio.store.get('job',key)\n        if not job:raise ValueError('Création introuvable.')\n        graph=studio.store.get('workflow',key)\n        if not graph:raise ValueError('Workflow de cette création non enregistré.')\n        value=job.get('recipe') or recipe_for(job['params'],graph,{'workflow':'historique enregistré'})\n        return web.json_response(value,headers={'Content-Disposition':'attachment; filename=creation_recipe.json'})\n\n    @routes.get('/api/workflow/{key}')")
     # Import before the CLI creates the app, not after web.run_app.
@@ -132,6 +138,10 @@ def transform_scene_studio(text):
 
 def transform_scene_js(text):
     if 'BAZOR_SCENE_S23' in text:return text
+    text=text.replace('the entire adult subject visible from head to feet','all requested subjects visible from head to feet')
+    text=text.replace('Strict standing pose, one adult subject upright on both feet, full weight-bearing posture, legs and feet visible, natural vertical alignment.','For subjects requested standing: upright on both feet with stable posture. Preserve other subjects in their requested poses.')
+    text=text.replace('seated, kneeling, lying down, crouching, floating, cut-off legs, cut-off feet','impossible balance, floating feet, cut-off legs, cut-off feet')
+    text=text.replace('stable framing, one clear action, no added subjects or objects','stable framing, preserve each requested action and subject, no unrequested subjects or objects')
     text=js_function(text,'payload',transform=lambda s:s.replace('return{mode,','return{...preparedPayloadS23(),mode,'))
     text=replace(text,"  clearSourceS2(); selectedResult='';resultSignature='';pendingRequest=null;","  resetPreparedS23();clearSourceS2(); selectedResult='';resultSignature='';pendingRequest=null;")
     text=js_function(text,'reuse',transform=lambda s:s.replace("saveDraft();$('prompt').focus()","restorePreparedS23(p);saveDraft();$('prompt').focus()"))

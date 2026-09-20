@@ -3,9 +3,9 @@
   "installer_revision": "S2.3",
   "application_build": "3.0.5-session-s2.3",
   "reported_windows_previous_attempt": "preflight_passed_stop_access_denied_before_application_writes",
-  "python_targeted_tests": 50,
+  "python_targeted_tests": 51,
   "python_regression_tests": 33,
-  "javascript_unit_scenarios": 20,
+  "javascript_unit_scenarios": 21,
   "python_imports_verified": true,
   "python_syntax_verified": true,
   "javascript_syntax_verified": true,
@@ -13,5 +13,5 @@
   "browser_ci": "PENDING_SEE_REPOSITORY_CI_RESULT",
   "windows_installer_executed": false,
   "real_gpu_generation_tested": false,
-  "embedded_payload_sha256": "21860e6c0c5ee60e937c1ec25249d6c166acb3a66b3dbfa80b4d3827227737be"
+  "embedded_payload_sha256": "b20df4538f9bfe8403c41efc046ae9aab51e8427578c4d9dc969a7478980ebf3"
 }

@@ -203,6 +203,9 @@ class SceneRouting(unittest.IsolatedAsyncioTestCase):
     def test_remote_metadata_does_not_reject_local_saveoutput(self):
         g={'1':{'class_type':'SaveOutput','inputs':{}}};self.assertEqual(remote_nodes(g),[])
         g['2']={'class_type':'UnknownAPI','inputs':{}};self.assertEqual(remote_nodes(g,{'UnknownAPI':{'is_api_node':True}}),['UnknownAPI'])
+    def test_visual_correction_survives_browser_style_block(self):
+        p=self.params(prompt='Two people on a boat.\n\n[Style visuel] browser style preview\n\n[Correction visuelle BAZOR] Show the missing red hat.')
+        text=generation_prompt(p);self.assertIn('Show the missing red hat.',text);self.assertNotIn('browser style preview',text)
 
 class Installation(unittest.TestCase):
     def test_transaction_idempotence_and_rollback(self):
