@@ -722,7 +722,47 @@
           ],
           "proof_required": "file_changes_and_tests"
         }
-      ]
+      ],
+      "source_handoffs": {
+        "session_s2": {
+          "project_id": "simple-studio",
+          "agent_id": "gpt",
+          "date": "2026-09-20",
+          "status": "SOURCE_AVAILABLE_RUNTIME_UNVERIFIED",
+          "request_id": "STUDIO-SESSION-S2-HANDOFF-20260920",
+          "application_build": "3.0.5-session-s2.2",
+          "installer_revision": "S2.2",
+          "path": "studio-deliverables/session-s2",
+          "archive": "BAZOR_STUDIO_SESSION_S2_SOURCES.zip",
+          "runtime_verified": false,
+          "windows_uac_verified": false,
+          "gpu_verified": false,
+          "tests": {
+            "python_targeted": 30,
+            "python_regression": 33,
+            "javascript_scenarios": 13,
+            "windows_stop_scenarios": "10 mocks; CI pending"
+          },
+          "reported_blocker": "Preflight passed, Stop-Process access denied before application file writes. Added standard UAC stop-only helper; runtime not confirmed.",
+          "related_tasks": [
+            "STUDIO-P0-001",
+            "STUDIO-P0-002",
+            "STUDIO-P0-008",
+            "STUDIO-P0-009",
+            "STUDIO-P0-010",
+            "STUDIO-P0-012"
+          ],
+          "next": "Read README and source, compare with live files through existing Action Engine, preserve memory-pressure guard, obtain real Windows and neutral image/video proof before DONE.",
+          "known_gaps": [
+            "Exact active H3 workflow unavailable to this session",
+            "No real GPU or UAC confirmation",
+            "No full browser visual verification",
+            "Existing 10 correction and 10s clip bounds are not completion of registry P1 intelligent-stop/segmentation requirements",
+            "Child mode and complete master workflow not delivered"
+          ],
+          "auto_execute": false
+        }
+      }
     },
     {
       "id": "wii-relay",
