@@ -15,7 +15,7 @@
     "python_targeted": 30,
     "python_regression": 33,
     "javascript_scenarios": 13,
-    "windows_stop_scenarios": "10 mocks; CI pending"
+    "windows_stop_scenarios": "13 isolated scenarios; CI pending; first 10 already passed on Windows PowerShell 5.1"
   },
   "reported_blocker": "Preflight passed, Stop-Process access denied before application file writes. Added standard UAC stop-only helper; runtime not confirmed.",
   "related_tasks": [
@@ -35,5 +35,5 @@
     "Child mode and complete master workflow not delivered"
   ],
   "auto_execute": false,
-  "archive_sha256": "e8aeec72d52cd6b3f31dc7f552f26cdfb29dbdb50c1bdbf29dc23d1174f73108"
+  "archive_sha256": "ce6491bf5f0963fe0e05e177ae6dd72f2bad4b774396fc4f5e1b218b86586a30"
 }
