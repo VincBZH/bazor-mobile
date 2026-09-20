@@ -413,3 +413,14 @@ def collect_and_post(issue_number, task_id, phase="poll", force=False):
     except Exception as exc:
         print("[STUDIO TRACE WARN]", type(exc).__name__, str(exc)[:300])
         return False
+
+
+if __name__ == "__main__":
+    import argparse
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--issue",type=int,default=129)
+    ap.add_argument("--task",default="STUDIO-P0-012")
+    ap.add_argument("--phase",default="manual")
+    args=ap.parse_args()
+    ok=collect_and_post(args.issue,args.task,args.phase,force=True)
+    print("STUDIO_TRACE_POSTED" if ok else "STUDIO_TRACE_NOT_POSTED")
