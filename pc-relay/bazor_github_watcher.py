@@ -27,6 +27,7 @@ CORE_LOG=os.path.join(HUB_LOG_DIR,"core.log")
 WATCHER_LOCK_PORT=8791
 AIROOM_CONTROL_FILE=os.path.join(os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"),"AppData","Local"),"BazorAIROOM","control.json")
 CONTROL_DIAG_DIR=os.path.join(os.path.dirname(AIROOM_CONTROL_FILE),"diagnostics")
+STUDIO_TRACE_BRIDGE_VERSION=2
 try:
     from bazor_studio_trace_bridge import collect_and_post as _studio_trace_post
 except Exception:
