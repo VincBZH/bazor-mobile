@@ -27,6 +27,11 @@ CORE_LOG=os.path.join(HUB_LOG_DIR,"core.log")
 WATCHER_LOCK_PORT=8791
 AIROOM_CONTROL_FILE=os.path.join(os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"),"AppData","Local"),"BazorAIROOM","control.json")
 CONTROL_DIAG_DIR=os.path.join(os.path.dirname(AIROOM_CONTROL_FILE),"diagnostics")
+try:
+    from bazor_studio_trace_bridge import collect_and_post as _studio_trace_post
+except Exception:
+    def _studio_trace_post(*args,**kwargs):
+        return False
 _WATCHER_LOCK=None
 
 def _single_instance():
@@ -2447,6 +2452,8 @@ while True:
                     if not m:
                         continue
                     task_id=m.group(1).strip().upper()
+                    if task_id=="STUDIO-P0-012":
+                        _studio_trace_post(issue["number"],task_id,"poll",force=False)
                     if not _task_retry_allowed(issue["number"],task_id,comments):
                         continue
                     retrying=(TASK_MARK in comments)
@@ -2464,6 +2471,8 @@ while True:
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","[BAZOR-TASK-START]\n\n"+task_id+" démarrée. État mobile passé EN COURS ; secondes lectures puis préflight Git avant toute écriture."])
                     except Exception:
                         pass
+                    if task_id=="STUDIO-P0-012":
+                        _studio_trace_post(issue["number"],task_id,"task_start",force=True)
                     try:
                         result=_run_registry_task(task_id)
                         ex=result.get("execution") or {}; ar=ex.get("action_result") or {}
@@ -2502,6 +2511,8 @@ while True:
                             if result.get("runtime_checks"):
                                 reply+="\nRuntime checks: "+json.dumps(result.get("runtime_checks"),ensure_ascii=False,separators=(",",":"))[:5000]
                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply[:12000]])
+                        if task_id=="STUDIO-P0-012":
+                            _studio_trace_post(issue["number"],task_id,"task_"+str(result.get("task_status") or "unknown").lower(),force=True)
                         _task_retry_note(issue["number"],task_id,result.get("task_status"))
                         if str(task_id or "").upper().startswith("STUDIO-P0-") and str(result.get("task_status") or "").upper() in ("BLOCKED","ANALYSE_SEULE"):
                             try:
