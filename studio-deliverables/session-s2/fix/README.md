@@ -1,4 +1,4 @@
-# BAZOR Studio — correctif Session S2.2
+# BAZOR Studio — correctif Session S2.3
 
 Correctif pour l’installation existante `C:\AI\SimpleStudioV2`, version 3.0.5.
 Date : 20 septembre 2026. Ce livrable stabilise une partie du projet ; ce n’est pas une certification du Studio complet.
@@ -11,6 +11,22 @@ Fermer les anciens lanceurs SAFE T2I V1 et DIRECT V4 s’ils attendent une nouve
 Le programme vérifie les sources avant de toucher l’installation. S’il ne reconnaît pas une signature, il s’arrête sans remplacer les fichiers.
 Il attend qu’aucune génération Studio soit active, identifie l’instance sur 8191, sauvegarde les fichiers modifiés, applique le correctif, réutilise ComfyUI sur 8188 ou le démarre s’il est absent, puis ouvre Studio sur 8191.
 Le lancement n’exécute aucun prompt sauvegardé et aucune génération automatique.
+
+## Complément S2.3 — moteur local et fidélité de la scène
+
+Le dernier journal nomme `MinimaxHailuo03TextToVideoNode` avec `model.resolution` et `model.duration`. C’est un nœud API en ligne, pas le nœud natif MiniMax H3. Une sélection par nom de fichier `minimax` mélangeait les deux familles. Le correctif construit désormais le graphe H3 natif à partir du nœud installé `MiniMaxH3ImageToVideo`, selon la topologie officielle ComfyUI. Les modèles, la projection 4B, les entrées et les choix disponibles sont vérifiés avant soumission. Les workflows de repli Hailuo/API sont exclus avant et après conversion. Si une dépendance manque, elle est nommée : aucune génération en ligne de secours.
+
+- Graphe reconstruit à chaque demande avec le mode, la référence choisie, la géométrie, la graine et le prompt actuels. L’inventaire ComfyUI est celui de la session, rafraîchi au plus toutes les 60 secondes.
+- Vidéo H3 silencieuse à 24 fps, longueur 17k+5 ; les durées effectives sont enregistrées dans la fiche. Aucun LoRA Turbo ou audio ajouté. Le négatif H3 est une clause textuelle « Avoid », pas un conditionnement négatif indépendant.
+- T2I/I2I restent sur le checkpoint SD/SDXL choisi, même si H3 est installé.
+- « Préparer pour le modèle » garde la demande d’origine et propose séparément un prompt anglais modifiable via Ollama. Ce prompt est utilisé seulement si la demande et le mode correspondent encore. Une réponse tardive périmée est écartée. La traduction n’est pas une garantie de fidélité visuelle.
+- « Prompt et paramètres du résultat » affiche et exporte les textes réellement présents dans le graphe soumis, la demande, les modèles, la graine, les réglages et le SHA-256 du graphe. Les anciens jobs utilisent leur graphe enregistré ; l’absence de graphe est signalée.
+- Déduction optionnelle par mots-clés pour cinq réglages : corps entier, debout, portrait, noir et blanc, cinématique. Elle ne télécharge pas de modèles, n’installe pas d’extensions et ne constitue pas le routeur maître complet demandé.
+- Les consignes « corps entier », « debout » et « naturel » ne réduisent plus une scène à un seul personnage ou à une seule action. La posture des autres sujets est préservée.
+
+Le workflow image fourni utilise SDXL avec un prompt français ; le résultat visible manque les sujets demandés. Aucun élément ne permet d’affirmer qu’une simple traduction corrigera tous les rendus. Le bouton d’analyse permet de comparer un résultat précis avec la demande ; une création terminée n’est pas automatiquement déclarée conforme.
+
+Le build attendu par l’installateur et le serveur est `3.0.5-session-s2.3`. Installer le nouveau CMD, même si son nom est identique au précédent. Le correctif peut être réappliqué sans doublon et conserve une sauvegarde pour restauration.
 
 ## Complément S2.2 — arrêt Windows refusé
 
@@ -62,12 +78,12 @@ La compatibilité de quantification, la version du nœud ClipProj et la mémoire
 
 ## Vérifications effectuées
 
-- 30 tests Python ciblés : références, modèles, adaptation 4B, médias en morceaux, vision, correspondance job/prompt, refus si GPU occupé, installation idempotente, sauvegarde et restauration.
+- 50 tests Python ciblés : références, modèles, adaptation 4B, médias en morceaux, vision, correspondance job/prompt, refus si GPU occupé, installation idempotente, sauvegarde et restauration.
 - 33 tests existants de workflow et API, sur moteur de test. La fixture expose maintenant `/api/show` et deux tests utilisent I2V pour vérifier une entrée image (une référence en T2V est désormais interdite).
-- 13 scénarios JavaScript unitaires : démarrage vierge, sélection explicite, désactivation de l’analyse sans rendu sélectionné, source selon le mode, reset et réponse d’analyse périmée.
+- 20 scénarios JavaScript unitaires : démarrage vierge, sélection explicite, désactivation de l’analyse sans rendu sélectionné, source selon le mode, reset et réponse d’analyse périmée.
 - Syntaxes Python et JavaScript vérifiées.
 - Aucun test de rendu IA réel. Aucun test d’exécution Windows du lanceur PowerShell dans cet environnement Linux.
-- Test navigateur complet préparé, mais non exécuté : Chromium indisponible, téléchargement bloqué. Le rendu visuel de l’interface n’est donc pas certifié ici.
+- Test navigateur préparé et ajouté à la CI S2.3 : Chromium indisponible localement. Consulter `CI_RESULT.json` dans le dépôt pour son exécution et le commit exact. Les interactions moteur sont simulées ; aucune qualité de rendu IA n’en découle.
 
 ## Ce qui reste pour terminer l’ensemble du projet
 
@@ -88,6 +104,7 @@ Les modèles, les bases de données, les créations, les fichiers Room et les cl
 ## Sources techniques consultées
 
 - Sources Studio : archive utilisateur AI_Simple_Studio_BAZOR_V3_3.0.5_PLAYWRIGHT_INSTALL_FIX_20260917.zip, puis comparaison avec les scripts de réparation de bazor-mobile.
+- [Workflow officiel H3 T2V](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_minimax_h3_t2v.json) : topologie native sans image de référence.
 - [Nœuds H3 natifs de ComfyUI](https://github.com/Comfy-Org/ComfyUI/blob/master/comfy_extras/nodes_minimax_h3.py) : dimensions et grille temporelle 17k+5.
 - [Ollama : images dans l’API](https://docs.ollama.com/capabilities/vision) : transmission des images en base64 au modèle vision.
 - [ClipProj, source du nœud](https://github.com/nicolab28/ComfyUI-ClipProj/blob/c01ba8fb8f41b4f2094dbd0b185cdc238fb6134c/clipproj_nodes.py) : contrat du nœud de projection.

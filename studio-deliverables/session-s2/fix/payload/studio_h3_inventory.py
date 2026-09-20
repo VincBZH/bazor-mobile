@@ -33,6 +33,10 @@ def resolve_h3_inventory(graph,info):
             if not isinstance(current,str):continue
             available=choices(info,kind,field)
             if current in available:continue
+            same=[v for v in available if basename(v)==basename(current)]
+            if len(same)>1:raise ValueError('Modèle ambigu dans ComfyUI : '+current)
+            if same:
+                inputs[field]=same[0];changes.append({'node':key,'input':field,'before':current,'after':same[0]});continue
             replacement=PAIRS.get((kind,field,basename(current)))
             if replacement:
                 target=exact_available(available,replacement)
