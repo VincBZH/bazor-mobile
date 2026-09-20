@@ -12,11 +12,11 @@
   "windows_uac_verified": false,
   "gpu_verified": false,
   "tests": {
-    "python_targeted": 50,
+    "python_targeted": 51,
     "python_regression": 33,
-    "javascript_scenarios": 20,
-    "windows_stop_scenarios": "13 existing scenarios; S2.3 CI pending",
-    "browser_flow": "Added to S2.3 CI; controlled engines; pending"
+    "javascript_scenarios": 21,
+    "windows_stop_scenarios": "13 passed under PS5.1 on first S2.3 build; final package CI pending",
+    "browser_flow": "Passed under Chromium on first S2.3 build; final package CI pending"
   },
   "reported_blocker": "Latest video log identified online MinimaxHailuo03TextToVideoNode selected as local H3. Native H3 topology now constructed and checked against live contracts; image fidelity still requires real output validation.",
   "related_tasks": [
@@ -37,10 +37,12 @@
     "Child mode and complete master workflow not delivered"
   ],
   "auto_execute": false,
-  "archive_sha256": "b240771bc4ff5a0e1be773c0df9e6a398cbd0b7703ceee07077b0a63d6757dcb",
+  "archive_sha256": "f918d72748be1f08c7f85d470f689c0555822e2b31d1980b033f16e80aa22d1d",
   "ci_evidence": {
     "status": "PENDING",
     "previous_s22_tested_commit": "5ad802628dd05a16c7e60b6400eb4d4e0591afa4",
-    "current_archive_sha256": "b240771bc4ff5a0e1be773c0df9e6a398cbd0b7703ceee07077b0a63d6757dcb"
+    "current_archive_sha256": "f918d72748be1f08c7f85d470f689c0555822e2b31d1980b033f16e80aa22d1d",
+    "previous_s23_tested_commit": "d1d3ece527da6fad339dbfab9ad834d9937a2bc9",
+    "previous_s23_workflow_url": "https://github.com/VincBZH/bazor-mobile/actions/runs/35514713686"
   }
 }

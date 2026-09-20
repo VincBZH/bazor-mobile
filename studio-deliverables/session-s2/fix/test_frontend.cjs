@@ -9,6 +9,7 @@ vm.runInContext(fs.readFileSync(path.resolve(__dirname,'payload/scene_ui_s23.js'
 vm.runInContext(source.match(/^function newCreationS2[\s\S]*?(?=^function mountSessionS2)/m)[0],ctx);
 for(const name of ['payload','selectedDone','buttons','renderResult']){const fn=source.match(new RegExp('^function '+name+'\\([^\\n]*$','m'));assert(fn,name);vm.runInContext(fn[0],ctx)}
 let n=0;function check(fn){fn();n++}
+check(()=>{assert(!source.includes('one adult subject'));assert(!source.includes('one clear action'))});
 const old={id:'old',status:'done',params:{mode:'t2i'},outputs:[{media:'image',url:'/old.png'}]};ctx.jobs=[old];
 check(()=>assert.equal(ctx.selectedDone(),undefined));
 check(()=>{ctx.renderResult();assert(!element('result').innerHTML.includes('/old.png'))});
