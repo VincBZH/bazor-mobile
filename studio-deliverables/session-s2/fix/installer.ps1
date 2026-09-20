@@ -10,6 +10,15 @@ $installLog=Join-Path $logDir 'session-s2-installer.log'
 function Log([string]$message){$line='['+[DateTime]::UtcNow.ToString('o')+'] '+$message;Write-Host $line;Add-Content -LiteralPath $installLog -Value $line -Encoding UTF8}
 function Probe([string]$url){try{return Invoke-RestMethod -Uri $url -TimeoutSec 3}catch{return $null}}
 function Occupied([int]$port){return @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue).Count -gt 0}
+function Test-AccessDenied($record){
+  if($record.CategoryInfo.Category -eq 'PermissionDenied'){return $true}
+  $cause=$record.Exception
+  for($depth=0;$cause -and $depth -lt 8;$depth++){
+    if($cause -is [System.UnauthorizedAccessException] -or $cause.NativeErrorCode -eq 5){return $true}
+    $cause=$cause.InnerException
+  }
+  return $false
+}
 try{
   Log 'BAZOR STUDIO - SESSION S2.2'
   if(!(Test-Path -LiteralPath $python)){throw 'Python ComfyUI introuvable.'}
@@ -32,7 +41,7 @@ try{
     try {
       Stop-Process -Id ([int]$runtime.pid) -ErrorAction Stop
     } catch {
-      $denied=$_.CategoryInfo.Category -eq 'PermissionDenied' -or $_.Exception -is [System.UnauthorizedAccessException] -or $_.Exception.NativeErrorCode -eq 5
+      $denied=Test-AccessDenied $_
       if(!$denied){throw}
       Log 'Windows refuse cet arret sans elevation. Autorise la demande Windows pour arreter uniquement ce Studio.'
       $helper=Join-Path $PSScriptRoot 'stop_studio_elevated.ps1'

@@ -12,5 +12,5 @@
   "chromium_visual_test": "NOT_EXECUTED_BROWSER_UNAVAILABLE",
   "windows_installer_executed": false,
   "real_gpu_generation_tested": false,
-  "embedded_payload_sha256": "95771d37825c4590854ab671de89aeb20dc47acae38b74e19718bc87b0e89aa6"
+  "embedded_payload_sha256": "4fdcadfab6a66c75cc71b0b40ad3eb6dbb188821731193895823cd42c83657f5"
 }

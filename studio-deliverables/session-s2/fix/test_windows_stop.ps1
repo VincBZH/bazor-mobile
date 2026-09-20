@@ -22,6 +22,16 @@ try {
     [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file),[ref]$tokens,[ref]$errors)
     if($errors.Count){throw ($errors | Out-String)}
   }
+  $tokens=$null;$errors=$null
+  $ast=[System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'installer.ps1'),[ref]$tokens,[ref]$errors)
+  $fn=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Test-AccessDenied'},$true)
+  . ([scriptblock]::Create($fn.Extent.Text))
+  foreach($kind in @('direct','nested','missing')){
+    $ex=if($kind -eq 'direct'){[System.UnauthorizedAccessException]::new('Denied')}elseif($kind -eq 'nested'){[System.InvalidOperationException]::new('Wrapped',[System.ComponentModel.Win32Exception]::new(5))}else{[System.ComponentModel.Win32Exception]::new(2)}
+    $record=[System.Management.Automation.ErrorRecord]::new($ex,'test',[System.Management.Automation.ErrorCategory]::CloseError,$null)
+    if((Test-AccessDenied $record) -ne ($kind -ne 'missing')){throw ('Wrong access-denied classification: '+$kind)}
+    Write-Output ('PASS denial '+$kind)
+  }
   foreach($case in @('success','wrong_app','wrong_pid','wrong_root','unknown_jobs','busy','wrong_process','wrong_listener','network','denied')){
     $global:BazorStopTestState.scenario=$case;$global:BazorStopTestState.stops=@();$global:LASTEXITCODE=99
     & (Join-Path $PSScriptRoot 'stop_studio_elevated.ps1') -StudioRoot $root -ExpectedPid 111
@@ -32,6 +42,6 @@ try {
     }elseif($global:BazorStopTestState.stops.Count){throw ('Unsafe stop for '+$case)}
     Write-Output ('PASS '+$case)
   }
-  Write-Output 'PASS 10 Windows stop scenarios; UAC and real GPU remain untested.'
+  Write-Output 'PASS 13 Windows scenarios; UAC and real GPU remain untested.'
   $global:LASTEXITCODE=0
 } finally {Remove-Item -LiteralPath $root -Recurse -Force; Remove-Variable -Name BazorStopTestState -Scope Global}
