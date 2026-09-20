@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.19.6",
+  "version": "2026.09.20.1",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -497,6 +497,31 @@
           "proof_required": "file_changes_and_tests"
         },
         {
+          "id": "STUDIO-P0-013",
+          "order": 7.4,
+          "priority": "P0",
+          "subproject": "presets",
+          "title": "Checkpoints SDXL : NoobAI / RealVisXL / Juggernaut avec sélection sûre",
+          "status": "TODO",
+          "action": "Inspecter les vrais fichiers du Studio et le workflow T2I/I2I avant toute écriture. Ajouter une sélection de checkpoint image SDXL fondée uniquement sur les fichiers .safetensors réellement présents dans le dossier ComfyUI models/checkpoints. Reconnaître au minimum NoobAI-XL v1.1, RealVisXL V4.0 et Juggernaut XL v9 par nom de fichier, sans inventer leur présence et sans téléchargement automatique. Exposer un choix clair 'Checkpoint image' dans l'interface T2I/I2I si le point d'injection réel est identifié, avec AUTO + options installées; si l'UI ne peut pas être modifiée sans toucher un fichier cœur vérifié de manière risquée, créer une intégration externe/configurée et raccorder seulement le point d'injection exact après preflight. Le workflow image doit utiliser CheckpointLoaderSimple.inputs.ckpt_name ou l'équivalent réel constaté. MiniMax H3 vidéo doit rester totalement séparé et ne jamais recevoir ces checkpoints SDXL. Les modèles absents doivent apparaître indisponibles et ne jamais produire une référence fantôme. Préserver rollback, sauvegarde et compatibilité V3.0.5.",
+          "acceptance": [
+            "Le scan du dossier ComfyUI models/checkpoints ne liste que les .safetensors réellement présents.",
+            "NoobAI-XL v1.1, RealVisXL V4.0 et Juggernaut XL v9 sont reconnus par alias/nom de fichier quand ils existent; aucun n'est déclaré installé s'il est absent.",
+            "Le mode image T2I/I2I expose une sélection AUTO + checkpoints installés, ou une intégration externe équivalente reliée au vrai point d'injection si l'UI cœur ne peut pas être modifiée sûrement.",
+            "Le workflow image sélectionné renseigne le vrai nœud CheckpointLoaderSimple/ckpt_name ou l'équivalent réellement constaté.",
+            "MiniMax H3 T2V/I2V reste inchangé et ne charge jamais un checkpoint SDXL.",
+            "Aucun modèle lourd n'est téléchargé automatiquement.",
+            "Les fichiers modifiés passent py_compile/JSON parse ou tests adaptés; un test sec démontre qu'un checkpoint installé est injecté dans un workflow image sans modifier H3.",
+            "Backup/rollback et rapport de preuves listent fichiers lus, fichiers changés, modèles détectés, tests et résultat."
+          ],
+          "dependencies": [],
+          "preferred_models": [
+            "qwen",
+            "gemini"
+          ],
+          "proof_required": "file_changes_preflight_tests_backup_report"
+        },
+        {
           "id": "STUDIO-P1-001",
           "order": 8,
           "priority": "P1",
@@ -990,6 +1015,15 @@
   "encyclopedia_updated_at": "2026-09-19",
   "encyclopedia_sync_required": true,
   "version_history": [
+    {
+      "component": "BAZOR Studio SDXL Checkpoint Routing",
+      "version": "2026.09.20.1",
+      "generated_at": "2026-09-20",
+      "artifact": null,
+      "changes": "Ajout STUDIO-P0-013 : détection et sélection sûre NoobAI-XL / RealVisXL / Juggernaut XL, H3 séparé.",
+      "tests": "À exécuter localement via BAZOR Action Engine avec preflight/tests/rollback.",
+      "status": "TASK"
+    },
     {
       "component": "BAZOR Studio V4 Trio Chain",
       "version": "2026.09.19.3",
