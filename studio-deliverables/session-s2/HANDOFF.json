@@ -15,8 +15,8 @@
     "python_targeted": 51,
     "python_regression": 33,
     "javascript_scenarios": 21,
-    "windows_stop_scenarios": "13 passed under PS5.1 on first S2.3 build; final package CI pending",
-    "browser_flow": "Passed under Chromium on first S2.3 build; final package CI pending"
+    "windows_stop_scenarios": "13 passed under Windows PowerShell 5.1; system calls mocked",
+    "browser_flow": "PASSED Chromium; engines mocked"
   },
   "reported_blocker": "Latest video log identified online MinimaxHailuo03TextToVideoNode selected as local H3. Native H3 topology now constructed and checked against live contracts; image fidelity still requires real output validation.",
   "related_tasks": [
@@ -39,10 +39,20 @@
   "auto_execute": false,
   "archive_sha256": "f918d72748be1f08c7f85d470f689c0555822e2b31d1980b033f16e80aa22d1d",
   "ci_evidence": {
-    "status": "PENDING",
-    "previous_s22_tested_commit": "5ad802628dd05a16c7e60b6400eb4d4e0591afa4",
-    "current_archive_sha256": "f918d72748be1f08c7f85d470f689c0555822e2b31d1980b033f16e80aa22d1d",
-    "previous_s23_tested_commit": "d1d3ece527da6fad339dbfab9ad834d9937a2bc9",
-    "previous_s23_workflow_url": "https://github.com/VincBZH/bazor-mobile/actions/runs/35514713686"
+    "status": "PASSED",
+    "tested_commit": "1d1af50623ff00f31b2a0c206b585b30bd32fd50",
+    "workflow_url": "https://github.com/VincBZH/bazor-mobile/actions/runs/35514866361",
+    "archive_sha256": "f918d72748be1f08c7f85d470f689c0555822e2b31d1980b033f16e80aa22d1d",
+    "installer_sha256": "b9d271307611efe49607591ebefe081b922bbae63f5757c5226f405c18a7cdf4",
+    "python_targeted": 51,
+    "python_regression": 33,
+    "javascript_scenarios": 21,
+    "windows_powershell_51_scenarios": 13,
+    "windows_system_calls": "MOCKED",
+    "browser_functional_flow": "PASSED Chromium with controlled engine responses",
+    "browser_visual_review": false,
+    "uac_real": false,
+    "gpu_real": false,
+    "global_console_hub_gate": "Unchanged certified-launcher assertion fails; PR not merged"
   }
 }
