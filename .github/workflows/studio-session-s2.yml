@@ -23,7 +23,7 @@ jobs:
         run: |
           sha256sum --check SHA256SUMS
           python -m zipfile -e BAZOR_STUDIO_SESSION_S2_SOURCES.zip tested
-      - run: python -m pip install aiohttp==3.12.15 Pillow==11.3.0
+      - run: python -m pip install aiohttp==3.12.15 Pillow==11.3.0 imageio-ffmpeg==0.6.0
       - name: Targeted Python and regression suites
         working-directory: studio-deliverables/session-s2/tested
         run: |
