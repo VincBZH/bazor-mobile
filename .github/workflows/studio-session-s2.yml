@@ -32,6 +32,14 @@ jobs:
           python work/studio/app/check_startup.py
           node fix/test_frontend.cjs
           node --check work/studio/app/static/app.js
+      - name: Install browser test dependency
+        working-directory: studio-deliverables/session-s2/tested
+        run: |
+          npm install --no-save playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Browser flow with controlled engines
+        working-directory: studio-deliverables/session-s2/tested
+        run: node fix/test_browser.cjs
   windows-stop:
     runs-on: windows-latest
     steps:

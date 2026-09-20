@@ -13,6 +13,29 @@ from studio_session_guard import normalize_analysis_image,read_media_limited,sel
 from studio_h3_inventory import resolve_h3_inventory
 from apply_fix import install,transform_js,transform_workflows,transform_studio,preserve_converter,transform_controls
 from rollback import rollback
+from studio_route_s23 import native_h3, graph_for_local, recipe_for, remote_nodes
+from workflows import generation_prompt, generation_negative
+
+def native_registry():
+    """Contract fixture from ComfyUI native H3 + ClipProj, not a GPU simulator."""
+    info=object_info()
+    def fields(**kw):return {k:[v] for k,v in kw.items()}
+    def node(**kw):return {'input':{'required':fields(**kw)}}
+    info.update({
+        'UNETLoader':node(unet_name=['minimax_h3_fl2va_pruned_w4a8_mixed.safetensors'],weight_dtype=['default']),
+        'CLIPLoader':node(clip_name=['qwen3vl_4b_int8_convrot.safetensors'],type=['minimax','krea2'],device=['default','cpu']),
+        'VAELoader':node(vae_name=['minimax_h3_video_vae_int8_convrot.safetensors']),
+        'ClipProjApply':node(clip='CLIP',projection=['mmh3-4b-ClipProj-v3-mlp.safetensors']),
+        'MiniMaxH3ImageToVideo':node(clip='CLIP',vae='VAE',prompt='STRING',width='INT',height='INT',length='INT'),
+        'RandomNoise':node(noise_seed='INT'),
+        'BasicGuider':node(model='MODEL',conditioning='CONDITIONING'),
+        'KSamplerSelect':node(sampler_name=['res_multistep']),
+        'BasicScheduler':node(model='MODEL',scheduler=['simple'],steps='INT',denoise='FLOAT'),
+        'SamplerCustomAdvanced':node(noise='NOISE',guider='GUIDER',sampler='SAMPLER',sigmas='SIGMAS',latent_image='LATENT'),
+    })
+    info['MiniMaxH3ImageToVideo']['input']['optional']=fields(first_frame='IMAGE',last_frame='IMAGE')
+    info['LoadImage']=node(image=['old.png'])
+    return info
 
 class Routes(unittest.TestCase):
     def test_engine_error_names_node_and_setting(self):
@@ -87,6 +110,99 @@ class Integration(unittest.IsolatedAsyncioTestCase):
         self.fake.queued.append([1,'other',{}, {},[]])
         status,a=await self.post('/api/jobs/old/analyze',{})
         self.assertEqual(status,400);self.assertIn('générations',a['error']);self.assertIsNone(self.fake.last_chat)
+    async def test_recipe_matches_submitted_graph_and_retry(self):
+        raw={'mode':'t2i','engine':'sd','checkpoint':'sdxl_test.safetensors','prompt':'Deux adultes sur un banc','prepared_prompt':'Two adults on a bench.','prepared_source':'Deux adultes sur un banc','prepared_mode':'t2i','seed':42}
+        key=uuid.uuid4().hex;status,j=await self.post('/api/jobs',raw,key)
+        self.assertEqual(status,200,j)
+        result=await self.client.get('/api/recipe/'+key);recipe=await result.json()
+        self.assertEqual(recipe['request'],raw['prompt']);self.assertEqual(recipe['seed'],42)
+        self.assertTrue(any('Two adults on a bench.' in x['text'] for x in recipe['effective_texts']))
+        expected=recipe_for(j['params'],self.fake.last_payload['prompt'],recipe['route'])
+        self.assertEqual(recipe,expected)
+        await self.post('/api/jobs',{**raw,'prompt':'different scene'},key)
+        self.assertEqual(self.fake.post_count,1)
+        self.assertEqual(await (await self.client.get('/api/recipe/'+key)).json(),recipe)
+    async def test_native_h3_submits_without_converting_cloud_template(self):
+        self.fake.info=native_registry()
+        status,j=await self.post('/api/jobs',{'mode':'t2v','prompt':'a boat crossing a lake','seed':3},uuid.uuid4().hex)
+        self.assertEqual(status,200,j);self.assertEqual(self.fake.post_count,1)
+        self.assertEqual(j['recipe']['route']['workflow'],'native-h3-s23')
+        self.assertEqual(j['recipe']['route']['frames_effective'],56)
+        self.assertFalse(remote_nodes(self.fake.last_payload['prompt']))
+    async def test_missing_local_model_does_not_submit(self):
+        self.fake.info=native_registry();del self.fake.info['ClipProjApply']
+        status,j=await self.post('/api/jobs',{'mode':'t2v','prompt':'a boat'},uuid.uuid4().hex)
+        self.assertEqual(status,400);self.assertIn('ClipProjApply',j['error']);self.assertEqual(self.fake.post_count,0)
+    async def test_missing_recipe_has_no_invented_history(self):
+        r=await self.client.get('/api/recipe/unknown');self.assertEqual(r.status,400)
+
+class SceneRouting(unittest.IsolatedAsyncioTestCase):
+    def params(self,**kw):return parameters({'mode':'t2v','prompt':'a boat on the lake','seed':7,**kw})
+    def test_native_graph_matches_local_contract(self):
+        g,route=native_h3(self.params(),native_registry(),None,'test')
+        self.assertEqual(g['h3_condition']['inputs']['length'],56)
+        self.assertNotIn('LoadImage',[n['class_type'] for n in g.values()])
+        self.assertEqual(g['h3_sample']['inputs']['latent_image'],['h3_condition',1])
+        link=g['h3_condition']['inputs']['clip'];self.assertEqual(g[link[0]]['class_type'],'ClipProjApply')
+        self.assertIn('format.codec',g['h3_save']['inputs']);self.assertNotIn('codec',g['h3_save']['inputs'])
+        self.assertFalse(route['audio'])
+    def test_reference_uses_only_new_upload_despite_cached_list(self):
+        g,_=native_h3(self.params(mode='i2v',asset_id='new'),native_registry(),'fresh.png','test')
+        self.assertEqual(g['h3_image']['inputs']['image'],'fresh.png')
+        self.assertEqual(g['h3_condition']['inputs']['first_frame'],['h3_image',0])
+    def test_missing_reference_is_rejected(self):
+        with self.assertRaisesRegex(ValueError,'référence'):native_h3(self.params(mode='i2v',asset_id='new'),native_registry(),None,'test')
+    def test_duration_converted_to_24_fps(self):
+        g,_=native_h3(self.params(fps=12),native_registry(),None,'test')
+        self.assertEqual(g['h3_condition']['inputs']['length'],107)
+    def test_missing_sampler_is_not_silently_replaced(self):
+        info=native_registry();info['KSamplerSelect']['input']['required']['sampler_name']=[['euler']]
+        with self.assertRaisesRegex(ValueError,'res_multistep'):native_h3(self.params(),info,None,'test')
+    def test_unrecognized_required_field_fails_before_submit(self):
+        info=native_registry();info['MiniMaxH3ImageToVideo']['input']['required']['future_required']=['STRING']
+        with self.assertRaisesRegex(ValueError,'future_required'):native_h3(self.params(),info,None,'test')
+    def test_old_savevideo_contract(self):
+        info=native_registry();info['SaveVideo']=object_info(dynamic=False)['SaveVideo']
+        g,_=native_h3(self.params(),info,None,'test');self.assertIn('codec',g['h3_save']['inputs'])
+    async def test_logged_hailuo_rejected_before_conversion(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'minimax_t2v.json'
+            path.write_text(json.dumps({'nodes':[{'id':23,'type':'MinimaxHailuo03TextToVideoNode','inputs':{'model.prompt':'test'}}]}))
+            s=type('S',(),{})();s.h3_workflow_candidates=lambda mode:[path];s.request=AsyncMock()
+            with self.assertRaisesRegex(ValueError,'en ligne exclu'):await graph_for_local(s,self.params(),{'ModelSamplingMiniMaxH3':{}},None,'test')
+            s.request.assert_not_awaited()
+    async def test_cloud_rejected_after_conversion_too(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'local_t2v.json';path.write_text('{"nodes": []}')
+            s=type('S',(),{})();s.h3_workflow_candidates=lambda mode:[path]
+            s.request=AsyncMock(return_value={'23':{'class_type':'MinimaxHailuo03TextToVideoNode','inputs':{}}})
+            with self.assertRaisesRegex(ValueError,'en ligne exclu'):await graph_for_local(s,self.params(),{'ModelSamplingMiniMaxH3':{}},None,'test')
+    async def test_image_route_stays_sd_when_h3_is_installed(self):
+        p=self.params(mode='t2i',engine='sd',checkpoint='sdxl_test.safetensors')
+        g,route=await graph_for_local(None,p,native_registry(),None,'test')
+        self.assertEqual(route['family'],'sd');self.assertIn('CheckpointLoaderSimple',[n['class_type'] for n in g.values()])
+    def test_prepared_prompt_rejected_when_source_or_mode_changes(self):
+        raw={'prepared_prompt':'An English boat.','prepared_source':'a boat on the lake','prepared_mode':'t2v'}
+        self.assertTrue(self.params(**raw)['prepared_prompt'])
+        self.assertEqual(self.params(**{**raw,'prepared_source':'old'})['prepared_prompt'],'')
+        self.assertEqual(self.params(**{**raw,'prepared_mode':'t2i'})['prepared_prompt'],'')
+    def test_keywords_are_optional_and_do_not_route_to_remote(self):
+        p=self.params(prompt='portrait corps entier debout sans noir et blanc',auto_style=True,style_presets=['portrait'])
+        self.assertEqual(p['style_presets'],['fullbody','standing'])
+        self.assertEqual(p['engine'],'wan');self.assertEqual(p['mode'],'t2v')
+        p=self.params(prompt='corps entier debout',auto_style=False)
+        self.assertNotIn('fullbody',p['style_presets'])
+    def test_styles_do_not_collapse_many_actors_into_one(self):
+        p=self.params(prompt='Two adults seated and a third standing.',style_presets=['fullbody','standing','natural'])
+        prompt=generation_prompt(p);self.assertNotIn('one adult subject',prompt);self.assertNotIn('one clear action',prompt)
+        self.assertIn('Keep other subjects',prompt);self.assertNotIn('seated, sitting',generation_negative(p))
+    def test_recipe_is_immutable_snapshot_with_exact_texts(self):
+        p=self.params();g,route=native_h3(p,native_registry(),None,'test');r=recipe_for(p,g,route)
+        text=g['h3_condition']['inputs']['prompt'];g['h3_condition']['inputs']['prompt']='changed';route['audio']=True;p['style_presets'].append('bw')
+        self.assertEqual(r['effective_texts'][0]['text'],text);self.assertFalse(r['route']['audio']);self.assertEqual(r['settings']['style_presets'],['realistic'])
+    def test_remote_metadata_does_not_reject_local_saveoutput(self):
+        g={'1':{'class_type':'SaveOutput','inputs':{}}};self.assertEqual(remote_nodes(g),[])
+        g['2']={'class_type':'UnknownAPI','inputs':{}};self.assertEqual(remote_nodes(g,{'UnknownAPI':{'is_api_node':True}}),['UnknownAPI'])
 
 class Installation(unittest.TestCase):
     def test_transaction_idempotence_and_rollback(self):
@@ -162,6 +278,10 @@ class Inventory(unittest.TestCase):
     def test_unknown_projection_is_rejected(self):
         g,info=self.fixture();info['ClipProjApply']['input']['required']['projection']=[['mmh3-8b-ClipProj-v3-mlp.safetensors']]
         with self.assertRaisesRegex(ValueError,'absent'):resolve_h3_inventory(g,info)
+    def test_original_model_in_subfolder_precedes_variant(self):
+        g,info=self.fixture();name='H3/minimax_h3_fl2va_pruned_int8_convrot.safetensors'
+        info['UNETLoader']['input']['required']['unet_name'][0].append(name)
+        result,_=resolve_h3_inventory(g,info);self.assertEqual(result['105:6']['inputs']['unet_name'],name)
 
 class H3Geometry(unittest.TestCase):
     def params(self):

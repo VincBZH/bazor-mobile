@@ -20,7 +20,7 @@ function Test-AccessDenied($record){
   return $false
 }
 try{
-  Log 'BAZOR STUDIO - SESSION S2.2'
+  Log 'BAZOR STUDIO - SESSION S2.3'
   if(!(Test-Path -LiteralPath $python)){throw 'Python ComfyUI introuvable.'}
   if(!(Test-Path -LiteralPath (Join-Path $root 'app\studio.py'))){throw 'Installation Studio introuvable.'}
   Log '1/5 - Verification de compatibilite, avant modification.'
@@ -75,7 +75,7 @@ try{
   $ready=$false
   for($i=0;$i -lt 30;$i++){
     $reply=Probe 'http://127.0.0.1:8191/api/ping'
-    if($reply -and $reply.build_id -eq '3.0.5-session-s2.2' -and $reply.pid -eq $server.Id){$ready=$true;break}
+    if($reply -and $reply.build_id -eq '3.0.5-session-s2.3' -and $reply.pid -eq $server.Id){$ready=$true;break}
     Start-Sleep -Seconds 1
   }
   if(!$ready){throw 'Le nouveau Studio ne repond pas. Consulte le journal studio-s2.'}
