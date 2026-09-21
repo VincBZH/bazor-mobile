@@ -106,11 +106,13 @@ def _expected_core_runtime_signature():
         os.path.join("pc-relay","bazor_action_engine.py"),
         os.path.join("pc-relay","bazor_security.py"),
         os.path.join("pc-relay","mammouth_client.py"),
+        os.path.join("pc-relay","bazor_bridge.py"),
     ):
         p=os.path.join(ROOT,rel)
         try:
             h.update(os.path.basename(p).encode("utf-8"))
-            h.update(open(p,"rb").read())
+            with open(p,"rb") as source:
+                h.update(source.read())
         except Exception:
             h.update(("missing:"+p).encode("utf-8"))
     return h.hexdigest()
@@ -196,7 +198,7 @@ def safe_update():
             LAST_HEAD=remote
 
             # Actions locales PREDEFINIES uniquement : aucun ordre shell ne vient de GitHub.
-            if any(x in changed for x in ("pc-relay/bazor_pc_relay_v3.py","pc-relay/mammouth_client.py","pc-relay/bazor_security.py","pc-relay/bazor_action_engine.py")):
+            if any(x in changed for x in ("pc-relay/bazor_pc_relay_v3.py","pc-relay/mammouth_client.py","pc-relay/bazor_bridge.py","pc-relay/bazor_security.py","pc-relay/bazor_action_engine.py")):
                 maybe_restart_core("mise a jour de code")
 
             if any(
@@ -2641,3 +2643,4 @@ while True:
     except Exception as e:
         print("[WATCHER RECOVERY]",type(e).__name__,str(e))
     time.sleep(POLL)
+
