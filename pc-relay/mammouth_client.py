@@ -240,6 +240,26 @@ def _candidate_profiles(selected_profile):
     return out
 
 
+def _split_curl_response(raw):
+    """Sépare le JSON de la ligne de statut ajoutée par curl --write-out.
+
+    curl interprète \\n dans --write-out comme un vrai retour à la ligne. Une
+    ancienne version du client cherchait la chaîne littérale "\\\\n", ce qui
+    transformait un HTTP 200 valide en statut 0. On tolère les deux formes pour
+    rester robuste entre environnements Windows/curl.
+    """
+    text = str(raw or "")
+    for marker in ("\nBAZOR_HTTP_STATUS:", "\\\\nBAZOR_HTTP_STATUS:"):
+        if marker not in text:
+            continue
+        body, status_text = text.rsplit(marker, 1)
+        try:
+            return body, int(status_text.strip() or "0")
+        except ValueError:
+            return body, 0
+    return text, 0
+
+
 def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_id):
     key = os.getenv("MAMMOUTH_API_KEY", "").strip()
     started=time.monotonic()
@@ -271,15 +291,7 @@ def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_
     )
     elapsed_ms=int((time.monotonic()-started)*1000)
     raw = (completed.stdout or b"").decode("utf-8", errors="replace")
-    marker = "\\nBAZOR_HTTP_STATUS:"
-    if marker in raw:
-        body, status_text = raw.rsplit(marker, 1)
-        try:
-            http_status = int(status_text.strip() or "0")
-        except ValueError:
-            http_status = 0
-    else:
-        body, http_status = raw, 0
+    body, http_status = _split_curl_response(raw)
 
     base={
         "provider":"mammouth",
