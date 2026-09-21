@@ -29,7 +29,7 @@ MOBILE_STATUS_FILE = DATA / "mobile_network_status.json"
 
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-HUB_BUILD = "2026.09.18.18"
+HUB_BUILD = "2026.09.21.19"
 
 SERVICES = [
     {
@@ -344,6 +344,7 @@ class Hub:
         bar.pack(fill="x")
         for text, cmd in [
             ("↻ MAJ + RELANCE BAZOR", self.update_restart_bazor),
+            ("📋 PROJETS", self.open_projects_dashboard),
             ("RÉPARER MOBILE", self.repair_mobile_access),
             ("USB TÉLÉPHONE", self.usb_mobile),
             ("RÉPARER H3", self.repair_h3),
@@ -1156,6 +1157,21 @@ class Hub:
         except Exception:
             pass
         self.refresh()
+
+    def open_projects_dashboard(self):
+        app = ROOT / "console-hub" / "bazor_project_dashboard.py"
+        if not app.exists():
+            self.summary.config(text="Tableau projets absent · lance MAJ + RELANCE BAZOR")
+            return
+        try:
+            subprocess.Popen(
+                [sys.executable, str(app)],
+                cwd=str(ROOT),
+                creationflags=CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+            )
+            self.summary.config(text="Tableau dynamique des projets ouvert")
+        except Exception as exc:
+            self.summary.config(text=f"Tableau projets impossible : {type(exc).__name__}")
 
     def update_restart_bazor(self):
         if not UPDATE_HELPER.exists():
