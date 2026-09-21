@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import os
 import socket
@@ -19,7 +20,7 @@ CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
 REFRESH_LOCAL_MS = 5000
 REFRESH_GITHUB_SECONDS = 60
-BUILD = "2026.09.21.1"
+BUILD = "2026.09.21.2"
 
 # IMPORTANT SECURITE:
 # - seuls les lanceurs listes ici peuvent etre executes;
@@ -287,6 +288,7 @@ class Dashboard:
         self.root.minsize(1080, 620)
         self.github_cache = {}
         self.github_last = 0.0
+        self.github_refreshing = False
         self.refreshing = False
         self.rows = {}
         self._build()
@@ -390,12 +392,9 @@ class Dashboard:
 
     def _refresh_worker(self):
         now = time.time()
-        fetch_gh = (now - self.github_last) >= REFRESH_GITHUB_SECONDS
-        if fetch_gh:
-            for p in PROJECTS:
-                if p.get("repo") and p.get("issue"):
-                    self.github_cache[p["id"]] = _gh_json(p)
-            self.github_last = now
+        if (now - self.github_last) >= REFRESH_GITHUB_SECONDS and not self.github_refreshing:
+            self.github_refreshing = True
+            threading.Thread(target=self._github_worker, daemon=True).start()
         snapshots = []
         for p in PROJECTS:
             healths = p.get("health") or []
@@ -433,6 +432,25 @@ class Dashboard:
                 detail = gh_detail
             snapshots.append((p["id"], status, runtime, detail, _find_launcher(p) is not None))
         self.root.after(0, lambda: self._apply(snapshots))
+
+    def _github_worker(self):
+        targets = [p for p in PROJECTS if p.get("repo") and p.get("issue")]
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+                future_map = {pool.submit(_gh_json, p): p["id"] for p in targets}
+                for future in concurrent.futures.as_completed(future_map):
+                    pid = future_map[future]
+                    try:
+                        self.github_cache[pid] = future.result()
+                    except Exception:
+                        self.github_cache[pid] = None
+            self.github_last = time.time()
+        finally:
+            self.github_refreshing = False
+            try:
+                self.root.after(0, self.refresh)
+            except Exception:
+                pass
 
     def _apply(self, snapshots):
         counts = {}
