@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_DEPENDENCY_INSTALL_SUCCESS_RESTART_PENDING",
+  "status": "M1_RUNTIME_DEPENDENCIES_VERIFIED_ANIMATEDIFF_MISSING",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -49,15 +49,15 @@
   "milestones": [
     {
       "id": "M0",
-      "status": "INVENTORY_DONE_BACKUP_PENDING",
+      "status": "VERIFIED",
       "name": "Local inventory & backup",
-      "note": "M1 logs show live ComfyUI API on 8188 and YAML paths resolved; missing cv2 prevents VHS/controlnet_aux import. Complete backups and dependency fix before M1."
+      "note": "Static inventory + live API + extra_model_paths verified; ComfyUI 8188 operational."
     },
     {
       "id": "M1",
-      "status": "PYTHON_DEPENDENCIES_INSTALLED_RUNTIME_PENDING",
+      "status": "PARTIAL",
       "name": "Pony XL + SDXL motion compatibility",
-      "note": "VideoHelperSuite and comfyui_controlnet_aux fail import: cv2 missing. VHS also warns imageio_ffmpeg missing. Pony/SDXL AnimateDiff/RIFE/RealESRGAN not yet installed."
+      "note": "Python/runtime dependencies repaired and verified. VHS + ControlNet Aux load after restart. AnimateDiff Evolved still absent; Pony/SDXL motion compatibility remains to install/test."
     },
     {
       "id": "M2",
@@ -91,14 +91,15 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "Run private post-fix one-click validator; if queue empty it will restart exact ComfyUI process then verify VHS + ControlNet Aux via /object_info. Read private output ZIP before progressing; no more model downloads yet.",
+  "next_action": "Install/verify only the minimal missing AnimateDiff-SDXL stack and Pony checkpoint after checking disk space and source hashes/licenses; preserve existing MiniMax/Wan. Then query /object_info for AnimateDiff Gen2 nodes before any generation.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "ComfyUI process has not yet restarted after Python package install",
-    "VHS/ControlNet Aux /object_info after restart unverified",
-    "Pony XL / AnimateDiff-SDXL/RIFE/RealESRGAN pending inventory and compatibility"
+    "AnimateDiff Evolved not installed/detected",
+    "Pony V6 XL not installed/detected",
+    "SDXL motion module not installed/detected",
+    "RIFE/RealESRGAN still pending"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -199,5 +200,35 @@
     "next_validator_archive": "BAZOR_M1_VALIDATION_POST_CORRECTIF_1_CLIC_20260924.zip (in private conversation only)",
     "next_validator_status": "PREPARED_NOT_EXECUTED_ON_WINDOWS",
     "note": "New one-click validator restarts only when one exact ComfyUI process and empty /queue are confirmed; otherwise it stops without affecting process. No installation or generation."
+  },
+  "post_fix_validation_20260924": {
+    "status": "RUNTIME_DEPENDENCIES_VERIFIED",
+    "api_url": "http://127.0.0.1:8188",
+    "nodes_before_restart": 967,
+    "nodes_after_restart": 1064,
+    "packages": {
+      "opencv_python": "4.12.0",
+      "imageio_ffmpeg": "0.6.0"
+    },
+    "videohelpersuite_loaded": true,
+    "videohelpersuite_examples": [
+      "VHS_VideoCombine",
+      "VHS_LoadVideo",
+      "VHS_LoadVideoPath",
+      "VHS_LoadVideoFFmpeg"
+    ],
+    "controlnet_aux_loaded": true,
+    "controlnet_aux_examples": [
+      "CannyEdgePreprocessor",
+      "DensePosePreprocessor",
+      "OpenposePreprocessor",
+      "DepthAnythingPreprocessor"
+    ],
+    "animatediff_evolved_detected": false,
+    "queue_before_restart": {
+      "running": 0,
+      "pending": 0
+    },
+    "errors": []
   }
 }
