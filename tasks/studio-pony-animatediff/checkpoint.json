@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_RUNTIME_DEPENDENCIES_VERIFIED_ANIMATEDIFF_MISSING",
+  "status": "M1_ONE_CLICK_INSTALLER_DELIVERED_AWAITING_LOCAL_EXECUTION",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -55,9 +55,9 @@
     },
     {
       "id": "M1",
-      "status": "PARTIAL",
+      "status": "INSTALLER_PREPARED_AWAITING_LOCAL_RUN",
       "name": "Pony XL + SDXL motion compatibility",
-      "note": "Python/runtime dependencies repaired and verified. VHS + ControlNet Aux load after restart. AnimateDiff Evolved still absent; Pony/SDXL motion compatibility remains to install/test."
+      "note": "Official pinned Pony XL + AnimateDiff-SDXL installer generated. No install or video run yet. Must inspect private run ZIP and /object_info to verify."
     },
     {
       "id": "M2",
@@ -91,15 +91,14 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "Install/verify only the minimal missing AnimateDiff-SDXL stack and Pony checkpoint after checking disk space and source hashes/licenses; preserve existing MiniMax/Wan. Then query /object_info for AnimateDiff Gen2 nodes before any generation.",
+  "next_action": "Receive and inspect real Windows installer-run ZIP. Confirm exact SHA-256 for Pony and SDXL motion, AnimateDiff Evolved import via /object_info after safe normal restart if needed. If OOM risks persist, design short 8GB compatibility test; never auto-generate in installer.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "AnimateDiff Evolved not installed/detected",
-    "Pony V6 XL not installed/detected",
-    "SDXL motion module not installed/detected",
-    "RIFE/RealESRGAN still pending"
+    "Installer local execution and SHA-256 result not yet received",
+    "AnimateDiff Evolved import and model choices via live /object_info not yet confirmed",
+    "No VRAM-tested Pony+SDXL motion video workflow"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -230,5 +229,32 @@
       "pending": 0
     },
     "errors": []
+  },
+  "one_click_installer_20260924": {
+    "archive": "BAZOR_M1_PONY_ANIMATEDIFF_INSTALL_1_CLIC_20260924.zip",
+    "archive_sha256": "97e36cca447f4e5b37620c4139fad114cecb60c46096f6ec235ed37341f34765",
+    "installer_mode": "EXISTING_COMFY_ONLY_CHECKSUM_VERIFIED_RESUMABLE_NO_GENERATION",
+    "pinned_sources": {
+      "pony": {
+        "huggingface_repo": "6chan/Pony-Diffusion-V6-XL",
+        "file": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+        "size_bytes": 6938041050,
+        "sha256": "67ab2fd8ec439a89b3fedb15cc65f54336af163c7eb5e4f2acc98f090a29b0b3"
+      },
+      "motion": {
+        "huggingface_repo": "guoyww/animatediff",
+        "file": "mm_sdxl_v10_beta.ckpt",
+        "size_bytes": 950143538,
+        "sha256": "fa4950a062e892fca50d4c441fcd6130d1ad68a621a0404d155be17580072978"
+      },
+      "animatediff_evolved": {
+        "github_repo": "Kosinkadink/ComfyUI-AnimateDiff-Evolved",
+        "version": "1.6.0",
+        "commit": "9257651221002dcba0a12f9cff37e1944e58fb60"
+      }
+    },
+    "verification": "Four offline unit tests passed and ZIP testzip checked; no Windows execution has occurred.",
+    "safety": "No downloads of RIFE/RealESRGAN yet; no pip/torch/numpy changes; no existing model overwrite; no force-stop of running Comfy; no generation.",
+    "user_action": "Extract ZIP, double-click DOUBLE_CLIC_INSTALLER_PONY_ANIMATEDIFF.cmd, provide BAZOR_M1_INSTALL_A_ME_TRANSMETTRE_*.zip privately."
   }
 }
