@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M3B_RUNTIME_SUCCESS_M3C_TWO_STAGE_DIAGNOSTIC_PREPARED",
+  "status": "M3C_IMPORT_FAILED_AUTONOMOUS_V2_READY_NOT_EXECUTED",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -93,14 +93,14 @@
     }
   ],
   "last_completed_milestone": "M3",
-  "next_action": "Vincent downloads private M3c ZIP, Extract all, double-clicks DOUBLE_CLIC_DIAGNOSTIC_M3C.cmd. Read private result BAZOR_M3C_A_ME_TRANSMETTRE_*.zip. Compare actual roundtrip vs resized original and, only if gate passed, 20-step AnimateDiff frames vs M3b. Do not equate automated gate with perceptual approval.",
+  "next_action": "Vincent downloads fresh autonomous V2 ZIP, Extract All to new folder, launches DOUBLE_CLIC_M3C_CORRIGE.cmd. Retrieve private BAZOR_M3C_A_ME_TRANSMETTRE_*.zip or exact new blocking message; never claim actual GPU run before log.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "No real M3c GPU/test results yet",
-    "M3b output identity degraded vs M2 source",
-    "M4 RIFE/RealESRGAN premature until root cause assessed"
+    "Await actual Windows runtime attempt using self-contained M3c v2",
+    "M3b fidelity low; source of loss not yet isolated",
+    "M4 RIFE/RealESRGAN pending"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -611,5 +611,31 @@
       "windows_or_gpu_execution": false
     },
     "next_private_output": "BAZOR_M3C_A_ME_TRANSMETTRE_*.zip"
+  },
+  "m3c_first_run_incident_20260925": {
+    "reported_error": "ModuleNotFoundError: No module named 'bazor_m3c_core'",
+    "phase": "BEFORE any ComfyUI work / no GPU job submitted",
+    "original_archive_contains_helper": true,
+    "suspected_cause": "Helper absent from extracted working folder (incomplete extraction or protection possible; exact reason not established).",
+    "no_model_changes": true
+  },
+  "m3c_autonomous_v2_fix": {
+    "status": "READY_FOR_USER_TEST_NOT_EXECUTED_ON_WINDOWS",
+    "filename": "BAZOR_M3C_CORRECTIF_AUTONOME_1_CLIC_20260925.zip",
+    "sha256": "857596e9ce5aabc328f0345b0afd5eaa0e8abf3e3c0a97c881cec33506bc4ea8",
+    "size_bytes": 1236883,
+    "launcher": "DOUBLE_CLIC_M3C_CORRIGE.cmd",
+    "mechanism": "All bazor_m3c_core Python source is embedded within BAZOR_M3C_AUTONOME.py; no additional core.py is required. Source PNG and M3b comparison PNGs remain packaged and hash verified.",
+    "offline_tests": [
+      "ZIP CRC and required files OK",
+      "ASCII .cmd no UTF8 BOM",
+      "Syntax checked",
+      "Isolated import successful after extraction with helper file absent",
+      "Source staging in disposable fake ComfyUI verified incl __file__ resolution",
+      "Source and baseline image SHA256 verified"
+    ],
+    "unchanged_workflow": "First resize/VAE roundtrip at 384x384 no motion; only if heuristic metrics pass one 20-step AnimateDiff-SDXL 8-frame run with M3b settings otherwise stop. No installs or downloads.",
+    "next_result_zip": "BAZOR_M3C_A_ME_TRANSMETTRE_*.zip",
+    "warning": "Possible external AV quarantine not bypassed. Do not disable antivirus."
   }
 }
