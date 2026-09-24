@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M3B_REAL_SUCCESS_FIDELITY_STILL_INSUFFICIENT",
+  "status": "M3B_RUNTIME_SUCCESS_M3C_TWO_STAGE_DIAGNOSTIC_PREPARED",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -93,14 +93,14 @@
     }
   ],
   "last_completed_milestone": "M3",
-  "next_action": "Before M4 RIFE/upscale, isolate fidelity root cause: generate a no-motion 384x384 VAE encode/decode roundtrip from exact M2 source to measure resize/VAE loss; if roundtrip acceptable, compare a controlled M3c variant keeping M3b prompt/seed/denoise 0.38/resolution/frames while raising sampling steps cautiously (e.g., 20) and logging GPU. Do not infer that interpolation or superresolution can repair warped anatomy.",
+  "next_action": "Vincent downloads private M3c ZIP, Extract all, double-clicks DOUBLE_CLIC_DIAGNOSTIC_M3C.cmd. Read private result BAZOR_M3C_A_ME_TRANSMETTRE_*.zip. Compare actual roundtrip vs resized original and, only if gate passed, 20-step AnimateDiff frames vs M3b. Do not equate automated gate with perceptual approval.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "M3b images still low fidelity; root cause unisolated",
-    "First frame not exact original; need conditioning improvements for pro mode",
-    "RIFE/RealESRGAN M4 pending, only after acceptable core frames"
+    "No real M3c GPU/test results yet",
+    "M3b output identity degraded vs M2 source",
+    "M4 RIFE/RealESRGAN premature until root cause assessed"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -571,5 +571,45 @@
     "visual_review": "M3b panda head/body silhouette and subject positioning more recognizable than M3, fewer extreme saturated glitches; still markedly washed/smeared relative to original M2 with unstable detail, geometric eye areas and little perceptible motion. Not acceptable as high-fidelity production.",
     "source_first_frame_pixel_exact": false,
     "comparison_limitations": "M3b changed both denoise and prompt, so any gain cannot be attributed solely to denoise. VRAM free values sampled at different times and cache states, not direct controlled comparison."
+  },
+  "m3c_diagnostic_20260925": {
+    "status": "PRIVATE_ARCHIVE_READY_OFFLINE_TESTED_NOT_EXECUTED_ON_USER_WINDOWS",
+    "name": "BAZOR_M3C_DIAGNOSTIC_VAE_ET_20_PAS_1_CLIC_20260925.zip",
+    "sha256": "4c40bb6145ef11485e9404616d58b435b4ff9f73756b1b2c7c9d4013c61d6ae0",
+    "bytes": 1237652,
+    "launcher": "DOUBLE_CLIC_DIAGNOSTIC_M3C.cmd",
+    "includes_real_user_assets": "M2 verified PNG and three representative M3b frames. Remain only in PRIVATE user-facing ZIP, not committed publicly.",
+    "two_stage_plan": [
+      "Stage A: real ComfyUI 384x384 ImageScale -> Pony checkpoint VAEEncode -> VAEDecode; save actual resized reference and decoded roundtrip, with NO KSampler or motion model.",
+      "Calculate RGB PSNR, SSIM and MAE against exact ComfyUI resized reference. Conservative automated quality gate: PSNR >=22dB AND SSIM>=0.78 AND MAE<=13/255. This is a heuristic, not visual approval; if it fails stop with comparative image and private report.",
+      "Only if gate passes and ComfyUI queue idle/VRAM adequate: M3c short AnimateDiff SDXL 8x384, denoise 0.38, CFG 4.5, seed 20260925, identical M3b prompt/image/motion/sampler; change ONLY KSampler steps from 10 to 20; 8 PNG + MP4.",
+      "Compare source M2, ComfyUI-resized 384, no-motion VAE roundtrip, prior M3b first frame, and new M3c first/last frames in user report. If visually still poor, next distinguish static img2img vs motion conditioning before RIFE/upscale."
+    ],
+    "safeguards": [
+      "No new installations/downloads/restarts by design when ComfyUI already running",
+      "Reuse existing ComfyUI portable (guarded start if absent) and Pony checkpoint",
+      "Verify live node schemas/menu and idle queue",
+      "Only release cached models through existing /free endpoint if queue idle",
+      "Persist UUID BEFORE each /prompt and never blindly re-post after interruption",
+      "No automatic retry if OOM, timeout, missing node, failed metric gate",
+      "All logs/images local and user ZIP private; never commit private report or image to public repo"
+    ],
+    "offline_validation": {
+      "passed": 32,
+      "failed": 0,
+      "included": [
+        "source and prior M3b frame hashes",
+        "no-motion Stage A workflow static check",
+        "PSNR/SSIM positive and blurred negative",
+        "M3c graph identical M3b except sampler steps 20",
+        "mock end-to-end staged 2 jobs and MP4 packaging",
+        "idempotent rerun no second GPU job",
+        "low-quality VAE failure stops before AnimateDiff",
+        "ZIP integrity",
+        "Windows launcher ASCII no BOM"
+      ],
+      "windows_or_gpu_execution": false
+    },
+    "next_private_output": "BAZOR_M3C_A_ME_TRANSMETTRE_*.zip"
   }
 }
