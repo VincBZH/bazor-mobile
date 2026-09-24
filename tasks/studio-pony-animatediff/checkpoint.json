@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
+  "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
+  "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
+  "status": "PLANNED_NOT_EXECUTED",
+  "machine": {
+    "gpu": "RTX 4060 Laptop",
+    "vram_gb": 8,
+    "studio_root_candidate": "C:\\AI\\SimpleStudioV2",
+    "comfy_url_candidate": "http://127.0.0.1:8188",
+    "studio_url_candidate": "http://127.0.0.1:8191",
+    "local_verification": "REQUIRED"
+  },
+  "pipeline": {
+    "still": "Pony Diffusion V6 XL SDXL",
+    "animation": "AnimateDiff-Evolved with SDXL-specific motion module; choose HotshotXL/AnimateDiff-SDXL after local test",
+    "postprocess": "RIFE + RealESRGAN if installed and proven",
+    "mode": "image validation then image-conditioned short animation",
+    "legacy_components": "do not delete MiniMax H3",
+    "forbidden_incompatibilities": [
+      "SD1.5 motion module mm_sd_v15_v2 attached to Pony XL",
+      "SVD motion_bucket_id used as AnimateDiff setting"
+    ]
+  },
+  "milestones": [
+    {
+      "id": "M0",
+      "status": "PENDING",
+      "name": "Local inventory & backup"
+    },
+    {
+      "id": "M1",
+      "status": "PENDING",
+      "name": "Pony XL + SDXL motion compatibility"
+    },
+    {
+      "id": "M2",
+      "status": "PENDING",
+      "name": "Pony still real runtime workflow"
+    },
+    {
+      "id": "M3",
+      "status": "PENDING",
+      "name": "Image-conditioned short AnimateDiff runtime"
+    },
+    {
+      "id": "M4",
+      "status": "PENDING",
+      "name": "RIFE upscale & mp4 validation"
+    },
+    {
+      "id": "M5",
+      "status": "PENDING",
+      "name": "Studio PRO one-click integration"
+    },
+    {
+      "id": "M6",
+      "status": "PENDING",
+      "name": "Restart tests, rollback, regression"
+    },
+    {
+      "id": "M7",
+      "status": "PENDING",
+      "name": "Final E2E proof, measured report"
+    }
+  ],
+  "last_completed_milestone": null,
+  "next_action": "READ MASTER SPEC #149 + ISSUE #161; RUN LOCAL READ-ONLY INVENTORY; BACKUP BEFORE PATCH; UPDATE THIS FILE WITH PROOF.",
+  "changed_files": [],
+  "test_results": [],
+  "runtime_proof": false,
+  "blocked_on": [
+    "Astra not launched from this chat",
+    "Local Windows runtime uninspected"
+  ],
+  "rollback_paths": [],
+  "evidence_paths": [],
+  "last_verified_commit": null,
+  "resume_protocol": [
+    "On every milestone write current state/logs to local disk and commit public technical status here",
+    "Never publish prompts, generated images, credentials or private logs to public repository",
+    "If credits stop, resume from last verified state, not reconstructed model reasoning",
+    "No shell commands from GitHub issue comments"
+  ],
+  "note": "This file is a work checkpoint, not proof that Studio/ComfyUI has been modified."
+}
