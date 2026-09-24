@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
+  "prepared_on": "2026-09-24",
+  "execution_status": "INSTALLER_PREPARED_NOT_EXECUTED_ON_USER_PC",
+  "artifact": {
+    "name": "BAZOR_PONY_ANIMATEDIFF_SDXL_INSTALL_AUTO_20260924.zip",
+    "sha256": "66ee083a8996b5370d6cd59dd9a14cac8376a4f21b36fa1399204d85111f347b",
+    "size_bytes": 9967,
+    "delivery": "private conversation attachment only",
+    "main_launcher": "DOUBLE_CLIC_INSTALLER_PONY_SDXL.cmd"
+  },
+  "download_sources": [
+    {
+      "id": "pony_v6_xl",
+      "repo": "https://huggingface.co/6chan/Pony-Diffusion-V6-XL",
+      "source_type": "third-party HF mirror requested by user",
+      "revision": "897c161e51093fb940e87a5a9b29cbc3d309a8dd",
+      "filename": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+      "size_bytes": 6938041050,
+      "sha256": "67ab2fd8ec439a89b3fedb15cc65f54336af163c7eb5e4f2acc98f090a29b0b3",
+      "destination": "ComfyUI/models/checkpoints"
+    },
+    {
+      "id": "sdxl_motion",
+      "repo": "https://huggingface.co/guoyww/animatediff",
+      "revision": "cd71ae134a27ec6008b968d6419952b0c0494cf2",
+      "filename": "mm_sdxl_v10_beta.ckpt",
+      "size_bytes": 950143538,
+      "sha256": "fa4950a062e892fca50d4c441fcd6130d1ad68a621a0404d155be17580072978",
+      "destination": "ComfyUI/models/animatediff_models"
+    },
+    {
+      "id": "extension",
+      "repo": "https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved",
+      "commit": "9257651221002dcba0a12f9cff37e1944e58fb60",
+      "version": "1.6.0",
+      "destination": "ComfyUI/custom_nodes/ComfyUI-AnimateDiff-Evolved"
+    }
+  ],
+  "prerequisites_verified_from_prior_private_reports": {
+    "api_port": 8188,
+    "comfyui_version": "0.34.0",
+    "python_embedded": "3.13.14",
+    "torch": "2.13.0+cu130",
+    "videohelper_suite_runtime": true,
+    "controlnet_aux_runtime": true,
+    "gpu": "RTX 4060 Laptop 8GB"
+  },
+  "safeguards": [
+    "Read extra_model_paths.yaml and reuse matching SHA256 checkpoint in Forge or ComfyUI",
+    "Never overwrite mismatching existing files",
+    "Stream to .part and resume with verified HTTP Content-Range",
+    "Verify fixed SHA256 and byte size before promoting models",
+    "Download pinned plugin source and validate Gen2 node IDs before installing",
+    "Refuse duplicate AnimateDiff extension directories",
+    "Keep at least 15 decimal GB free after downloads",
+    "Do not modify Studio, MiniMax H3, Wan, Torch, NumPy or ComfyUI startup flags",
+    "Do not kill/restart live ComfyUI or trigger video generation",
+    "Report status and JSON privately; never commit private logs"
+  ],
+  "offline_tests": {
+    "passed": 5,
+    "failed": 0,
+    "areas": [
+      "sha validation",
+      "safe resume",
+      "wrong hash halt",
+      "ZIP extension integrity/atomic install",
+      "mock end-to-end idempotent re-run"
+    ],
+    "windows_live_executed": false
+  },
+  "next_steps": [
+    "Run the one-click ZIP on Vincent's own Windows machine",
+    "Read report ZIP privately",
+    "Restart ComfyUI normally when idle",
+    "Verify actual Gen2 ADE nodes and model choices in /object_info",
+    "Only then attempt Pony still frame and short SDXL motion under 8GB safety limits"
+  ]
+}
