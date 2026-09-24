@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_VERIFIED_M2_ONE_CLICK_PREPARED_NOT_EXECUTED",
+  "status": "M2_STILL_VERIFIED_M3_ONE_CLICK_READY_NOT_EXECUTED",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -61,14 +61,15 @@
     },
     {
       "id": "M2",
-      "status": "ONE_CLICK_PREPARED_NOT_EXECUTED",
+      "status": "VERIFIED",
       "name": "Pony still real runtime workflow",
-      "note": "Read-only preflight then one Pony still 512x512 if idle queue. Script tested offline and ZIP delivered in private conversation. No Windows/GPU generation proof yet."
+      "note": "User's private ZIP 2026-09-25 00:00:55 includes actual 512x512 PNG from real Pony CheckpointLoader, 16 steps, CFG 5.0, seed 20260924; M2 completed without AnimateDiff; GPU readings before 7865 MiB and after 1735 MiB free are snapshots, not measured peak consumption."
     },
     {
       "id": "M3",
-      "status": "PENDING",
-      "name": "Image-conditioned short AnimateDiff runtime"
+      "status": "ONE_CLICK_PREPARED_NOT_EXECUTED",
+      "name": "Image-conditioned short AnimateDiff runtime",
+      "note": "8-frame 384x384 source-image-conditioned AnimateDiff-SDXL test; seeded from the validated M2 red panda PNG included in private ZIP. No Windows GPU generation run yet; 8GB may OOM."
     },
     {
       "id": "M4",
@@ -91,15 +92,15 @@
       "name": "Final E2E proof, measured report"
     }
   ],
-  "last_completed_milestone": null,
-  "next_action": "Vincent extracts and double-clicks DOUBLE_CLIC_M2_IMAGE_PONY.cmd. Obtain private BAZOR_M2_A_ME_TRANSMETTRE_*.zip with PNG/JSON/TXT. Validate actual image, VRAM behavior, ComfyUI job history, elapsed time before considering a short image-conditioned AnimateDiff-SDXL M3 test.",
+  "last_completed_milestone": "M2",
+  "next_action": "Vincent extracts private ZIP and double-clicks DOUBLE_CLIC_M3_VIDEO_PONY.cmd. Collect private BAZOR_M3_A_ME_TRANSMETTRE_*.zip. Only after reviewing actual generated 8 PNGs/MP4, ComfyUI job history and GPU/OOM determine feasibility and next M3 improvements. Never claim real SDXL motion success from offline mocks.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "M2 first GPU still render not executed or reviewed",
-    "M3 AnimateDiff-SDXL VRAM compatibility and image-conditioning still unproven",
-    "RIFE/RealESRGAN post-processing not yet installed"
+    "Actual 8-frame SDXL AnimateDiff runtime under 8GB not tested",
+    "M3 generated PNGs/MP4 not yet reviewed",
+    "RIFE/RealESRGAN postprocess remains future M4"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -420,5 +421,60 @@
     "offline_tests": "7 groups passed; Python AST, legacy/V3 menus, graph, refusal missing Pony/sampler, no duplicate state and process-check, ASCII launcher and ZIP checksum",
     "verified_on_user_windows": false,
     "result_zip_pattern": "BAZOR_M2_A_ME_TRANSMETTRE_*.zip"
+  },
+  "m2_real_generation_20260925": {
+    "timestamp": "2026-09-25T00:00:55",
+    "status": "COMPLETE_PNG_INSPECTED",
+    "resolution": [
+      512,
+      512
+    ],
+    "steps": 16,
+    "cfg": 5,
+    "seed": 20260924,
+    "image_exists_in_private_zip": true,
+    "image_sha256": "d028fcf7c6ae06d2963dc3341805c47ecccaba466aba0888a9f4792f1026a600",
+    "observed_vram_free_before_mib": 7865,
+    "observed_vram_free_after_mib": 1735,
+    "caveat": "VRAM snapshots can reflect model caching; not a GPU peak utilization measurement.",
+    "motion_used": false
+  },
+  "m3_one_click_package_20260925": {
+    "status": "ARCHIVE_BUILT_OFFLINE_TESTED_NOT_EXECUTED_ON_VINCENT_PC",
+    "archive_name": "BAZOR_M3_PONY_ANIMATEDIFF_SDXL_1_CLIC_20260925.zip",
+    "sha256": "7ee91642e7a6db98c7b8c3e9599181a3b7722cd22d056d49fb0ab8f4279fa37e",
+    "bytes": 507658,
+    "launcher": "DOUBLE_CLIC_M3_VIDEO_PONY.cmd",
+    "includes_exact_m2_validated_source_png": true,
+    "config": {
+      "resolution": [
+        384,
+        384
+      ],
+      "frames": 8,
+      "fps": 8,
+      "steps": 10,
+      "cfg": 4.5,
+      "denoise": 0.52,
+      "beta_schedule": "linear (AnimateDiff-SDXL)",
+      "checkpoint": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+      "motion": "mm_sdxl_v10_beta.ckpt"
+    },
+    "graph": "LoadImage -> ImageScale -> VAEEncode -> RepeatLatentBatch(8), Pony CLIP prompt, ADE_LoadAnimateDiffModel -> ADE_ApplyAnimateDiffModel -> ADE_UseEvolvedSampling -> KSampler -> VAEDecode -> SaveImage -> FFmpeg MP4",
+    "safeguards": [
+      "No download/installation/RIFE/upscale",
+      "Conditioned on M2 real image but not pixel-identical first frame",
+      "Existing ComfyUI reuse or anti-duplicate start",
+      "Strict live /object_info menus and empty queue",
+      "Only if queue idle optionally free cached ComfyUI memory through /free",
+      "Stable prompt UUID persisted before POST to prevent duplicate GPU jobs",
+      "Abort/report on OOM or missing nodes rather than blindly retry",
+      "Report ZIP includes images, MP4 if encode works and sanitized local progress; do not publish raw reports"
+    ],
+    "offline_tests_passed": 12,
+    "offline_ffmpeg_mp4_encode_tested": true,
+    "mocked_end_to_end_and_rerun_tested": true,
+    "user_windows_runtime_unverified": true,
+    "expected_private_report": "BAZOR_M3_A_ME_TRANSMETTRE_*.zip"
   }
 }
