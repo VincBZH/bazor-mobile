@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M2_STILL_VERIFIED_M3_ONE_CLICK_READY_NOT_EXECUTED",
+  "status": "M3_TECHNICAL_SUCCESS_M3B_FIDELITY_TEST_PREPARED_NOT_EXECUTED",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -67,9 +67,9 @@
     },
     {
       "id": "M3",
-      "status": "ONE_CLICK_PREPARED_NOT_EXECUTED",
+      "status": "TECHNICALLY_VERIFIED_VISUAL_QUALITY_NEEDS_IMPROVEMENT",
       "name": "Image-conditioned short AnimateDiff runtime",
-      "note": "8-frame 384x384 source-image-conditioned AnimateDiff-SDXL test; seeded from the validated M2 red panda PNG included in private ZIP. No Windows GPU generation run yet; 8GB may OOM."
+      "note": "Real private ZIP 2026-09-25 00:15:06: AnimateDiff-SDXL on RTX4060 8GB completed 8 PNG, 384x384, MP4 H.264 1s/8fps. Sampled min free 1157 MiB; qualitative inspection shows strong smearing, abstract color drift and weak fidelity to original M2 image; not production ready."
     },
     {
       "id": "M4",
@@ -92,15 +92,15 @@
       "name": "Final E2E proof, measured report"
     }
   ],
-  "last_completed_milestone": "M2",
-  "next_action": "Vincent extracts private ZIP and double-clicks DOUBLE_CLIC_M3_VIDEO_PONY.cmd. Collect private BAZOR_M3_A_ME_TRANSMETTRE_*.zip. Only after reviewing actual generated 8 PNGs/MP4, ComfyUI job history and GPU/OOM determine feasibility and next M3 improvements. Never claim real SDXL motion success from offline mocks.",
+  "last_completed_milestone": "M3",
+  "next_action": "Vincent extracts M3b ZIP, double-clicks DOUBLE_CLIC_M3B_FIDELITE.cmd, sends private BAZOR_M3B_A_ME_TRANSMETTRE_*.zip. Inspect actual 8 PNG/MP4 side-by-side with M3 and GPU/Comfy status; iterate fidelity if poor, then plan RIFE/RealESRGAN M4 only when appropriate.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "Actual 8-frame SDXL AnimateDiff runtime under 8GB not tested",
-    "M3 generated PNGs/MP4 not yet reviewed",
-    "RIFE/RealESRGAN postprocess remains future M4"
+    "Real 0.38-denoise M3b GPU job not yet executed",
+    "Visual fidelity poor in successful M3 baseline; M3b not guaranteed to fix it",
+    "RIFE/RealESRGAN M4 not installed/proven"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -476,5 +476,66 @@
     "mocked_end_to_end_and_rerun_tested": true,
     "user_windows_runtime_unverified": true,
     "expected_private_report": "BAZOR_M3_A_ME_TRANSMETTRE_*.zip"
+  },
+  "m3_real_generation_20260925": {
+    "report_received": true,
+    "reported_status": "COMPLETE",
+    "run_started_local": "2026-09-25T00:14:32",
+    "run_finished_local": "2026-09-25T00:15:06",
+    "pipeline": "Pony V6 XL + AnimateDiff Evolved Gen2 + mm_sdxl_v10_beta.ckpt + M2 source VAEEncode repeated 8 times",
+    "frames": 8,
+    "frame_size": [
+      384,
+      384
+    ],
+    "fps": 8,
+    "mp4_codec": "h264",
+    "mp4_duration_seconds": 1,
+    "denoise": 0.52,
+    "steps": 10,
+    "cfg": 4.5,
+    "seed": 20260925,
+    "gpu_min_free_mib_sampled": 1157,
+    "vrambudget_note": "Sampled minimum free VRAM from finite polls, not a measured peak utilization or warranty for longer videos.",
+    "source_first_frame_pixel_exact": false,
+    "no_installation": true,
+    "no_rife": true,
+    "no_upscale": true,
+    "runtime_evidence": "ComfyUI history status success, 8 PNG inspected, FFprobe H.264 384x384 8fps 1s verified from private ZIP",
+    "visual_review": "BAD_FIDELITY: panda outline present, but large color distortions, smeared anatomy/background and unstable features across frames. M3 technical feasibility proven only; do not claim clean motion, stable face or production quality."
+  },
+  "m3b_fidelity_trial_20260925": {
+    "status": "PACKAGE_DELIVERED_OFFLINE_TESTED_NOT_EXECUTED_ON_USER_WINDOWS",
+    "archive_name": "BAZOR_M3B_FIDELITE_IMAGE_1_CLIC_20260925.zip",
+    "archive_sha256": "127628189defec84fffc7ebab3380a9484b390d71fd5f737566617254561b5a3",
+    "archive_size_bytes": 508855,
+    "launcher": "DOUBLE_CLIC_M3B_FIDELITE.cmd",
+    "test_version": "M3b-denoise038-v1",
+    "settings": {
+      "frames": 8,
+      "width": 384,
+      "height": 384,
+      "fps": 8,
+      "steps": 10,
+      "cfg": 4.5,
+      "seed": 20260925,
+      "denoise": 0.38
+    },
+    "comparison": "Reuse exact original M2 PNG/checkpoint/motion/seed/sampler, lower denoise from 0.52 to 0.38, also refine prompt toward minimal motion, facial and scene fidelity; not a single-variable denoise experiment.",
+    "safeguards": [
+      "Reuse existing ComfyUI, no package/model installs, no RIFE/upscale",
+      "Check API /object_info all 12 nodes and live model choices",
+      "Block if ComfyUI queue not empty",
+      "Optional /free idle cache only when queue proven empty",
+      "Persist prompt UUID before POST to avoid duplicate GPU jobs",
+      "Separate M3b report/state, no overwrite M3 success outputs",
+      "No automatic GPU retry after OOM/error",
+      "Only private ZIP reporting"
+    ],
+    "offline_test_count": 18,
+    "offline_failed": 0,
+    "mock_end_to_end_mp4": true,
+    "important_test_limitation": "Mock reused earlier M3 PNG frames and FFmpeg solely for packaging; actual M3b GPU quality/performance untested.",
+    "expected_report_zip": "BAZOR_M3B_A_ME_TRANSMETTRE_*.zip"
   }
 }
