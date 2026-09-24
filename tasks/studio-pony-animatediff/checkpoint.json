@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "PLANNED_NOT_EXECUTED",
+  "status": "M0_STATIC_INVENTORY_RECEIVED_RUNTIME_PENDING",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -43,8 +43,9 @@
   "milestones": [
     {
       "id": "M0",
-      "status": "PENDING",
-      "name": "Local inventory & backup"
+      "status": "PARTIAL",
+      "name": "Local inventory & backup",
+      "note": "Read-only inventory received 2026-09-24. API /object_info and extra_model_paths.yaml still unverified. No installation."
     },
     {
       "id": "M1",
@@ -83,13 +84,14 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "READ ISSUE #149 + ISSUE #161 + PLAN.md; VERIFY LOCAL /object_info AND MODEL FILENAMES; PERFORM READ-ONLY M0 INVENTORY; BACKUP BEFORE PATCH; UPDATE CHECKPOINT WITH REAL EVIDENCE",
+  "next_action": "Read extra_model_paths.yaml and inspect extra model roots; start existing authorized ComfyUI, query actual API port /object_info; verify model names and custom nodes; only then decide conditional installation.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "Astra not launched from this chat",
-    "Local Windows runtime uninspected"
+    "ComfyUI runtime API unverified",
+    "extra_model_paths.yaml not parsed",
+    "No workflow runtime validation"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -102,5 +104,37 @@
   ],
   "note": "This file is a work checkpoint, not proof that Studio/ComfyUI has been modified.",
   "architecture_revision": 2,
-  "architecture_plan_url": "https://github.com/VincBZH/bazor-mobile/blob/main/tasks/studio-pony-animatediff/PLAN.md"
+  "architecture_plan_url": "https://github.com/VincBZH/bazor-mobile/blob/main/tasks/studio-pony-animatediff/PLAN.md",
+  "static_inventory_20260924": {
+    "physical_model_files": 21,
+    "actual_extension_directories": 8,
+    "custom_nodes_directories_including_pycache": 9,
+    "checkpoints_existing": [
+      "sd_xl_base_1.0",
+      "NoobAI-XL-v1.1"
+    ],
+    "video_models_existing": [
+      "MiniMax H3",
+      "Wan 2.2"
+    ],
+    "custom_node_folders_present": [
+      "ComfyUI-VideoHelperSuite",
+      "comfyui_controlnet_aux",
+      "ComfyUI_IPAdapter_plus"
+    ],
+    "absent_from_scanned_roots": [
+      "Pony V6 XL",
+      "SDXL AnimateDiff motion module",
+      "AnimateDiff Evolved node folder",
+      "RIFE node folder/weights",
+      "RealESRGAN weights"
+    ],
+    "ffmpeg_and_ffprobe_paths_found": true,
+    "gpu_vram_total_mib": 8188,
+    "gpu_vram_free_mib": 7948,
+    "free_disk_gb": 38.7,
+    "comfyui_api": "NOT_VERIFIED",
+    "extra_model_paths_yaml": "PRESENT_NOT_PARSED",
+    "disclaimer": "Static file metadata only. Actual runtime loadability and global absence are not established."
+  }
 }
