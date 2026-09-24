@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_MODEL_FILES_SHA_VERIFIED_RUNTIME_VALIDATION_PENDING",
+  "status": "M1_GEN2_NODES_LOADED_V3_OPTIONS_CHECK_PENDING",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -55,9 +55,9 @@
     },
     {
       "id": "M1",
-      "status": "MODEL_FILES_INSTALLED_AND_SHA_VERIFIED_RUNTIME_PENDING",
+      "status": "GEN2_LOADED_V3_OPTIONS_PENDING",
       "name": "Pony XL + SDXL motion compatibility",
-      "note": "User ZIP 2026-09-24 23:42:29 reports Pony XL + mm_sdxl_v10_beta SHA256 validated and AnimateDiff Evolved 1.6.0 installed. ComfyUI /object_info post-restart not yet verified; no generation."
+      "note": "After guarded restart all 3 Gen2 ADE nodes registered and weights SHA256 OK; previous validator V1-only parse falsely/maybe misreports motion and beta options. Private fixed V3 read-only checker prepared."
     },
     {
       "id": "M2",
@@ -91,14 +91,13 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "Vincent extracts ZIP and double-clicks DOUBLE_CLIC_VALIDER_PONY.cmd, sends BAZOR_M1_PONY_RUNTIME_A_ME_TRANSMETTRE_*.zip privately; validate actual ADE_LoadAnimateDiffModel, ADE_ApplyAnimateDiffModel and ADE_UseEvolvedSampling classes and both model loader choices. Then test Pony still image M2; no M3 video yet.",
+  "next_action": "Vincent runs corrected private one-click validator while existing ComfyUI stays open; examine private BAZOR_M1_OPTIONS_V3_A_ME_TRANSMETTRE_*.zip; if V3 model_name lists mm_sdxl_v10_beta.ckpt and beta_schedule lists linear (AnimateDiff-SDXL), mark M1 runtime verified and proceed to M2 still-image prototype. No fresh model downloads or process restarts before results.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "ComfyUI not yet restarted/validated after AnimateDiff Evolved installation",
-    "ADE Gen2 node class schema and both model choices not yet verified in live /object_info",
-    "8GB runtime still/image and video not tested"
+    "Await exact V3 COMBO menu options from live /object_info; previous negative was from legacy-only parser and does not prove missing motion model",
+    "M2 image generation and 8GB memory not tested"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -328,5 +327,46 @@
     "behavior": "Read-only hashes and /object_info, guarded idle-only restart of exact one ComfyUI portable process. No download/install/generation.",
     "offline_tests": "9 validation cases passed; syntax/ZIP integrity and ASCII no-BOM CMD checks passed",
     "status": "PREPARED_NOT_EXECUTED_ON_WINDOWS"
+  },
+  "last_runtime_validation_20260924": {
+    "timestamp": "2026-09-24T23:50:23+02:00",
+    "report_received": true,
+    "installed_file_hashes": {
+      "pony": "OK",
+      "sdxl_motion": "OK"
+    },
+    "api_port": 8188,
+    "comfyui_restart": "CONFIRMED_RESTARTED_EXISTING_PROCESS_IDLE_QUEUE",
+    "node_classes_before_restart": 1064,
+    "node_classes_after_restart": 1209,
+    "gen2_nodes_present": [
+      "ADE_LoadAnimateDiffModel",
+      "ADE_ApplyAnimateDiffModel",
+      "ADE_UseEvolvedSampling"
+    ],
+    "pony_checkpoint_menu": true,
+    "vhs_count": 40,
+    "controlnet_aux_witnesses": [
+      "DepthAnythingPreprocessor",
+      "CannyEdgePreprocessor",
+      "OpenposePreprocessor"
+    ],
+    "validator_motion_menu_false": false,
+    "validator_beta_menu_empty": true,
+    "likely_diagnostic_bug": "Validator only parses V1 nested list combo, but AnimateDiff Evolved 1.6.0 uses ComfyUI V3 COMBO type with choices in metadata options; runtime model menu not yet independently verified.",
+    "no_generation": true
+  },
+  "m1_options_v3_validator": {
+    "status": "PREPARED_NOT_YET_EXECUTED_ON_USER_WINDOWS",
+    "private_artifact": "BAZOR_M1_VERIFICATION_OPTIONS_V3_1_CLIC_20260924.zip",
+    "sha256": "2dbcc7a8abe6cd0b847bc2aba56d2aa5d710abda6053fb5eb492b5d2fa248cde",
+    "read_only": true,
+    "no_restart": true,
+    "no_install_or_download": true,
+    "parses": [
+      "V1 [[options], metadata]",
+      "V3 ['COMBO', {'options':[...]}]"
+    ],
+    "offline_tests_passed": 6
   }
 }
