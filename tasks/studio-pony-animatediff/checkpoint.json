@@ -14,14 +14,31 @@
   },
   "pipeline": {
     "still": "Pony Diffusion V6 XL SDXL",
-    "animation": "AnimateDiff-Evolved with SDXL-specific motion module; choose HotshotXL/AnimateDiff-SDXL after local test",
+    "animation": "AnimateDiff-Evolved with verified SDXL motion module: mm_sdxl_v10_beta.ckpt or HotshotXL hsxl_temporal_layers.safetensors, determined by actual 8GB tests",
     "postprocess": "RIFE + RealESRGAN if installed and proven",
     "mode": "image validation then image-conditioned short animation",
     "legacy_components": "do not delete MiniMax H3",
     "forbidden_incompatibilities": [
       "SD1.5 motion module mm_sd_v15_v2 attached to Pony XL",
       "SVD motion_bucket_id used as AnimateDiff setting"
-    ]
+    ],
+    "parameter_contract": {
+      "forbidden": [
+        "motion_bucket_id",
+        "SD1.5 motion model directly on Pony XL"
+      ],
+      "documented": [
+        "scale_multival",
+        "effect_multival",
+        "beta_schedule",
+        "context_length",
+        "context_overlap"
+      ],
+      "conditional": [
+        "context_stride only where supported",
+        "strength/context_offset only if local /object_info reports such exact inputs"
+      ]
+    }
   },
   "milestones": [
     {
@@ -66,7 +83,7 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "READ MASTER SPEC #149 + ISSUE #161; RUN LOCAL READ-ONLY INVENTORY; BACKUP BEFORE PATCH; UPDATE THIS FILE WITH PROOF.",
+  "next_action": "READ ISSUE #149 + ISSUE #161 + PLAN.md; VERIFY LOCAL /object_info AND MODEL FILENAMES; PERFORM READ-ONLY M0 INVENTORY; BACKUP BEFORE PATCH; UPDATE CHECKPOINT WITH REAL EVIDENCE",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
@@ -83,5 +100,7 @@
     "If credits stop, resume from last verified state, not reconstructed model reasoning",
     "No shell commands from GitHub issue comments"
   ],
-  "note": "This file is a work checkpoint, not proof that Studio/ComfyUI has been modified."
+  "note": "This file is a work checkpoint, not proof that Studio/ComfyUI has been modified.",
+  "architecture_revision": 2,
+  "architecture_plan_url": "https://github.com/VincBZH/bazor-mobile/blob/main/tasks/studio-pony-animatediff/PLAN.md"
 }
