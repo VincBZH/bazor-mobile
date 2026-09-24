@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_API_VERIFIED_PYTHON_DEPENDENCIES_BLOCKED",
+  "status": "M1_DEPENDENCY_INSTALL_SUCCESS_RESTART_PENDING",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -55,7 +55,7 @@
     },
     {
       "id": "M1",
-      "status": "BLOCKED_DEPENDENCIES",
+      "status": "PYTHON_DEPENDENCIES_INSTALLED_RUNTIME_PENDING",
       "name": "Pony XL + SDXL motion compatibility",
       "note": "VideoHelperSuite and comfyui_controlnet_aux fail import: cv2 missing. VHS also warns imageio_ffmpeg missing. Pony/SDXL AnimateDiff/RIFE/RealESRGAN not yet installed."
     },
@@ -91,15 +91,14 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "Run optional targeted one-click repair for missing cv2/imageio_ffmpeg in existing embedded Python after checking NumPy/pip; normally restart existing ComfyUI (do not kill running jobs); verify VHS and controlnet_aux import in new startup log and /object_info. Afterwards choose only truly missing Pony XL + AnimateDiff-SDXL dependencies and remeasure disk/VRAM.",
+  "next_action": "Run private post-fix one-click validator; if queue empty it will restart exact ComfyUI process then verify VHS + ControlNet Aux via /object_info. Read private output ZIP before progressing; no more model downloads yet.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "cv2 missing, VHS + ControlNet Aux fail to import",
-    "imageio_ffmpeg missing according to VHS startup",
-    "Pony XL / AnimateDiff-SDXL pipeline not installed or verified",
-    "No backup or output E2E test yet"
+    "ComfyUI process has not yet restarted after Python package install",
+    "VHS/ControlNet Aux /object_info after restart unverified",
+    "Pony XL / AnimateDiff-SDXL/RIFE/RealESRGAN pending inventory and compatibility"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -181,5 +180,24 @@
       "constraints": "no automatic numpy, torch, model or node upgrades",
       "restart_required_to_activate_nodes": true
     }
+  },
+  "targeted_repair_20260924": {
+    "log_timestamp": "2026-09-24T23:12:29+02:00",
+    "package_imports_tested": true,
+    "installed": [
+      "opencv-python==4.12.0.88 (cv2 import 4.12.0)",
+      "imageio-ffmpeg==0.6.0"
+    ],
+    "installed_package_diff_only_two": true,
+    "unchanged": [
+      "numpy==2.5.2",
+      "torch==2.13.0+cu130"
+    ],
+    "models_touched": false,
+    "runtime_nodes_tested_after_restart": false,
+    "comfyui_restart_required": true,
+    "next_validator_archive": "BAZOR_M1_VALIDATION_POST_CORRECTIF_1_CLIC_20260924.zip (in private conversation only)",
+    "next_validator_status": "PREPARED_NOT_EXECUTED_ON_WINDOWS",
+    "note": "New one-click validator restarts only when one exact ComfyUI process and empty /queue are confirmed; otherwise it stops without affecting process. No installation or generation."
   }
 }
