@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M3_TECHNICAL_SUCCESS_M3B_FIDELITY_TEST_PREPARED_NOT_EXECUTED",
+  "status": "M3B_REAL_SUCCESS_FIDELITY_STILL_INSUFFICIENT",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -67,9 +67,9 @@
     },
     {
       "id": "M3",
-      "status": "TECHNICALLY_VERIFIED_VISUAL_QUALITY_NEEDS_IMPROVEMENT",
+      "status": "M3_AND_M3B_TECHNICALLY_VERIFIED_VISUAL_QUALITY_PENDING",
       "name": "Image-conditioned short AnimateDiff runtime",
-      "note": "Real private ZIP 2026-09-25 00:15:06: AnimateDiff-SDXL on RTX4060 8GB completed 8 PNG, 384x384, MP4 H.264 1s/8fps. Sampled min free 1157 MiB; qualitative inspection shows strong smearing, abstract color drift and weak fidelity to original M2 image; not production ready."
+      "note": "M3b user private ZIP from 2026-09-25 00:24:19 confirms 8 frames 384x384 8fps MP4 with denoise 0.38 and modified prompt; success under 8GB, sampled minimum free VRAM 1989 MiB. Visually red panda silhouette clearer than M3, but major loss of details/identity relative to M2; almost static. Source first frame not pixel locked."
     },
     {
       "id": "M4",
@@ -93,14 +93,14 @@
     }
   ],
   "last_completed_milestone": "M3",
-  "next_action": "Vincent extracts M3b ZIP, double-clicks DOUBLE_CLIC_M3B_FIDELITE.cmd, sends private BAZOR_M3B_A_ME_TRANSMETTRE_*.zip. Inspect actual 8 PNG/MP4 side-by-side with M3 and GPU/Comfy status; iterate fidelity if poor, then plan RIFE/RealESRGAN M4 only when appropriate.",
+  "next_action": "Before M4 RIFE/upscale, isolate fidelity root cause: generate a no-motion 384x384 VAE encode/decode roundtrip from exact M2 source to measure resize/VAE loss; if roundtrip acceptable, compare a controlled M3c variant keeping M3b prompt/seed/denoise 0.38/resolution/frames while raising sampling steps cautiously (e.g., 20) and logging GPU. Do not infer that interpolation or superresolution can repair warped anatomy.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "Real 0.38-denoise M3b GPU job not yet executed",
-    "Visual fidelity poor in successful M3 baseline; M3b not guaranteed to fix it",
-    "RIFE/RealESRGAN M4 not installed/proven"
+    "M3b images still low fidelity; root cause unisolated",
+    "First frame not exact original; need conditioning improvements for pro mode",
+    "RIFE/RealESRGAN M4 pending, only after acceptable core frames"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -537,5 +537,39 @@
     "mock_end_to_end_mp4": true,
     "important_test_limitation": "Mock reused earlier M3 PNG frames and FFmpeg solely for packaging; actual M3b GPU quality/performance untested.",
     "expected_report_zip": "BAZOR_M3B_A_ME_TRANSMETTRE_*.zip"
+  },
+  "m3b_real_generation_20260925": {
+    "date_local": "2026-09-25T00:24:19",
+    "report_received": true,
+    "status": "COMPLETE",
+    "api": "http://127.0.0.1:8188",
+    "prompt_id_private_redacted": true,
+    "settings": {
+      "size": [
+        384,
+        384
+      ],
+      "frames": 8,
+      "fps": 8,
+      "steps": 10,
+      "cfg": 4.5,
+      "denoise": 0.38,
+      "seed": 20260925,
+      "motion": "mm_sdxl_v10_beta.ckpt",
+      "beta_schedule": "linear (AnimateDiff-SDXL)"
+    },
+    "output": {
+      "frames": 8,
+      "mp4": "H.264 384x384 8fps 1 second verified with ffprobe"
+    },
+    "gpu_min_free_mib_sampled": 1989,
+    "prev_m3_gpu_min_free_mib_sampled": 1157,
+    "no_install_or_download": true,
+    "no_rife": true,
+    "no_upscale": true,
+    "runtime_status": "ComfyUI history execution_success, ffmpeg_exit_code 0",
+    "visual_review": "M3b panda head/body silhouette and subject positioning more recognizable than M3, fewer extreme saturated glitches; still markedly washed/smeared relative to original M2 with unstable detail, geometric eye areas and little perceptible motion. Not acceptable as high-fidelity production.",
+    "source_first_frame_pixel_exact": false,
+    "comparison_limitations": "M3b changed both denoise and prompt, so any gain cannot be attributed solely to denoise. VRAM free values sampled at different times and cache states, not direct controlled comparison."
   }
 }
