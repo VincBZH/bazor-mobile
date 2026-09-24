@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M3C_IMPORT_FAILED_AUTONOMOUS_V2_READY_NOT_EXECUTED",
+  "status": "M3D_STATIC_ONE_CLICK_PREPARED_NOT_YET_EXECUTED",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -93,7 +93,7 @@
     }
   ],
   "last_completed_milestone": "M3",
-  "next_action": "Vincent downloads fresh autonomous V2 ZIP, Extract All to new folder, launches DOUBLE_CLIC_M3C_CORRIGE.cmd. Retrieve private BAZOR_M3C_A_ME_TRANSMETTRE_*.zip or exact new blocking message; never claim actual GPU run before log.",
+  "next_action": "Run M3d one-click ZIP on user PC; inspect private result ZIP before attempting RIFE/upscale.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
@@ -637,5 +637,19 @@
     "unchanged_workflow": "First resize/VAE roundtrip at 384x384 no motion; only if heuristic metrics pass one 20-step AnimateDiff-SDXL 8-frame run with M3b settings otherwise stop. No installs or downloads.",
     "next_result_zip": "BAZOR_M3C_A_ME_TRANSMETTRE_*.zip",
     "warning": "Possible external AV quarantine not bypassed. Do not disable antivirus."
+  },
+  "m3c_stage_a": {
+    "status": "COMPLETE_GATE_FAILED",
+    "psnr_db": 27.47,
+    "ssim": 0.741,
+    "mae": 6.89,
+    "stage_b_20_steps_executed": false
+  },
+  "m3d_package": {
+    "file": "BAZOR_M3D_1_CLIC_20260925.zip",
+    "sha256": "3abdc67e1acf6c09d4aa072d858b5eedba28880c18938dfb376ce494742e7bde",
+    "status": "OFFLINE_TESTED_NOT_EXECUTED",
+    "purpose": "Single Pony img2img 384x384, 10 steps, denoise .38, no AnimateDiff. Compare visually with VAE-only and animated M3b.",
+    "offline_tests_passed": 10
   }
 }
