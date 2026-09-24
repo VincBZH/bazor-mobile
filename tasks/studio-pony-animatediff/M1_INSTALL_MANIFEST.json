@@ -2,7 +2,7 @@
   "schema_version": 1,
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "prepared_on": "2026-09-24",
-  "execution_status": "INSTALLER_PREPARED_NOT_EXECUTED_ON_USER_PC",
+  "execution_status": "ORIGINAL_INSTALL_ATTEMPT_BLOCKED_HF_401_RECOVERY_V2_PREPARED",
   "artifact": {
     "name": "BAZOR_PONY_ANIMATEDIFF_SDXL_INSTALL_AUTO_20260924.zip",
     "sha256": "66ee083a8996b5370d6cd59dd9a14cac8376a4f21b36fa1399204d85111f347b",
@@ -77,5 +77,26 @@
     "Restart ComfyUI normally when idle",
     "Verify actual Gen2 ADE nodes and model choices in /object_info",
     "Only then attempt Pony still frame and short SDXL motion under 8GB safety limits"
-  ]
+  ],
+  "first_user_pc_attempt": {
+    "status": "BLOCKED_NO_DESTRUCTIVE_CHANGE",
+    "log_timestamp": "2026-09-24T23:34:44",
+    "github_animatediff_source_zip": "DOWNLOADED_AND_CHECKED",
+    "pony_model": "NOT_DOWNLOADED_HTTP_401_WINERROR_10054",
+    "sdxl_motion": "NOT_ATTEMPTED",
+    "extension": "NOT_INSTALLED"
+  },
+  "recovery_v2": {
+    "archive_name": "BAZOR_PONY_SDXL_REPRISE_HF_1_CLIC_20260924.zip",
+    "sha256": "ed9f12e78ff7359f43776fcf4fc6f0143dd0cb95d86da0203ab37bca89465047",
+    "bytes": 11550,
+    "entrypoint": "DOUBLE_CLIC_REPRENDRE_PONY.cmd",
+    "downloader": "preinstalled huggingface_hub + hf-xet",
+    "official_repo": "6chan/Pony-Diffusion-V6-XL",
+    "mirror_repo": "ratoenien/pony",
+    "pony_sha256": "67ab2fd8ec439a89b3fedb15cc65f54336af163c7eb5e4f2acc98f090a29b0b3",
+    "model_verification": "sha256 and expected bytes before promote",
+    "offline_tests_passed": 7,
+    "windows_runtime_tested": false
+  }
 }
