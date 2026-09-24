@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_VERIFIED_M2_STILL_IMAGE_PENDING",
+  "status": "M1_VERIFIED_M2_ONE_CLICK_PREPARED_NOT_EXECUTED",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -61,8 +61,9 @@
     },
     {
       "id": "M2",
-      "status": "PENDING",
-      "name": "Pony still real runtime workflow"
+      "status": "ONE_CLICK_PREPARED_NOT_EXECUTED",
+      "name": "Pony still real runtime workflow",
+      "note": "Read-only preflight then one Pony still 512x512 if idle queue. Script tested offline and ZIP delivered in private conversation. No Windows/GPU generation proof yet."
     },
     {
       "id": "M3",
@@ -91,14 +92,14 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "M2 separate Pony still-image proof on existing ComfyUI, starting at 512x512, moderate steps, confirm safe idle queue and live loader choices before POST /prompt; capture GPU/Comfy logs/output evidence. Only after M2 review proceed to M3 short AnimateDiff-SDXL video, with 8GB VRAM caution.",
+  "next_action": "Vincent extracts and double-clicks DOUBLE_CLIC_M2_IMAGE_PONY.cmd. Obtain private BAZOR_M2_A_ME_TRANSMETTRE_*.zip with PNG/JSON/TXT. Validate actual image, VRAM behavior, ComfyUI job history, elapsed time before considering a short image-conditioned AnimateDiff-SDXL M3 test.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "M2 real still generation and VRAM proof not yet executed",
-    "M3 image-conditioned AnimateDiff-SDXL runtime under 8GB untested",
-    "RIFE and RealESRGAN installation pending after proof"
+    "M2 first GPU still render not executed or reviewed",
+    "M3 AnimateDiff-SDXL VRAM compatibility and image-conditioning still unproven",
+    "RIFE/RealESRGAN post-processing not yet installed"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -391,5 +392,33 @@
     "no_changes": true,
     "no_generation": true,
     "limitation": "Node registration/menu presence and SHA256 integrity do not prove motion model loads jointly with Pony under 8 GiB VRAM."
+  },
+  "m2_one_click_package_20260924": {
+    "private_archive": "BAZOR_M2_PONY_IMAGE_FIXE_UN_CLIC_20260924.zip",
+    "sha256": "6c8e0c7e509bc35ce74ea1a5d1e631bb1be8035bbdf87b61c51ae87f17deb462",
+    "size_bytes": 7997,
+    "launcher": "DOUBLE_CLIC_M2_IMAGE_PONY.cmd",
+    "settings": {
+      "resolution": "512x512",
+      "steps": 16,
+      "cfg": 5,
+      "sampler": "euler",
+      "scheduler": "normal",
+      "seed": 20260924,
+      "batch": 1,
+      "subject": "single red panda in forest, no person"
+    },
+    "safety": [
+      "Uses existing portable ComfyUI; starts only if offline and no Comfy Python process detected",
+      "Requires idle queue and available Pony checkpoint menu",
+      "Skips AnimateDiff entirely during M2",
+      "Blocks on VRAM below 4800 MiB or free disk below 4GB",
+      "Stable prompt UUID persisted before submission to prevent duplicate generation after interruption",
+      "Packages JSON/TXT and single resulting image privately",
+      "No model/Python/Studio modifications and no automatic retry of image generation"
+    ],
+    "offline_tests": "7 groups passed; Python AST, legacy/V3 menus, graph, refusal missing Pony/sampler, no duplicate state and process-check, ASCII launcher and ZIP checksum",
+    "verified_on_user_windows": false,
+    "result_zip_pattern": "BAZOR_M2_A_ME_TRANSMETTRE_*.zip"
   }
 }
