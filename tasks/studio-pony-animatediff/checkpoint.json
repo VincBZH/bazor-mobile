@@ -3,14 +3,20 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M0_STATIC_INVENTORY_RECEIVED_RUNTIME_PENDING",
+  "status": "M1_API_VERIFIED_PYTHON_DEPENDENCIES_BLOCKED",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
     "studio_root_candidate": "C:\\AI\\SimpleStudioV2",
     "comfy_url_candidate": "http://127.0.0.1:8188",
     "studio_url_candidate": "http://127.0.0.1:8191",
-    "local_verification": "REQUIRED"
+    "local_verification": "REQUIRED",
+    "comfy_url_verified": "http://127.0.0.1:8188",
+    "comfyui_version": "0.34.0",
+    "python_version": "3.13.14",
+    "pytorch_version": "2.13.0+cu130",
+    "vram_mode": "NORMAL_VRAM",
+    "dynamic_vram": true
   },
   "pipeline": {
     "still": "Pony Diffusion V6 XL SDXL",
@@ -43,14 +49,15 @@
   "milestones": [
     {
       "id": "M0",
-      "status": "PARTIAL",
+      "status": "INVENTORY_DONE_BACKUP_PENDING",
       "name": "Local inventory & backup",
-      "note": "Read-only inventory received 2026-09-24. API /object_info and extra_model_paths.yaml still unverified. No installation."
+      "note": "M1 logs show live ComfyUI API on 8188 and YAML paths resolved; missing cv2 prevents VHS/controlnet_aux import. Complete backups and dependency fix before M1."
     },
     {
       "id": "M1",
-      "status": "PENDING",
-      "name": "Pony XL + SDXL motion compatibility"
+      "status": "BLOCKED_DEPENDENCIES",
+      "name": "Pony XL + SDXL motion compatibility",
+      "note": "VideoHelperSuite and comfyui_controlnet_aux fail import: cv2 missing. VHS also warns imageio_ffmpeg missing. Pony/SDXL AnimateDiff/RIFE/RealESRGAN not yet installed."
     },
     {
       "id": "M2",
@@ -84,14 +91,15 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "Read extra_model_paths.yaml and inspect extra model roots; start existing authorized ComfyUI, query actual API port /object_info; verify model names and custom nodes; only then decide conditional installation.",
+  "next_action": "Run optional targeted one-click repair for missing cv2/imageio_ffmpeg in existing embedded Python after checking NumPy/pip; normally restart existing ComfyUI (do not kill running jobs); verify VHS and controlnet_aux import in new startup log and /object_info. Afterwards choose only truly missing Pony XL + AnimateDiff-SDXL dependencies and remeasure disk/VRAM.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "ComfyUI runtime API unverified",
-    "extra_model_paths.yaml not parsed",
-    "No workflow runtime validation"
+    "cv2 missing, VHS + ControlNet Aux fail to import",
+    "imageio_ffmpeg missing according to VHS startup",
+    "Pony XL / AnimateDiff-SDXL pipeline not installed or verified",
+    "No backup or output E2E test yet"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -136,5 +144,42 @@
     "comfyui_api": "NOT_VERIFIED",
     "extra_model_paths_yaml": "PRESENT_NOT_PARSED",
     "disclaimer": "Static file metadata only. Actual runtime loadability and global absence are not established."
+  },
+  "runtime_audit_20260924": {
+    "api_url": "http://127.0.0.1:8188",
+    "api_verified": true,
+    "object_info_node_classes": 967,
+    "custom_nodes": {
+      "ComfyUI_VideoHelperSuite": "IMPORT_FAILED_NO_CV2",
+      "comfyui_controlnet_aux": "IMPORT_FAILED_NO_CV2",
+      "ComfyUI_IPAdapter_plus": "IMPORT_OK",
+      "ComfyUI_Spectrum_MiniMax_H3": "IMPORT_OK",
+      "ComfyUI_GGUF": "IMPORT_OK",
+      "ComfyUI_BerniniR": "IMPORT_OK"
+    },
+    "videohelper_additional_warning": "imageio_ffmpeg import failed",
+    "model_paths_yml_resolved": [
+      "Forge webui models/ControlNet",
+      "Forge webui models/Lora",
+      "Forge webui models/Stable-diffusion",
+      "Forge webui models/VAE"
+    ],
+    "installed_model_files_seen_in_latest_M1_scan": 20,
+    "gpu_vram_mib": {
+      "total": 8188,
+      "free_during_scan": 7865
+    },
+    "disk_free_gb": 38.27,
+    "vrambudget": "NORMAL_VRAM with DynamicVRAM/offloading active",
+    "launcher_zip_error": "Tried zipping active stderr log; user supplied individual logs, no repeat audit needed",
+    "dependencies_targeted_fix": {
+      "status": "PREPARED_NOT_EXECUTED_ON_WINDOWS",
+      "packages": [
+        "opencv-python==4.12.0.88 if cv2 missing",
+        "imageio-ffmpeg>=0.5.1,<1 if module missing"
+      ],
+      "constraints": "no automatic numpy, torch, model or node upgrades",
+      "restart_required_to_activate_nodes": true
+    }
   }
 }
