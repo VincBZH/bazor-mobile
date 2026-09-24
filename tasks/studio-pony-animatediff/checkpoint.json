@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_ONE_CLICK_INSTALLER_DELIVERED_AWAITING_LOCAL_EXECUTION",
+  "status": "M1_INSTALLER_PREPARED_NOT_EXECUTED",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -55,7 +55,7 @@
     },
     {
       "id": "M1",
-      "status": "INSTALLER_PREPARED_AWAITING_LOCAL_RUN",
+      "status": "INSTALLER_PREPARED_RUNTIME_PENDING",
       "name": "Pony XL + SDXL motion compatibility",
       "note": "Official pinned Pony XL + AnimateDiff-SDXL installer generated. No install or video run yet. Must inspect private run ZIP and /object_info to verify."
     },
@@ -91,14 +91,15 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "Receive and inspect real Windows installer-run ZIP. Confirm exact SHA-256 for Pony and SDXL motion, AnimateDiff Evolved import via /object_info after safe normal restart if needed. If OOM risks persist, design short 8GB compatibility test; never auto-generate in installer.",
+  "next_action": "Vincent extracts ZIP and double-clicks DOUBLE_CLIC_INSTALLER_PONY_SDXL.cmd; obtain private BAZOR_M1_PONY_A_ME_TRANSMETTRE_*.zip; do not claim models installed before reading real report; restart existing ComfyUI normally, validate ADE Gen2 nodes via /object_info before first workflow.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "Installer local execution and SHA-256 result not yet received",
-    "AnimateDiff Evolved import and model choices via live /object_info not yet confirmed",
-    "No VRAM-tested Pony+SDXL motion video workflow"
+    "M1 installer not yet run on user Windows PC",
+    "Pony checkpoint and SDXL motion module not confirmed installed",
+    "AnimateDiff Evolved runtime after normal restart not validated",
+    "8GB video runtime performance not tested"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -256,5 +257,16 @@
     "verification": "Four offline unit tests passed and ZIP testzip checked; no Windows execution has occurred.",
     "safety": "No downloads of RIFE/RealESRGAN yet; no pip/torch/numpy changes; no existing model overwrite; no force-stop of running Comfy; no generation.",
     "user_action": "Extract ZIP, double-click DOUBLE_CLIC_INSTALLER_PONY_ANIMATEDIFF.cmd, provide BAZOR_M1_INSTALL_A_ME_TRANSMETTRE_*.zip privately."
+  },
+  "m1_install_package": {
+    "name": "BAZOR_PONY_ANIMATEDIFF_SDXL_INSTALL_AUTO_20260924.zip",
+    "sha256": "66ee083a8996b5370d6cd59dd9a14cac8376a4f21b36fa1399204d85111f347b",
+    "size_bytes": 9967,
+    "delivery": "private conversation attachment only",
+    "main_launcher": "DOUBLE_CLIC_INSTALLER_PONY_SDXL.cmd",
+    "manifest_url": "https://github.com/VincBZH/bazor-mobile/blob/main/tasks/studio-pony-animatediff/M1_INSTALL_MANIFEST.json",
+    "offline_tests_passed": 5,
+    "windows_execution_confirmed": false,
+    "models_downloaded_on_user_pc": false
   }
 }
