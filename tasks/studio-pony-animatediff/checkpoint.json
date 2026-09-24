@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_INSTALLER_PREPARED_NOT_EXECUTED",
+  "status": "M1_INSTALL_BLOCKED_HF_HTTP_401_RECOVERY_V2_PREPARED",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -55,7 +55,7 @@
     },
     {
       "id": "M1",
-      "status": "INSTALLER_PREPARED_RUNTIME_PENDING",
+      "status": "DOWNLOAD_BLOCKED_RECOVERY_V2_PREPARED",
       "name": "Pony XL + SDXL motion compatibility",
       "note": "Official pinned Pony XL + AnimateDiff-SDXL installer generated. No install or video run yet. Must inspect private run ZIP and /object_info to verify."
     },
@@ -91,15 +91,16 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "Vincent extracts ZIP and double-clicks DOUBLE_CLIC_INSTALLER_PONY_SDXL.cmd; obtain private BAZOR_M1_PONY_A_ME_TRANSMETTRE_*.zip; do not claim models installed before reading real report; restart existing ComfyUI normally, validate ADE Gen2 nodes via /object_info before first workflow.",
+  "next_action": "Vincent extracts and runs recovery V2 locally, then uploads BAZOR_M1_PONY_REPRISE_A_ME_TRANSMETTRE_*.zip privately. Do not claim models or AnimateDiff installed before verifying report. Then restart existing ComfyUI when idle and validate ADE Gen2 nodes via /object_info.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "M1 installer not yet run on user Windows PC",
-    "Pony checkpoint and SDXL motion module not confirmed installed",
-    "AnimateDiff Evolved runtime after normal restart not validated",
-    "8GB video runtime performance not tested"
+    "Pony checkpoint download failed (HTTP 401 then connection resets)",
+    "M1 recovery v2 not yet run on user PC",
+    "AnimateDiff Evolved zip downloaded only; extension not installed",
+    "SDXL motion file not downloaded",
+    "No E2E model/runtime proof"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -268,5 +269,30 @@
     "offline_tests_passed": 5,
     "windows_execution_confirmed": false,
     "models_downloaded_on_user_pc": false
+  },
+  "last_install_attempt_20260924": {
+    "local_attempt_timestamp": "2026-09-24T23:34:44",
+    "outcome": "BLOCKED_NO_DESTRUCTIVE_CHANGE",
+    "comfy_api": {
+      "active": true,
+      "port": 8188,
+      "version": "0.34.0"
+    },
+    "free_disk_gb": 40.41,
+    "animatediff_source_zip": "DOWNLOAD_CONFIRMED_CHECKED_NOT_INSTALLED",
+    "pony": "HTTP_401_THEN_CONNECTION_RESET_10054_NOT_INSTALLED",
+    "sdxl_motion": "NOT_ATTEMPTED_NOT_INSTALLED",
+    "extension": "NOT_INSTALLED",
+    "generation_triggered": false,
+    "note": "Read from ZIP that Vincent uploaded in private conversation. Only anonymized summary belongs in public repo."
+  },
+  "m1_hf_recovery_v2": {
+    "delivery": "private conversation ZIP",
+    "archive_name": "BAZOR_PONY_SDXL_REPRISE_HF_1_CLIC_20260924.zip",
+    "sha256": "ed9f12e78ff7359f43776fcf4fc6f0143dd0cb95d86da0203ab37bca89465047",
+    "entrypoint": "DOUBLE_CLIC_REPRENDRE_PONY.cmd",
+    "strategy": "Use preinstalled huggingface_hub + hf_xet, pinned official Pony revision, fallback ratoenien/pony exact original SHA256, persistent isolated staging and SHA256-before-publish, original GitHub extension zip reuse.",
+    "offline_tests_passed": 7,
+    "windows_execution_confirmed": false
   }
 }
