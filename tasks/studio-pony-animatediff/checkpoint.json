@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_GEN2_NODES_LOADED_V3_OPTIONS_CHECK_PENDING",
+  "status": "M1_VERIFIED_M2_STILL_IMAGE_PENDING",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -55,9 +55,9 @@
     },
     {
       "id": "M1",
-      "status": "GEN2_LOADED_V3_OPTIONS_PENDING",
+      "status": "VERIFIED",
       "name": "Pony XL + SDXL motion compatibility",
-      "note": "After guarded restart all 3 Gen2 ADE nodes registered and weights SHA256 OK; previous validator V1-only parse falsely/maybe misreports motion and beta options. Private fixed V3 read-only checker prepared."
+      "note": "Real 2026-09-24 23:55:13 read-only /object_info V1/V3 report: Pony checkpoint visible, SDXL motion model mm_sdxl_v10_beta.ckpt visible, Gen2 ADE_Load/Apply/Use nodes registered, beta schedule linear (AnimateDiff-SDXL) available. SHA256 checks from prior installer passed; no image or GPU runtime generation yet."
     },
     {
       "id": "M2",
@@ -91,13 +91,14 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "Vincent runs corrected private one-click validator while existing ComfyUI stays open; examine private BAZOR_M1_OPTIONS_V3_A_ME_TRANSMETTRE_*.zip; if V3 model_name lists mm_sdxl_v10_beta.ckpt and beta_schedule lists linear (AnimateDiff-SDXL), mark M1 runtime verified and proceed to M2 still-image prototype. No fresh model downloads or process restarts before results.",
+  "next_action": "M2 separate Pony still-image proof on existing ComfyUI, starting at 512x512, moderate steps, confirm safe idle queue and live loader choices before POST /prompt; capture GPU/Comfy logs/output evidence. Only after M2 review proceed to M3 short AnimateDiff-SDXL video, with 8GB VRAM caution.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "Await exact V3 COMBO menu options from live /object_info; previous negative was from legacy-only parser and does not prove missing motion model",
-    "M2 image generation and 8GB memory not tested"
+    "M2 real still generation and VRAM proof not yet executed",
+    "M3 image-conditioned AnimateDiff-SDXL runtime under 8GB untested",
+    "RIFE and RealESRGAN installation pending after proof"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -368,5 +369,27 @@
       "V3 ['COMBO', {'options':[...]}]"
     ],
     "offline_tests_passed": 6
+  },
+  "m1_options_v3_verification_20260924": {
+    "timestamp": "2026-09-24T23:55:13+02:00",
+    "result": "OPTIONS_V3_VERIFIED",
+    "api": "http://127.0.0.1:8188",
+    "nodes_present": [
+      "CheckpointLoaderSimple",
+      "ADE_LoadAnimateDiffModel",
+      "ADE_ApplyAnimateDiffModel",
+      "ADE_UseEvolvedSampling"
+    ],
+    "pony_checkpoint_visible": true,
+    "checkpoint_schema": "V1",
+    "checkpoint_menu_count": 3,
+    "motion_model_visible": "mm_sdxl_v10_beta.ckpt",
+    "motion_schema": "V3",
+    "sdxl_beta_schedule_visible": "linear (AnimateDiff-SDXL)",
+    "beta_schema": "V3",
+    "api_errors": [],
+    "no_changes": true,
+    "no_generation": true,
+    "limitation": "Node registration/menu presence and SHA256 integrity do not prove motion model loads jointly with Pony under 8 GiB VRAM."
   }
 }
