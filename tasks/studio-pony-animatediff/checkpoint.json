@@ -3,7 +3,7 @@
   "task_id": "BAZOR-STUDIO-PONY-AD-SDXL-161",
   "github_issue": "https://github.com/VincBZH/bazor-mobile/issues/161",
   "master_spec": "https://github.com/VincBZH/bazor-mobile/issues/149",
-  "status": "M1_INSTALL_BLOCKED_HF_HTTP_401_RECOVERY_V2_PREPARED",
+  "status": "M1_MODEL_FILES_SHA_VERIFIED_RUNTIME_VALIDATION_PENDING",
   "machine": {
     "gpu": "RTX 4060 Laptop",
     "vram_gb": 8,
@@ -55,9 +55,9 @@
     },
     {
       "id": "M1",
-      "status": "DOWNLOAD_BLOCKED_RECOVERY_V2_PREPARED",
+      "status": "MODEL_FILES_INSTALLED_AND_SHA_VERIFIED_RUNTIME_PENDING",
       "name": "Pony XL + SDXL motion compatibility",
-      "note": "Official pinned Pony XL + AnimateDiff-SDXL installer generated. No install or video run yet. Must inspect private run ZIP and /object_info to verify."
+      "note": "User ZIP 2026-09-24 23:42:29 reports Pony XL + mm_sdxl_v10_beta SHA256 validated and AnimateDiff Evolved 1.6.0 installed. ComfyUI /object_info post-restart not yet verified; no generation."
     },
     {
       "id": "M2",
@@ -91,16 +91,14 @@
     }
   ],
   "last_completed_milestone": null,
-  "next_action": "Vincent extracts and runs recovery V2 locally, then uploads BAZOR_M1_PONY_REPRISE_A_ME_TRANSMETTRE_*.zip privately. Do not claim models or AnimateDiff installed before verifying report. Then restart existing ComfyUI when idle and validate ADE Gen2 nodes via /object_info.",
+  "next_action": "Vincent extracts ZIP and double-clicks DOUBLE_CLIC_VALIDER_PONY.cmd, sends BAZOR_M1_PONY_RUNTIME_A_ME_TRANSMETTRE_*.zip privately; validate actual ADE_LoadAnimateDiffModel, ADE_ApplyAnimateDiffModel and ADE_UseEvolvedSampling classes and both model loader choices. Then test Pony still image M2; no M3 video yet.",
   "changed_files": [],
   "test_results": [],
   "runtime_proof": false,
   "blocked_on": [
-    "Pony checkpoint download failed (HTTP 401 then connection resets)",
-    "M1 recovery v2 not yet run on user PC",
-    "AnimateDiff Evolved zip downloaded only; extension not installed",
-    "SDXL motion file not downloaded",
-    "No E2E model/runtime proof"
+    "ComfyUI not yet restarted/validated after AnimateDiff Evolved installation",
+    "ADE Gen2 node class schema and both model choices not yet verified in live /object_info",
+    "8GB runtime still/image and video not tested"
   ],
   "rollback_paths": [],
   "evidence_paths": [],
@@ -294,5 +292,41 @@
     "strategy": "Use preinstalled huggingface_hub + hf_xet, pinned official Pony revision, fallback ratoenien/pony exact original SHA256, persistent isolated staging and SHA256-before-publish, original GitHub extension zip reuse.",
     "offline_tests_passed": 7,
     "windows_execution_confirmed": false
+  },
+  "successful_install_20260924": {
+    "local_report_time": "2026-09-24T23:42:29+02:00",
+    "report_received": true,
+    "report_status": "FILES_INSTALLED_RUNTIME_NOT_YET_VALIDATED",
+    "pony": {
+      "name": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+      "sha256": "67ab2fd8ec439a89b3fedb15cc65f54336af163c7eb5e4f2acc98f090a29b0b3",
+      "status": "INSTALLED_SHA256_VERIFIED",
+      "source": "same-hash HF mirror after official HTTP 401"
+    },
+    "sdxl_motion": {
+      "name": "mm_sdxl_v10_beta.ckpt",
+      "sha256": "fa4950a062e892fca50d4c441fcd6130d1ad68a621a0404d155be17580072978",
+      "status": "INSTALLED_SHA256_VERIFIED",
+      "source": "official guoyww HF pinned revision"
+    },
+    "extension": {
+      "name": "ComfyUI-AnimateDiff-Evolved",
+      "version": "1.6.0",
+      "commit": "9257651221002dcba0a12f9cff37e1944e58fb60",
+      "status": "FILES_INSTALLED_RUNTIME_UNVERIFIED"
+    },
+    "comfyui_alive_during_install": true,
+    "comfyui_port": 8188,
+    "generation_performed": false,
+    "v2_launcher_initial_BOM_warning": "NONBLOCKING; next validation .cmd generated ASCII no BOM"
+  },
+  "runtime_validator_20260924": {
+    "filename": "BAZOR_PONY_SDXL_VALIDATION_RUNTIME_1_CLIC_20260924.zip",
+    "sha256": "d2640d9c3926a6a21cccea2e2b22e7e5850184ffc6eba7f6995a7c9fa38de838",
+    "bytes": 7183,
+    "launcher": "DOUBLE_CLIC_VALIDER_PONY.cmd",
+    "behavior": "Read-only hashes and /object_info, guarded idle-only restart of exact one ComfyUI portable process. No download/install/generation.",
+    "offline_tests": "9 validation cases passed; syntax/ZIP integrity and ASCII no-BOM CMD checks passed",
+    "status": "PREPARED_NOT_EXECUTED_ON_WINDOWS"
   }
 }
