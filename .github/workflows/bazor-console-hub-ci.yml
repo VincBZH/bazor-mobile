@@ -321,11 +321,12 @@ jobs:
           assert "8188" in launcher and "8191" in launcher
           assert "LANCER_BAZOR_STUDIO.cmd" in launcher
           assert "bazor_studio_certified_launcher.py" in cmd
-          assert "bazor_pc_relay_v3" in cmd
+          assert "RELANCER_WATCHER_STUDIO.cmd" in cmd, "studio must request watcher recovery"
+          assert "bazor_pc_relay_v3.py" in watcher, "watcher must manage the real Core"
           assert "pause" in cmd.lower(), "CMD must stay open on failure"
           assert "BAZOR_STUDIO_NO_PAUSE" in cmd, "automated no-pause gate missing"
           assert "^|" not in cmd, "CMD must not leak caret-pipe into PowerShell"
-          assert "foreach($cand in $cands)" in cmd, "safe Python candidate loop missing"
+          assert "if not defined PYTHON" in cmd and "where py" in cmd, "safe Python fallback selection missing"
           assert "BAZOR_STUDIO_TEST_ONLY" in launcher, "safe env test gate missing"
           assert "[bazor-certify:studio]" in watcher
           assert "_run_studio_certified_test" in watcher
