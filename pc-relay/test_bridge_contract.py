@@ -243,9 +243,10 @@ class RoomRegressionTests(unittest.TestCase):
         path=Path(__file__).resolve().parents[1]/"room-payload/v2.4/app/room_v2_server.py"
         spec=importlib.util.spec_from_file_location("bridge_room_test",path)
         room=importlib.util.module_from_spec(spec);spec.loader.exec_module(room)
-        with patch.object(room,"engine_status",return_value={"ollama":{"available":True},"mammouth":{"available":False},"gpt":{"available":False}}):
+        with patch.object(room,"engine_status",return_value={"core":{"available":True},"ollama":{"available":True},"mammouth":{"available":False},"gpt":{"available":False}}):
             self.assertEqual(room.choose_route("simple")["selected"],"ollama")
-            self.assertEqual(room.choose_route("simple","mammouth")["selected"],"mammouth")
+            self.assertIsNone(room.choose_route("simple","mammouth")["selected"])
+            self.assertIsNone(room.choose_route("simple","gpt")["selected"])
 
 
 if __name__ == "__main__":
