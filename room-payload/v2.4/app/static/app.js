@@ -86,6 +86,7 @@ byId('chatBtn').addEventListener('click', async () => {
   } catch (error) {
     byId('chatResult').textContent = 'Erreur locale : ' + (error?.name || 'connexion impossible');
   } finally {
+    byId('allowExternal').checked = false; // Consentement pour un seul envoi.
     byId('chatBtn').disabled = false;
   }
 });
