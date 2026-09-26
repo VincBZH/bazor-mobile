@@ -85,7 +85,9 @@ def engine_status():
     mammouth = health.get("mammouth") or {}
     # A configured API key is not proof of a real Mammouth call.
     return {
-        "core": {"available": core["available"], "reason": core.get("reason")},
+        "core": {"available": core["available"], "reason": core.get("reason"),
+                 "runtime_signature": health.get("runtime_signature"),
+                 "port": urllib.parse.urlsplit(_core_origin()).port},
         "ollama": ollama,
         "mammouth": {"available": None, "configured": bool(mammouth.get("configured")),
                      "budget": mammouth.get("budget") if core["available"] else None,
