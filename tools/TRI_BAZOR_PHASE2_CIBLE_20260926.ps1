@@ -133,6 +133,21 @@ foreach($path in $items) {
   if ($category -eq 'ARCHIVE_STUDIO') {$toArchive.Add($obj)}
   else {$toBin.Add($obj)}
 }
+# Deux dossiers récents que l'audit initial a exclus car ils contiennent des medias :
+# on les déplace dans Documents mais on ne les supprime JAMAIS.
+foreach ($n in @('BAZOR_M3B_REPORTS','BAZOR_M3_REPORTS')) {
+  $p = Join-Path $desktop $n
+  if (Test-Path -LiteralPath $p -PathType Container) {
+    $i = Get-Item -LiteralPath $p -Force
+    if (($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+        ($i.Attributes -band [IO.FileAttributes]::Offline) -or (IsReferenced $p)) {
+      $protected.Add("DOSSIER STUDIO PROTEGE NON DEPLACE : "+$p)
+    } else {
+      $obj=[pscustomobject]@{Path=$p;Nom=$i.Name;IsDir=$true;Bytes=[long]0}
+      $toArchive.Add($obj)
+    }
+  }
+}
 # Lien Studio non certifie : seulement le lien va a la corbeille, jamais Studio installe.
 $studioLink=Join-Path $desktop 'AI Simple Studio 2.lnk'
 if (Test-Path -LiteralPath $studioLink) {
