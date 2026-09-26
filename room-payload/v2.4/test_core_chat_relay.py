@@ -19,6 +19,7 @@ class FakeCore(BaseHTTPRequestHandler):
     configured = False
     offline = False
     fail_mammouth = False
+    fail_ollama = False
 
     def respond(self, body, status=200):
         raw = json.dumps(body).encode()
@@ -41,8 +42,9 @@ class FakeCore(BaseHTTPRequestHandler):
         self.chat_calls.append(body)
         result = {"ok": True}
         if body.get("target") in ("ollama", "both"):
-            result["ollama"] = {"ok": True, "provider": "ollama", "model": "qwen2.5-coder:7b",
-                                "answer": "OLLAMA_OK"}
+            result["ollama"] = ({"ok": False, "provider": "ollama", "error": "ollama_failed"}
+                if self.fail_ollama else {"ok": True, "provider": "ollama", "model": "qwen2.5-coder:7b",
+                                        "answer": "OLLAMA_OK"})
         if body.get("target") in ("mammouth", "both"):
             result["mammouth"] = (
                 {"ok": False, "provider": "mammouth", "error": "http_401"} if self.fail_mammouth
@@ -77,6 +79,7 @@ class HTTPTests(unittest.TestCase):
         FakeCore.configured = False
         FakeCore.offline = False
         FakeCore.fail_mammouth = False
+        FakeCore.fail_ollama = False
 
     def post(self, payload):
         req = urllib.request.Request(self.url + "/api/chat", json.dumps(payload).encode(),
@@ -113,6 +116,9 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual([r["provider"] for r in body["results"]], ["ollama", "mammouth"])
         self.assertTrue(all(r["ok"] for r in body["results"]))
+        self.assertEqual([c["target"] for c in FakeCore.chat_calls], ["ollama", "mammouth"])
+        self.assertEqual(FakeCore.chat_calls[1]["profile"], "light")
+        self.assertIn("OLLAMA_OK", FakeCore.chat_calls[1]["text"])
 
     def test_partial_failure_cannot_be_green(self):
         FakeCore.configured = True
@@ -122,6 +128,14 @@ class HTTPTests(unittest.TestCase):
         self.assertFalse(body["ok"])
         self.assertTrue(body["results"][0]["ok"])
         self.assertFalse(body["results"][1]["ok"])
+
+    def test_local_failure_does_not_trigger_paid_review(self):
+        FakeCore.configured = True
+        FakeCore.fail_ollama = True
+        status, body = self.post({"target": "both", "text": "Bonjour", "allow_external": True})
+        self.assertEqual(status, 502)
+        self.assertFalse(body["results"][0]["ok"])
+        self.assertEqual([c["target"] for c in FakeCore.chat_calls], ["ollama"])
 
     def test_gpt_is_manual_handoff_not_fake_api(self):
         status, body = self.post({"target": "gpt", "text": "Question publique"})
