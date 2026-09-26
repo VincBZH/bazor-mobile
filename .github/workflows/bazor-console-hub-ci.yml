@@ -31,6 +31,8 @@ jobs:
         run: |
           python -m py_compile \
             console-hub/bazor_console_hub.py \
+            console-hub/bazor_diagnostics.py \
+            console-hub/test_bazor_diagnostics.py \
             console-hub/bazor_hub_expert_review.py \
             console-hub/bazor_popup_guard.py \
             console-hub/bazor_interface_update_restart.py \
@@ -45,6 +47,8 @@ jobs:
             pc-relay/bazor_studio_h3_converter_hotfix.py \
             pc-relay/test_studio_p0_012_routing.py \
             pc-relay/mammouth_client.py
+      - name: Test IA diagnostic no false positives
+        run: python console-hub/test_bazor_diagnostics.py
       - name: Test Studio P0-012 routing context
         run: python pc-relay/test_studio_p0_012_routing.py
       - name: Validate mobile UI JavaScript
