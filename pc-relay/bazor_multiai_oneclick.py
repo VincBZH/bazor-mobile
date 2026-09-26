@@ -125,6 +125,9 @@ def github_smoke(roomurl, core_signature, model):
         return "PENDING:gh_cli_missing"
     safeenv = os.environ.copy()
     for key in list(safeenv):
+        # GitHub CLI may legitimately authenticate using these two variables.
+        if key.upper() in ("GH_TOKEN", "GITHUB_TOKEN"):
+            continue
         if any(word in key.upper() for word in ("MAMMOUTH", "API_KEY", "TOKEN", "SECRET", "PASSWORD")):
             safeenv.pop(key, None)
     def call(args):
