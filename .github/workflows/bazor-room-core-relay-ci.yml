@@ -1,0 +1,44 @@
+name: BAZOR AI Room Core Relay CI
+
+on:
+  push:
+    paths:
+      - "room-payload/v2.4/**"
+      - ".github/workflows/bazor-room-core-relay-ci.yml"
+  pull_request:
+    paths:
+      - "room-payload/v2.4/**"
+      - ".github/workflows/bazor-room-core-relay-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile existing Room and the relay
+        run: python -m py_compile room-payload/v2.4/app/room_v2_server.py room-payload/v2.4/test_core_chat_relay.py
+      - name: HTTP contract tests with a fake local Core
+        run: python room-payload/v2.4/test_core_chat_relay.py
+      - name: Check browser script syntax
+        run: node --check room-payload/v2.4/app/static/app.js
+      - name: Check the simple UI is present
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root=Path("room-payload/v2.4/app/static")
+          html=(root/"index.html").read_text(encoding="utf-8")
+          js=(root/"app.js").read_text(encoding="utf-8")
+          for key in ("chatPrompt", "chatTarget", "chatBtn", "chatResult", "allowExternal", "copyGPT"):
+              assert f'id="{key}"' in html, key
+              assert key in js, key
+          assert "NoTrack non certifié" in html, "optional providers must stay honest"
+          print("Interface de chat et avertissements : OK")
+          PY
