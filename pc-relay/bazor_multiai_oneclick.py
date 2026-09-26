@@ -106,6 +106,76 @@ def valid_room_reply(reply):
             and "BAZOR_LOCAL_OK" in row["text"])
 
 
+def valid_github_ticket(issue):
+    # Deliberately pinned to the already-created non-confidential test issue.
+    return (isinstance(issue, dict) and issue.get("number") == 168
+            and str(issue.get("title") or "").startswith("[bazor-queue]")
+            and ((issue.get("user") or {}).get("login") == "VincBZH")
+            and "REQUEST_ID: BRIDGE-SMOKE-20260926" in str(issue.get("body") or ""))
+
+
+def github_smoke(roomurl, core_signature, model):
+    """Optional GitHub issue round-trip, NOT an OpenAI API connection.
+
+    Only issue #168 written by repository owner may be processed; no local
+    files, issue-provided shell, user prompts or secrets are sent to GitHub.
+    """
+    gh = shutil.which("gh")
+    if not gh:
+        return "PENDING:gh_cli_missing"
+    safeenv = os.environ.copy()
+    for key in list(safeenv):
+        if any(word in key.upper() for word in ("MAMMOUTH", "API_KEY", "TOKEN", "SECRET", "PASSWORD")):
+            safeenv.pop(key, None)
+    def call(args):
+        return subprocess.run([gh, *args], capture_output=True, timeout=20, env=safeenv,
+                              check=False)
+    if call(["auth", "status"]).returncode:
+        return "PENDING:gh_not_authenticated"
+    try:
+        r = call(["api", "repos/VincBZH/bazor-mobile/issues/168"])
+        issue = json.loads(r.stdout.decode("utf-8")) if r.returncode == 0 else {}
+        if not valid_github_ticket(issue):
+            return "BLOCKED:github_issue_identity_mismatch"
+        cm = call(["api", "repos/VincBZH/bazor-mobile/issues/168/comments?per_page=100"])
+        comments = json.loads(cm.stdout.decode("utf-8")) if cm.returncode == 0 else []
+        marker = "BAZOR_ONECLICK_GPT_FILEBUS_OK"
+        if any(marker in str(c.get("body") or "") for c in comments if isinstance(c, dict)):
+            return "ALREADY_REPORTED:github_issue_168"
+        # Separate actual one-turn model reply; never claim success from the
+        # earlier local prompt alone. This is the only issue we can process.
+        result = local_json(roomurl + "/api/chat", {"target": "ollama",
+            "text": "Reponds uniquement BAZOR_OLLAMA_BRIDGE_OK."}, timeout=210)
+        if not valid_room_reply_for_github(result, model):
+            return "BLOCKED:github_test_ollama_reply_invalid"
+        text = ("\n".join((
+            marker,
+            "REQUEST_ID: BRIDGE-SMOKE-20260926",
+            "BAZOR_OLLAMA_BRIDGE_OK",
+            "RELAY: local one-click (not the background watcher)",
+            "PATH: GPT issue -> GitHub CLI -> isolated Room -> verified Core -> Ollama -> GitHub",
+            "CORE_SIGNATURE: " + core_signature[:16],
+            "OLLAMA_MODEL: " + model,
+            "NOTE: GPT reading this comment remains a separate connector step; no direct GPT API is claimed.",
+        )))
+        sent = call(["issue", "comment", "168", "--repo", "VincBZH/bazor-mobile", "--body", text])
+        return "PASS:github_comment_sent" if sent.returncode == 0 else "BLOCKED:github_comment_failed"
+    except (ValueError, OSError, TimeoutError, urllib.error.URLError, subprocess.TimeoutExpired):
+        return "BLOCKED:github_or_ollama_test_failed"
+
+
+def valid_room_reply_for_github(reply, expected_model):
+    if not isinstance(reply, dict) or reply.get("ok") is not True:
+        return False
+    rows = reply.get("results")
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+        return False
+    row = rows[0]
+    return (row.get("provider") == "ollama" and row.get("ok") is True
+            and row.get("model") == expected_model and isinstance(row.get("text"), str)
+            and "BAZOR_OLLAMA_BRIDGE_OK" in row["text"])
+
+
 def env_with_user_key():
     env = os.environ.copy()
     if not env.get("MAMMOUTH_API_KEY") and os.name == "nt":
@@ -169,6 +239,17 @@ def selftest():
             self.assertFalse(valid_room_reply({"ok": True, "results": [{**row, "ok": False}]}))
             self.assertFalse(valid_room_reply({"ok": True, "results": [{**row, "text": ""}]}))
             self.assertFalse(valid_room_reply({"ok": True, "results": []}))
+        def test_strict_issue_and_model_proof(self):
+            issue = {"number": 168, "title": "[bazor-queue] test",
+                     "user": {"login": "VincBZH"},
+                     "body": "REQUEST_ID: BRIDGE-SMOKE-20260926"}
+            self.assertTrue(valid_github_ticket(issue))
+            self.assertFalse(valid_github_ticket({**issue, "number": 169}))
+            self.assertFalse(valid_github_ticket({**issue, "user": {"login": "stranger"}}))
+            row = {"provider": "ollama", "model": "llama3.2:3b", "ok": True,
+                   "text": "BAZOR_OLLAMA_BRIDGE_OK"}
+            self.assertTrue(valid_room_reply_for_github({"ok": True, "results": [row]}, "llama3.2:3b"))
+            self.assertFalse(valid_room_reply_for_github({"ok": True, "results": [{**row, "model": "unknown"}]}, "llama3.2:3b"))
         def test_reject_external_url(self):
             with self.assertRaises(ValueError):
                 local_json("https://api.example.com/private")
@@ -287,7 +368,7 @@ def run(test_mammouth=False):
     report["evidence"]["ollama_model"] = answer["results"][0]["model"]
     report["evidence"]["room_url"] = roomurl
     print("PASS local : Room -> Core -> Ollama. Interface : " + roomurl)
-    status["gpt"] = "PENDING:GitHub_watcher_roundtrip_#168"
+    status["gpt"] = github_smoke(roomurl, sig, model)
     status["astra"] = "PENDING:authorized_connector"
     status["notrack"] = "NOT_CONFIGURED"
     status["tor"] = "OPTIONAL_DISABLED"
