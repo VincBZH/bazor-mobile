@@ -20,6 +20,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,7 +38,7 @@ CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
 
 def local_json(url, payload=None, timeout=5):
     """Strictly local HTTP; proxies disabled and bounded JSON responses."""
-    parsed = urllib.request.urlsplit(url)
+    parsed = urllib.parse.urlsplit(url)
     if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
             or parsed.username or parsed.password or parsed.fragment):
         raise ValueError("local_http_only")
@@ -258,6 +259,12 @@ def run(test_mammouth=False):
         spawn("isolated_room", [sys.executable, str(ROOM)], room_env)
         room = wait_for(roomurl + "/api/status",
                         lambda x: isinstance(x, dict) and x.get("version") == "2.4-core-relay")
+    if room:
+        verified = (room.get("engines") or {}).get("core") or {}
+        if (verified.get("runtime_signature") != sig or verified.get("port") != core_port):
+            status["room"] = "BLOCKED:room_connected_to_wrong_core"
+            save_report(report)
+            return 2
     if not room:
         status["room"] = "BLOCKED:isolated_start_failed_check_log"
         save_report(report)
@@ -299,7 +306,7 @@ def run(test_mammouth=False):
             childenv["BAZOR_DATA_DIR"] = str(WORK / "PRIVATE_CORE_DATA")
             proof_path = WORK / "bridge_runtime_proof.json"
             call = subprocess.run([sys.executable, str(PC / "test_mammouth_ollama_runtime.py"),
-                                   "--room-url", core_url, "--output", str(proof_path)],
+                                   "--room-url", core_url, "--model", model, "--output", str(proof_path)],
                                   cwd=str(PC), env=childenv, capture_output=True, timeout=360)
             try:
                 proof = json.loads(proof_path.read_text(encoding="utf-8"))
