@@ -403,6 +403,11 @@ class Hub:
         self.log_text = tk.Text(left, bg="#0e1116", fg="#d7dde7", insertbackground="white", wrap="none", font=("Consolas", 9))
         self.log_text.pack(fill="both", expand=True)
 
+        ttk.Button(right, text="DIAGNOSTIC IA (lecture seule)", command=self.diagnose_ai).pack(anchor="w", pady=(0,4))
+        self.diag_text = tk.Text(right, height=8, bg="#f1f5f9", fg="#193445", wrap="word", font=("Consolas", 9))
+        self.diag_text.insert("1.0", "Cliquez pour tester les services locaux ; aucun appel fournisseur payant.")
+        self.diag_text.pack(fill="x", pady=(0,8))
+
         tk.Label(right, text="JOURNAL CENTRAL BAZOR", font=("Segoe UI", 10, "bold")).pack(anchor="w")
         self.all_text = tk.Text(right, bg="#0e1116", fg="#d7dde7", insertbackground="white", wrap="none", font=("Consolas", 9))
         self.all_text.pack(fill="both", expand=True)
@@ -424,6 +429,10 @@ class Hub:
                     self._h3_done()
                 elif kind == "h3_error":
                     self._h3_failed(item[1])
+                elif kind == "ai_diag_ready":
+                    self.diag_text.delete("1.0", "end")
+                    self.diag_text.insert("end", item[1])
+                    self.summary.config(text="Diagnostic IA terminé : voir le panneau de preuves")
         except queue.Empty:
             pass
         try:
@@ -1189,6 +1198,19 @@ class Hub:
             self.summary.config(text="Mise à jour + relance demandées…")
         except Exception as exc:
             messagebox.showerror("BAZOR", f"Relance impossible : {type(exc).__name__}")
+
+    def diagnose_ai(self):
+        """Lecture seule ; pas d'appel payant, pas de redemarrage automatique."""
+        self.diag_text.delete("1.0", "end")
+        self.diag_text.insert("end", "Verification en cours...")
+        def worker():
+            try:
+                from bazor_diagnostics import build_report, render_text
+                outcome = render_text(build_report())
+            except Exception as exc:
+                outcome = "[JAUNE] Diagnostic incomplet : " + type(exc).__name__
+            self.ui_queue.put(("ai_diag_ready", outcome))
+        threading.Thread(target=worker, daemon=True).start()
 
     def open_log(self):
         svc = self.selected_service()
