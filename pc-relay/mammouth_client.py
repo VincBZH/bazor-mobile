@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import re
 import subprocess
 import time
 import uuid
@@ -121,8 +122,8 @@ def _record_usage(model, usage, estimated_cost):
     with _USAGE_LOCK:
         state = usage_state()
         state["calls"] = int(state.get("calls", 0) or 0) + 1
-        state["last_model"] = model
-        state["last_usage"] = usage or {}
+        state["last_model"] = redact(model)
+        state["last_usage"] = redact(usage or {})
         state["last_call"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
         if estimated_cost is not None:
             state["estimated_spent_usd"] = float(state.get("estimated_spent_usd", 0.0) or 0.0) + float(estimated_cost)
@@ -240,6 +241,29 @@ def _candidate_profiles(selected_profile):
     return out
 
 
+def redact(value):
+    """Remove configured credentials and bearer tokens from returned data."""
+    if isinstance(value, dict):
+        return {k: ("[REDACTED]" if k.lower() in {"authorization", "api_key", "token", "secret"} else redact(v)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact(v) for v in value]
+    if isinstance(value, str):
+        for name, secret in os.environ.items():
+            if any(part in name.upper() for part in ("API_KEY", "TOKEN", "SECRET", "PASSWORD")) and secret:
+                value = value.replace(secret, "[REDACTED]")
+        return re.sub(r"(?i)Bearer\s+[^\s\"']+", "Bearer [REDACTED]", value)
+    return value
+
+
+def _split_curl_response(raw):
+    """Accept actual newline and literal backslash-n; only a terminal footer."""
+    text = str(raw or "")
+    match = re.search(r"(?:\r?\n|\\n)BAZOR_HTTP_STATUS:([1-5][0-9]{2})\s*$", text)
+    if not match:
+        return text, 0
+    return text[:match.start()], int(match.group(1))
+
+
 def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_id):
     key = os.getenv("MAMMOUTH_API_KEY", "").strip()
     started=time.monotonic()
@@ -253,17 +277,16 @@ def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_
 
     completed = subprocess.run(
         [
-            "curl.exe", "--silent", "--show-error", "--location",
+            "curl.exe" if os.name == "nt" else "curl", "--silent", "--show-error",
+            "--max-filesize", "131072", "--config", "-",
             "--connect-timeout", "20", "--max-time", "90",
-            "--header", "Authorization: Bearer " + key,
             "--header", "Content-Type: application/json",
             "--header", "Accept: application/json",
             "--header", "User-Agent: BAZOR-Mammouth-Client/3.2",
-            "--data-binary", "@-",
             "--write-out", "\\nBAZOR_HTTP_STATUS:%{http_code}",
             MAMMOUTH_URL,
         ],
-        input=payload,
+        input=("header = " + json.dumps("Authorization: Bearer " + key) + "\ndata-binary = " + json.dumps(payload.decode("utf-8"), ensure_ascii=False) + "\n").encode("utf-8"),
         capture_output=True,
         text=False,
         timeout=100,
@@ -271,20 +294,18 @@ def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_
     )
     elapsed_ms=int((time.monotonic()-started)*1000)
     raw = (completed.stdout or b"").decode("utf-8", errors="replace")
-    marker = "\\nBAZOR_HTTP_STATUS:"
-    if marker in raw:
-        body, status_text = raw.rsplit(marker, 1)
-        try:
-            http_status = int(status_text.strip() or "0")
-        except ValueError:
-            http_status = 0
-    else:
-        body, http_status = raw, 0
+    body, http_status = _split_curl_response(raw)
+    if len(raw.encode("utf-8")) > 131200:
+        return {"ok": False, "provider": "mammouth", "error": "mammouth_response_too_large", "http_status": http_status}
 
     base={
         "provider":"mammouth",
         "profile":selected_profile,
         "model":model,
+        "requested_model":model,
+        "actual_model":None,
+        "base_url":MAMMOUTH_URL,
+        "request_id":correlation_id,
         "correlation_id":correlation_id,
         "http_status":http_status,
         "elapsed_ms":elapsed_ms,
@@ -298,7 +319,7 @@ def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_
             "content_valid":False,
             "error":"mammouth_http" if http_status else "mammouth_curl",
             "message":f"Mammouth HTTP {http_status}" if http_status else "curl Mammouth indisponible",
-            "detail":detail[:900],
+            "detail":redact(detail)[:900],
         }
 
     try:
@@ -309,8 +330,8 @@ def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_
             "provider_ok":False,
             "content_valid":False,
             "error":"mammouth_parse_error",
-            "message":str(exc)[:300],
-            "body_excerpt":str(body or "")[:700],
+            "message":redact(str(exc))[:300],
+            "body_excerpt":redact(str(body or ""))[:700],
         }
 
     if not isinstance(data,dict):
@@ -322,8 +343,12 @@ def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_
         }
 
     api_error=_error_text(data)
-    choice=(data.get("choices") or [{}])[0]
-    actual_model=data.get("model") or model
+    choices = data.get("choices")
+    if choices is not None and (not isinstance(choices, list) or any(not isinstance(c, dict) for c in choices)):
+        return {**base, "ok": False, "error": "mammouth_invalid_choices"}
+    choice=(choices or [{}])[0]
+    actual_model=data.get("model")
+    base.update(actual_model=actual_model, provider_request_id=data.get("id"))
     usage=data.get("usage") or {}
     estimated_cost=_estimate_cost(actual_model,usage)
     if usage:
@@ -336,14 +361,18 @@ def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_
             "content_valid":False,
             "error":"mammouth_api_error",
             "model":actual_model,
-            "message":api_error[:800],
+            "message":redact(api_error)[:800],
             "response_keys":sorted(data.keys()),
             "choice_keys":sorted(choice.keys()) if isinstance(choice,dict) else [],
             "finish_reason":choice.get("finish_reason") if isinstance(choice,dict) else None,
             "usage":usage,
         }
 
+    if not isinstance(actual_model, str) or not actual_model.strip():
+        return {**base, "ok": False, "error": "mammouth_actual_model_missing", "usage": usage}
     answer=_extract_answer(data)
+    if len(answer) > 32000:
+        return {**base, "ok": False, "error": "mammouth_content_too_large", "usage": usage}
     if not answer:
         return {**base,
             "ok":False,
@@ -363,17 +392,20 @@ def _single_chat_attempt(text, selected_profile, model, max_tokens, correlation_
         "provider_ok":True,
         "content_valid":True,
         "model":actual_model,
-        "answer":answer,
+        "answer":redact(answer),
         "usage":usage,
         "estimated_cost_usd":None if estimated_cost is None else round(estimated_cost,6),
     }
 
 
-def chat(text, task_kind="general", profile=None, max_tokens=3000):
+def chat(text, task_kind="general", profile=None, max_tokens=3000, max_attempts=3, request_id=None):
     key = os.getenv("MAMMOUTH_API_KEY", "").strip()
     selected_profile = profile or choose_profile(task_kind)
     selected_model = MODEL_PROFILES.get(selected_profile, selected_profile)
-    correlation_id="mammouth-"+uuid.uuid4().hex[:12]
+    correlation_id=request_id or "mammouth-"+uuid.uuid4().hex[:12]
+    if not isinstance(text, str) or len(text) > 64000 or not isinstance(max_tokens, int) or not 1 <= max_tokens <= 3000:
+        return {"ok": False, "provider": "mammouth", "error": "mammouth_limits_exceeded", "correlation_id": correlation_id}
+    max_attempts = max(1, min(3, int(max_attempts)))
 
     if not key:
         return {
@@ -395,7 +427,8 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
         }
 
     attempts=[]
-    for prof,model in _candidate_profiles(selected_profile):
+    for attempt in range(max_attempts):
+        prof, model = selected_profile, selected_model
         # Ne pas engager un nouvel appel si le budget vient d'être atteint.
         if budget_status().get("blocked"):
             attempts.append({"profile":prof,"model":model,"error":"budget_reached_before_attempt"})
@@ -407,7 +440,8 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
                 "ok":False,"transport_ok":False,"provider_ok":False,"content_valid":False,
                 "provider":"mammouth","profile":prof,"model":model,
                 "correlation_id":correlation_id,"error":"mammouth_error",
-                "message":str(exc)[:300],
+                "message":redact(str(exc))[:300],
+                "transient": isinstance(exc, (TimeoutError, subprocess.TimeoutExpired)),
             }
         attempts.append({
             "profile":prof,
@@ -423,12 +457,18 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
         })
         if result.get("ok") and result.get("content_valid"):
             result["attempts"]=attempts
-            result["fallback_used"]=len(attempts)>1
+            result["fallback_used"]=False
+            result["retry_used"]=len(attempts)>1
             result["budget"]=budget_status()
-            return result
+            return redact(result)
+        http_status = result.get("http_status")
+        transient = http_status in (408, 429, 500, 502, 503, 504) or result.get("transient")
+        if http_status in (401, 403) or not transient or attempt + 1 == max_attempts:
+            break
+        time.sleep(min(2 ** attempt, 4))
 
     last=(result if "result" in locals() else {})
-    return {
+    return redact({
         **last,
         "ok":False,
         "provider":"mammouth",
@@ -442,5 +482,6 @@ def chat(text, task_kind="general", profile=None, max_tokens=3000):
         "message":last.get("message") or "Tous les profils Mammouth testés ont échoué.",
         "attempts":attempts,
         "budget":budget_status(),
-    }
+    })
+
 
