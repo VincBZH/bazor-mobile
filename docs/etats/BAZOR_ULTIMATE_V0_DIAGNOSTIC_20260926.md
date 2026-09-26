@@ -10,7 +10,7 @@
 1. `console-hub/bazor_diagnostics.py` : quatre sondes HTTP locales **GET uniquement** (Core 8775, AI Room 8765, liaison déclarative Room/Core, Ollama 11434). États VERT / JAUNE / ROUGE / GRIS. Évite les faux verts pour `ok=false`, les réponses mal formées, les modèles Ollama absents et une déclaration de liaison incompatible avec un contrôle indépendant.
 2. `console-hub/bazor_ultimate_dashboard.py` : surcouche **du vrai Hub existant** (classe `UltimateHub(Hub)`) ; réutilise ses tableaux/logs et lui ajoute un panneau de voyants actualisés en arrière-plan. L'ancien tableau est explicitement étiqueté comme historique « port/processus ».
 3. **Bouton volontaire « Tester la conversation LOCALE »** : seul point d'entrée pour un `POST /api/chat` qui interroge Ollama via la Room et inscrit un message `BAZOR_OK` dans l'historique local. Le rafraîchissement automatique **ne génère jamais** de réponse.
-4. `tests/test_bazor_diagnostics.py` et `tests/test_ultimate_dashboard.py` : **23 tests simulés/statiques**, pas de requête réseau, pas de Tkinter affiché ni de fournisseur payant.
+4. `tests/test_bazor_diagnostics.py` et `tests/test_ultimate_dashboard.py` : **26 tests simulés/statiques**, pas de requête réseau, dont trois tests de widgets Tkinter simulés, sans fenêtre affichée ni fournisseur payant.
 5. `.github/workflows/bazor-ultimate-v0-ci.yml` : syntaxe Python + tests sur chaque modification des fichiers concernés.
 
 ## Ce qui n'est PAS encore démontré
