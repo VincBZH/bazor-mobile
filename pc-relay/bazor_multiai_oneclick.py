@@ -255,13 +255,14 @@ def run(test_mammouth=False):
     if not room:
         room_env = env.copy()
         room_env.update(BAZOR_ROOM_HOST="127.0.0.1", BAZOR_ROOM_PORT=str(ROOM_PORT),
-                        BAZOR_CORE_URL=core_url)
+                        BAZOR_CORE_URL=core_url, BAZOR_OLLAMA_MODEL=model)
         spawn("isolated_room", [sys.executable, str(ROOM)], room_env)
         room = wait_for(roomurl + "/api/status",
                         lambda x: isinstance(x, dict) and x.get("version") == "2.4-core-relay")
     if room:
         verified = (room.get("engines") or {}).get("core") or {}
-        if (verified.get("runtime_signature") != sig or verified.get("port") != core_port):
+        if (verified.get("runtime_signature") != sig or verified.get("port") != core_port
+                or verified.get("configured_local_model") != model):
             status["room"] = "BLOCKED:room_connected_to_wrong_core"
             save_report(report)
             return 2
