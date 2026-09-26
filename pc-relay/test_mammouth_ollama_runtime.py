@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--room-url", required=True, help="Verified active Room/Core gateway origin")
     parser.add_argument("--output", default="BAZOR_DATA/bridge_runtime_proof.json")
+    parser.add_argument("--model", default=None, help="Name of an installed small Ollama model")
     args = parser.parse_args()
     parsed = urllib.parse.urlparse(args.room_url)
     if parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.username or parsed.path not in ("", "/"):
@@ -39,7 +40,7 @@ def main():
             raise ValueError("mammouth_key_missing_on_active_core")
         request = urllib.request.Request(args.room_url.rstrip("/") + "/api/v1/chat",
             data=json.dumps({"target": "mammouth_ollama", "text": "Combien font 2+2 ? Réponds 4.",
-                "bridge_e2e": True, "profile": "light", "room": "BAZOR BRIDGE E2E"}).encode(),
+                "bridge_e2e": True, "model": args.model, "profile": "light", "room": "BAZOR BRIDGE E2E"}).encode(),
             headers={"Content-Type": "application/json"}, method="POST")
         with opener.open(request, timeout=300) as response:
             proof["http_status"] = response.status
