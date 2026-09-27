@@ -62,7 +62,10 @@ jobs:
           cmd = Path("BAZOR_REPARER_CONNEXIONS_1_CLIC.cmd").read_text(encoding="utf-8")
           runtime = Path("pc-relay/test_mammouth_ollama_runtime.py").read_text(encoding="utf-8")
           core = Path("pc-relay/bazor_pc_relay_v3.py").read_text(encoding="utf-8")
-          assert "bazor_multiai_oneclick.py" in cmd and "--test-mammouth" in cmd
+          assert "bazor_multiai_oneclick.py" in cmd and "--test-mammouth" not in cmd
+          oneclick = Path("pc-relay/bazor_multiai_oneclick.py").read_text(encoding="utf-8")
+          assert "explicit_positive_budget_required" in oneclick
+          assert "return 0 if (not test_mammouth or " in oneclick
           assert '"--model"' in runtime and 'args.model' in runtime
           assert 'BAZOR_CORE_BIND_HOST' in core and 'BAZOR_DISABLE_UDP' in core
           print("Launcher + isolated runtime gates OK; Windows execution NOT tested")
