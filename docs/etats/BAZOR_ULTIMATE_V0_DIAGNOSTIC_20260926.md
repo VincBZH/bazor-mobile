@@ -13,11 +13,23 @@
 4. `tests/test_bazor_diagnostics.py` et `tests/test_ultimate_dashboard.py` : **26 tests simulés/statiques**, pas de requête réseau, dont trois tests de widgets Tkinter simulés, sans fenêtre affichée ni fournisseur payant.
 5. `.github/workflows/bazor-ultimate-v0-ci.yml` : syntaxe Python + tests sur chaque modification des fichiers concernés.
 
+## Validation utilisateur — 27 septembre 2026, 10 h 56 (heure affichée à l'écran)
+
+**NOUVEAU — essai réel réussi sur le PC de Vincent, d'après les captures transmises dans sa conversation ChatGPT principale.**
+
+- Vincent a extrait le ZIP de la branche et lancé `LANCER_BAZOR_ULTIMATE_V0.cmd`. La fenêtre `BAZOR ULTIMATE — Centre de contrôle` s'est ouverte. Ce test prouve que l'interface démarre sur son PC, **pas** que toute la suite BAZOR est opérationnelle.
+- Diagnostics affichés : **VERT** Core 8775 (API accessible), **VERT** AI Room 8765 (API accessible), **VERT** Ollama 11434 (cinq modèles listés), **VERT** liaison déclarée Core/Ollama. Ils ne constituent pas, à eux seuls, une preuve de génération réelle.
+- Vincent a ensuite cliqué lui-même sur **« Tester la conversation LOCALE »**. La deuxième capture montre **« VERT · Vrai aller-retour local BAZOR_OK confirmé »**. Le programme exige une réponse HTTP 2xx, `ok=true` et `answer.strip()=="BAZOR_OK"` sur `POST /api/chat`. **La chaîne AI Room → Core → Ollama a donc réussi son premier test conversationnel visible dans BAZOR ULTIMATE V0.**
+- Le tableau historique affichait toujours cinq composants fermés (Gateway 8776, GitHub Watcher, Popup Guard, ComfyUI 8188, Studio 8191) et un signalement de **deux processus Wii Bridge** (PIDs visibles 1328 et 21852). Leur fonctionnement interne et le caractère réel du doublon **n'ont pas été vérifiés**. **Ne pas lancer « FERMER DOUBLONS » ni « CENTRALISER / ADOPTER » sans analyse préalable.**
+- **Limites de preuve :** captures d'écran communiquées par Vincent, sans accès direct de cette session à Windows ni aux logs complets de l'essai. La capture n'est pas encore archivée comme pièce jointe GitHub ; le présent rapport consigne uniquement ce qui y est visible. Ce résultat ne valide ni les boutons RÉPARER (absents de V0), ni le comportement au redémarrage, ni un audit de sécurité du Hub original.
+
+**État corrigé :** ouverture réelle Windows et premier aller-retour local **validés par capture utilisateur** ; projet **toujours en cours**, PR en brouillon en attente des vérifications de lancement unique, des services annexes et de la préparation d'une livraison stable.
+
 ## Ce qui n'est PAS encore démontré
 
-- Le démarrage graphique sur le PC Windows de Vincent.
+- Le redémarrage répété de la GUI et la résistance aux doublons sur le PC Windows de Vincent (le **premier démarrage réel est confirmé**).
 - Le statut actuel des instances Core/Room/Ollama au moment de l'installation.
-- Une conversation réelle réalisée **avec cette version** du tableau de bord.
+- Une campagne de conversations réelles répétées et l'analyse des logs (le **premier aller-retour BAZOR_OK est confirmé par capture**).
 - Le raccourci Bureau « BAZOR ULTIMATE » testé.
 - Les boutons RÉPARER, le rollback réel, les liaisons API Mammouth/GPT/Astra.
 - La synchronisation du Hub présent sur le PC avec le clone GitHub : si son Hub local est différent de la version GitHub, une inspection est nécessaire avant installation.
