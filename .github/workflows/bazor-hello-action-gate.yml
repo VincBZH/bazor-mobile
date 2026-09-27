@@ -1,0 +1,48 @@
+name: BAZOR Windows Hello action gate — offline + Windows build
+
+on:
+  push:
+    paths:
+      - "pc-relay/bazor_action_policy.py"
+      - "pc-relay/test_action_policy.py"
+      - "pc-relay/windows-hello-gate/**"
+      - ".github/workflows/bazor-hello-action-gate.yml"
+  pull_request:
+    paths:
+      - "pc-relay/bazor_action_policy.py"
+      - "pc-relay/test_action_policy.py"
+      - "pc-relay/windows-hello-gate/**"
+      - ".github/workflows/bazor-hello-action-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Test fail-closed policy and PANIC
+        run: python -m unittest discover -s pc-relay -p "test_action_policy.py" -v
+  windows-hello-build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Compile genuine Windows Hello interop for desktop (NO runtime verification)
+        run: dotnet publish pc-relay/windows-hello-gate/BazorHelloGate.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/BazorHelloGate
+      - name: Upload developer-only proof component (NOT production authorization)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BAZOR-Hello-Diagnostics-PROTOTYPE-win-x64
+          path: artifacts/BazorHelloGate/
+          if-no-files-found: error
+          retention-days: 7
