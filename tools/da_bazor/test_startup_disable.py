@@ -1,9 +1,13 @@
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 from tempfile import TemporaryDirectory
 import unittest
+import uuid
 
-from startup_disable import EXPECTED, apply, planned, restore
+from startup_disable import EXPECTED, apply, planned, restore, task_change, task_enabled, task_definition_signature
 
 class StartupDisableTests(unittest.TestCase):
     def test_refuses_changed_or_extra_entry(self):
@@ -72,6 +76,29 @@ class StartupDisableTests(unittest.TestCase):
             self.assertTrue(shortcut.exists())
             self.assertTrue(task.read_text().find('<Enabled>true</Enabled>') > -1)
             self.assertEqual(json.loads((folder / 'manifest.json').read_text())['phase'], 'RESTORED')
+
+    @unittest.skipUnless(sys.platform == 'win32' and os.getenv('GITHUB_ACTIONS') == 'true',
+                         'Disposable scheduled-task integration runs only on Windows CI')
+    def test_real_windows_scheduler_disable_enable_on_disposable_task(self):
+        name = '\\BAZOR_CI_' + uuid.uuid4().hex[:12]
+        path = Path(os.environ['SystemRoot']) / 'System32' / 'Tasks' / name.lstrip('\\')
+        created = False
+        try:
+            subprocess.run(['schtasks.exe', '/Create', '/TN', name, '/TR', 'cmd.exe /c exit 0',
+                            '/SC', 'DAILY', '/ST', '23:59', '/F'],
+                           check=True, capture_output=True, timeout=20)
+            created = True
+            before = path.read_bytes()
+            self.assertTrue(task_enabled(path))
+            task_change(name, False)
+            self.assertFalse(task_enabled(path))
+            self.assertEqual(task_definition_signature(before), task_definition_signature(path.read_bytes()))
+            task_change(name, True)
+            self.assertTrue(task_enabled(path))
+        finally:
+            if created:
+                subprocess.run(['schtasks.exe', '/Delete', '/TN', name, '/F'],
+                               capture_output=True, timeout=20)
 
 if __name__ == '__main__':
     unittest.main()
