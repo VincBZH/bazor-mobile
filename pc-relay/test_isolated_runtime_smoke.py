@@ -122,10 +122,12 @@ class IsolatedRuntimeTests(unittest.TestCase):
         self.assertEqual(out["result"], "BLOCKED")
 
     def test_changed_live_room_pid_blocks_even_if_ollama_passes(self):
-        calls = []
+        room_calls = []
         def changing_owner(port):
-            calls.append(port)
-            return 8 if len(calls) == 1 else 19
+            if port != 8765:
+                return None
+            room_calls.append(port)
+            return 8 if len(room_calls) == 1 else 19
         out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch,
                           owner=changing_owner)
         self.assertEqual(out["production_room"], "CHANGED")
