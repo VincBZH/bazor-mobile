@@ -79,3 +79,19 @@ jobs:
           MAMMOUTH_API_KEY: ""
           OPENAI_API_KEY: ""
         run: python -m unittest discover -s pc-relay -p 'test_rollback_rehearsal.py' -v
+
+  transaction-windows-fixtures:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Test transaction and crash recovery on disposable Windows folders
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: |
+          python -m unittest discover -s pc-relay -p 'test_transaction_sandbox.py' -v
+          python pc-relay/bazor_transaction_sandbox.py --simulate-only
