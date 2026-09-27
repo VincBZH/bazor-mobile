@@ -92,5 +92,6 @@ if not errorlevel 1 (
 echo.
 echo Rapport public : %PUBLIC%
 echo API payante : ZERO
+echo PAID_AI_CALLS: ZERO
 echo Production remplacee : NON
 exit /b %RC%
