@@ -87,7 +87,10 @@ class DiagnosticGate:
             expires_at=self._clock() + ttl_seconds, session_id=secrets.token_hex(24))
 
     def allow(self, action: str, *, origin: str = "local_ui") -> bool:
-        if action not in SAFE_ACTIONS or origin != "local_ui":
+        # Only the local service may classify a GitHub event as verified-owner.
+        # Never forward an untrusted GitHub 'origin' string into this method.
+        trusted_origins = ("local_ui", "verified_github_owner")
+        if action not in SAFE_ACTIONS or origin not in trusted_origins:
             return False
         if not self.enabled:
             # Expired / Windows locked sessions must never come back later.
