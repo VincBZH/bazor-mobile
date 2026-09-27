@@ -11,7 +11,9 @@
 2. Double-cliquer sur `BAZOR_REPARER_CONNEXIONS_1_CLIC.cmd`. Une fenêtre affiche les étapes et reste ouverte, y compris en cas d'erreur.
 3. Si le contrôle local réussit, ouvrir **http://127.0.0.1:8768/** dans Opera. Les rapports et les journaux sont enregistrés dans `%LOCALAPPDATA%\BAZOR_ONECLICK`.
 
-La case `--test-mammouth` déjà intégrée au lanceur **autorise un seul appel Mammouth plafonné et synthétique** (test « 2 + 2 ») **si** une clé est disponible et si le budget indiqué par BAZOR est suffisant. Aucun document privé n'est transmis. Ne pas lancer plusieurs fois de suite en cas d'erreur Mammouth. Si Vincent souhaite tester *uniquement* le local sans dépense, exécuter depuis le dossier extrait : `py -3 pc-relay\bazor_multiai_oneclick.py`.
+**Comportement du double-clic : gratuit par défaut.** Le lanceur effectue uniquement les tests locaux Core/Room/Ollama et le relais GitHub non confidentiel lorsqu'il est disponible. Il **ne** transmet **aucune** requête à Mammouth et ne charge pas sa clé dans le nouveau Core isolé.
+
+**Test Mammouth optionnel, exclusivement sur décision distincte :** ouvrir un terminal dans le dossier extrait, renseigner explicitement un budget mensuel positif autorisé, par exemple `set BAZOR_MAMMOUTH_BUDGET_USD=4` dans `cmd.exe`, puis lancer `py -3 pc-relay\bazor_multiai_oneclick.py --test-mammouth`. Une clé valide doit déjà être configurée sur le PC ; ne jamais la copier dans GitHub. Le contrôle BAZOR utilise une estimation du coût cumulé : la facturation réelle du fournisseur peut différer. En l'absence de budget explicite, ce test est refusé. Le test n'envoie qu'une question synthétique (`2 + 2`) et au plus une requête externe par lancement. Ne pas le relancer automatiquement après une erreur.
 
 ## Ce que ce lanceur fait réellement
 
@@ -20,7 +22,7 @@ La case `--test-mammouth` déjà intégrée au lanceur **autorise un seul appel 
 - Réutilise un Core actif **uniquement après vérification exacte de sa signature et de son identité**. Sinon démarre un Core *isolé* sur **127.0.0.1:8875**, sans découverte UDP, avec ses propres données dans `BAZOR_ONECLICK`. Il n'arrête pas ni n'écrase l'ancien Core 8775.
 - Démarre ou vérifie la véritable Room V2.4 sur **127.0.0.1:8768**, rattachée au Core identifié, avec le modèle léger choisi. Refuse un port occupé par une application inconnue.
 - Exécute un **vrai aller-retour Room → Core → Ollama** avec un message de test constant. Un HTTP 200, l'existence d'un processus ou la présence d'une clé **ne constituent jamais seuls une preuve de succès**.
-- Si Mammouth est autorisé et configuré, exécute le contrôle borné Ollama → Mammouth → Ollama, avec **une seule requête Mammouth**, le profil `light`, identité réelle des modèles, provenance des trois étapes et marqueur exact `BAZOR_BRIDGE_E2E_OK`. La preuve est conservée dans `bridge_runtime_proof.json`.
+- Uniquement avec `--test-mammouth` et un budget explicite, exécute le contrôle borné Ollama → Mammouth → Ollama, avec **une seule requête Mammouth**, le profil `light`, identité réelle des modèles, provenance des trois étapes et marqueur exact `BAZOR_BRIDGE_E2E_OK`. La preuve est conservée dans `bridge_runtime_proof.json`.
 - Si la GitHub CLI `gh` est installée et connectée, peut répondre à **l'unique ticket de contrôle public autorisé [#168](https://github.com/VincBZH/bazor-mobile/issues/168)**, rédigé par le propriétaire du dépôt, avec un nouvel aller-retour réel de test depuis Ollama ; ne lit/exécute aucune commande issue d'un ticket. Cette étape vérifie GitHub comme *transport* ; elle **ne constitue pas une API GPT directe**. Si `gh` est absente ou non authentifiée, le statut reste EN ATTENTE.
 - La connexion GPT/Astra directe reste **manuelle**, NoTrack reste désactivé tant que l'API/autorisation n'est pas validée. DuckDuckGo/Tor servent éventuellement à la recherche/navigation, pas à simuler un fournisseur de modèle IA. Ollama et ses ports ne sont pas exposés sur Internet.
 
