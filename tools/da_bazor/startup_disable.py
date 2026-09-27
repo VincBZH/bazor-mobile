@@ -53,7 +53,8 @@ def task_definition_signature(raw: bytes) -> str:
     for node in root.iter():
         if node.tag.rsplit("}", 1)[-1] == "Enabled":
             node.text = "__ENABLED__"
-    return digest(ET.tostring(root, encoding="utf-8"))
+    canonical = ET.canonicalize(ET.tostring(root, encoding="unicode"), strip_text=True)
+    return digest(canonical.encode("utf-8"))
 
 
 def task_change(name: str, enable: bool) -> None:
