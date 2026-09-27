@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from da_bazor import checkpoint, inspect, local_answer, report, allowed_destination
+from create_desktop_launcher import launcher_content
 
 class DaBazorTests(unittest.TestCase):
     def test_http_200_false_is_not_green(self):
@@ -52,6 +53,13 @@ class DaBazorTests(unittest.TestCase):
         state = inspect(lambda url: {'models': []} if url.endswith('/api/tags') else {'ok': False}, lambda url: False)
         self.assertIsNone(allowed_destination('room', state))
         self.assertIsNone(allowed_destination('core', state))
+
+    def test_desktop_launcher_quotes_path_and_refuses_cmd_expansion(self):
+        content = launcher_content(Path(r'C:\Program Files\Python\python.exe'), Path(r'C:\Users\Vincent\Da Bazor\da_bazor.py'))
+        self.assertIn('"C:\\Program Files\\Python\\python.exe"', content)
+        self.assertIn('"C:\\Users\\Vincent\\Da Bazor\\da_bazor.py"', content)
+        with self.assertRaises(ValueError):
+            launcher_content(Path(r'C:\Users\100%\python.exe'), Path(r'C:\Da Bazor\da_bazor.py'))
 
 if __name__ == '__main__':
     unittest.main()
