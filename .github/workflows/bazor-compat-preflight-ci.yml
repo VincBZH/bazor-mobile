@@ -12,6 +12,8 @@ on:
       - "BAZOR_SIMULER_RESTAURATION_1_CLIC.cmd"
       - "pc-relay/bazor_rollback_rehearsal.py"
       - "pc-relay/test_rollback_rehearsal.py"
+      - "pc-relay/bazor_transaction_sandbox.py"
+      - "pc-relay/test_transaction_sandbox.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
   pull_request:
     paths:
@@ -24,6 +26,8 @@ on:
       - "BAZOR_SIMULER_RESTAURATION_1_CLIC.cmd"
       - "pc-relay/bazor_rollback_rehearsal.py"
       - "pc-relay/test_rollback_rehearsal.py"
+      - "pc-relay/bazor_transaction_sandbox.py"
+      - "pc-relay/test_transaction_sandbox.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
   workflow_dispatch:
 
@@ -46,6 +50,15 @@ jobs:
           python -m py_compile pc-relay/bazor_rollback_simulation.py pc-relay/test_rollback_simulation.py
       - name: Syntax of temp-only rollback rehearsal
         run: python -m py_compile pc-relay/bazor_rollback_rehearsal.py pc-relay/test_rollback_rehearsal.py
+      - name: Compile disposable transaction engine and test suite
+        run: python -m py_compile pc-relay/bazor_transaction_sandbox.py pc-relay/test_transaction_sandbox.py
+      - name: Simulated two-service transaction and crash recovery (mock only)
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: |
+          python -m unittest discover -s pc-relay -p 'test_transaction_sandbox.py' -v
+          python pc-relay/bazor_transaction_sandbox.py --simulate-only
       - name: Read-only backup/restore and confidentiality tests
         env:
           MAMMOUTH_API_KEY: ""
