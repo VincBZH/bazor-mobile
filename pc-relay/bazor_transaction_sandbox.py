@@ -133,6 +133,13 @@ def promote(root: Path, crash: str | None = None) -> str:
     rec = _validated(root)
     if rec["phase"] != "INITIALIZED" or not _data_untouched(root, rec):
         raise UnsafeSandbox("transaction_not_ready")
+    # Validate ALL candidate and live fixture components before first rename.
+    # Otherwise drift in Room could leave a partially promoted Core.
+    for name in COMPONENTS:
+        if (_hash_file(root / "live" / name / "version.txt") != rec["old"][name]
+                or _hash_file(root / "candidate" / name / "version.txt") != rec["new"][name]
+                or (root / "previous" / name).exists()):
+            raise UnsafeSandbox("manifest_drift")
     _move_step(root, rec, "Core", crash)
     _move_step(root, rec, "Room", crash)
     if not _data_untouched(root, rec):
