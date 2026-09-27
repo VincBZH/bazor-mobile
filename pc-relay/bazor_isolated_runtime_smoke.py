@@ -19,6 +19,7 @@ CORE_PORT = 8875
 ROOM_PORT = 8768
 STATIC_MARKER = "BAZOR_LOCAL_OK"
 PRODUCTION_CORE = "http://127.0.0.1:8775/api/v1/health"
+PRODUCTION_CORE_STATUS = "http://127.0.0.1:8775/api/v1/security/status"
 PRODUCTION_ROOM = "http://127.0.0.1:8765/api/status"
 ISOLATED_CORE = "http://127.0.0.1:8875/api/v1/health"
 ISOLATED_ROOM = "http://127.0.0.1:8768/api/status"
@@ -52,6 +53,43 @@ def stable_live(before, after) -> str:
     return "UNCHANGED" if all(before[k] == after[k] for k in keys) else "CHANGED"
 
 
+def stable_core(before, after, status_before, status_after, pid_before, pid_after) -> str:
+    """Verify legacy Core using its security-status API and listener owner.
+
+    Prefer /health PID + runtime signature when both exist. A fallback requires
+    the same positive Windows listener PID plus two valid BAZOR status replies.
+    """
+    verified = stable_live(before, after)
+    if verified != "NOT_VERIFIED":
+        if (pid_before is not None and pid_after is not None
+                and pid_before != pid_after):
+            return "CHANGED"
+        return verified
+    if not (isinstance(pid_before, int) and pid_before > 0
+            and isinstance(pid_after, int) and pid_after > 0):
+        return "NOT_VERIFIED"
+    if pid_before != pid_after:
+        return "CHANGED"
+    for health in (before, after):
+        if isinstance(health, dict):
+            if health.get("ok") is False:
+                return "NOT_VERIFIED"
+            if health.get("pid") is not None and health.get("pid") != pid_before:
+                return "NOT_VERIFIED"
+    if not (isinstance(status_before, dict) and isinstance(status_after, dict)
+            and status_before.get("ok") is True and status_after.get("ok") is True
+            and status_before.get("mode") == status_after.get("mode") == "device-proof"):
+        return "NOT_VERIFIED"
+    for field in ("runtime_signature", "service", "version"):
+        if isinstance(before, dict) and isinstance(after, dict):
+            left, right = before.get(field), after.get(field)
+            if left is not None and right is not None and left != right:
+                return "CHANGED"
+            if (left is None) != (right is None):
+                return "NOT_VERIFIED"
+    return "UNCHANGED"
+
+
 def windows_listening_pid(port: int) -> int | None:
     """Read a Windows loopback listener PID; never stop or modify the process.
 
@@ -74,7 +112,7 @@ def windows_listening_pid(port: int) -> int | None:
             # The LISTENING state is localized on some systems. Restrict by
             # both the exact loopback address and the empty remote endpoint.
             if (len(parts) >= 5 and parts[0].upper() == "TCP"
-                    and parts[1] == f"127.0.0.1:{port}"
+                    and parts[1] in (f"127.0.0.1:{port}", f"0.0.0.0:{port}")
                     and parts[2] == "0.0.0.0:0" and parts[-1].isdigit()):
                 owners.add(int(parts[-1]))
         return next(iter(owners)) if len(owners) == 1 and next(iter(owners)) > 0 else None
@@ -121,6 +159,8 @@ def check(root: Path, *, allow_local_chat: bool = False, fetch=None, owner=None)
             return None
 
     live_core_before = local(PRODUCTION_CORE)
+    core_status_before = local(PRODUCTION_CORE_STATUS)
+    core_pid_before = owner(8775)
     live_room_before = local(PRODUCTION_ROOM)
     if live_room_before is None:
         live_room_before = local('http://127.0.0.1:8765/health')
@@ -171,11 +211,15 @@ def check(root: Path, *, allow_local_chat: bool = False, fetch=None, owner=None)
         else:
             report["local_chat"] = "FAILED_OR_UNVERIFIABLE"
     live_core_after = local(PRODUCTION_CORE)
+    core_status_after = local(PRODUCTION_CORE_STATUS)
+    core_pid_after = owner(8775)
     live_room_after = local(PRODUCTION_ROOM)
     if live_room_after is None:
         live_room_after = local('http://127.0.0.1:8765/health')
     room_pid_after = owner(8765)
-    report["production_core"] = stable_live(live_core_before, live_core_after)
+    report["production_core"] = stable_core(
+        live_core_before, live_core_after,
+        core_status_before, core_status_after, core_pid_before, core_pid_after)
     report["production_room"] = stable_room(live_room_before, live_room_after,
                                              room_pid_before, room_pid_after)
     if report["production_core"] == "CHANGED" or report["production_room"] == "CHANGED":
