@@ -24,6 +24,18 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(any(isinstance(n, ast.If) and n.test
                             for n in tree.body))
 
+    def test_v0_launcher_is_guarded_and_starts_only_dashboard(self):
+        cmd = (DIR.parent / "LANCER_BAZOR_ULTIMATE_V0.cmd").read_text(encoding="utf-8")
+        self.assertIn('cd /d "%~dp0"', cmd)
+        self.assertIn("127.0.0.1',8790", cmd)
+        self.assertIn('console-hub\\bazor_ultimate_dashboard.py', cmd)
+        for forbidden in ("--centralize", "Stop-Process", "taskkill /f", "ollama serve"):
+            self.assertNotIn(forbidden, cmd)
+
+    def test_diagnostic_dashboard_disables_legacy_wrapper_cleanup(self):
+        code = (DIR / "bazor_ultimate_dashboard.py").read_text(encoding="utf-8")
+        self.assertIn("_legacy_hub.kill_legacy_bazor_wrappers = lambda: 0", code)
+
     def test_manual_chat_button_is_separate_from_auto_refresh(self):
         source = (DIR / "bazor_ultimate_dashboard.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
