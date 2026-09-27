@@ -140,11 +140,11 @@ class IsolatedRuntimeTests(unittest.TestCase):
         self.assertEqual(out["result"], "PASS_REAL_LOCAL")
 
     def test_windows_netstat_owner_parses_local_listener(self):
-        output = "TCP 127.0.0.1:8765 0.0.0.0:0 EN_ECOUTE 8124\\n"
-        output += "TCP 0.0.0.0:8765 0.0.0.0:0 EN_ECOUTE 9999\\n"
+        output = chr(10).join(("TCP 127.0.0.1:8765 0.0.0.0:0 EN_ECOUTE 8124",
+                               "TCP 0.0.0.0:8765 0.0.0.0:0 EN_ECOUTE 9999"))
         result = MagicMock(returncode=0, stdout=output)
-        with patch.object(smoke.os, "name", "nt"), \\
-                patch.object(smoke.subprocess, "run", return_value=result):
+        with (patch.object(smoke.os, "name", "nt"),
+              patch.object(smoke.subprocess, "run", return_value=result)):
             self.assertEqual(smoke.windows_listening_pid(8765), 8124)
 
     def test_missing_windows_owner_never_reports_stable(self):
