@@ -179,6 +179,29 @@ def valid_room_reply_for_github(reply, expected_model):
             and "BAZOR_OLLAMA_BRIDGE_OK" in row["text"])
 
 
+def classify_bridge_failure(proof):
+    """Make provider quota failures explicit without logging credentials or details."""
+    bridge = proof.get("bridge") if isinstance(proof, dict) else None
+    if not isinstance(bridge, dict):
+        return "BLOCKED:see_bridge_proof"
+    stage = bridge.get("mammouth_review")
+    if not isinstance(stage, dict):
+        stage = next((row for row in bridge.get("stages", [])
+                      if isinstance(row, dict) and row.get("provider") == "mammouth"), None)
+    if not isinstance(stage, dict):
+        return "BLOCKED:see_bridge_proof"
+    if stage.get("http_status") == 429:
+        try:
+            detail = json.loads(stage.get("detail") or "{}")
+        except (ValueError, TypeError):
+            detail = {}
+        err = detail.get("error") if isinstance(detail, dict) else None
+        if isinstance(err, dict) and err.get("type") == "budget_exceeded":
+            return "BLOCKED:PROVIDER_API_BUDGET_EXCEEDED"
+        return "BLOCKED:PROVIDER_RATE_LIMITED"
+    return "BLOCKED:see_bridge_proof"
+
+
 def env_with_user_key():
     env = os.environ.copy()
     if not env.get("MAMMOUTH_API_KEY") and os.name == "nt":
@@ -253,6 +276,21 @@ def selftest():
                    "text": "BAZOR_OLLAMA_BRIDGE_OK"}
             self.assertTrue(valid_room_reply_for_github({"ok": True, "results": [row]}, "llama3.2:3b"))
             self.assertFalse(valid_room_reply_for_github({"ok": True, "results": [{**row, "model": "unknown"}]}, "llama3.2:3b"))
+        def test_provider_budget_error_not_a_transport_failure(self):
+            stage = {"provider": "mammouth", "http_status": 429,
+                     "detail": json.dumps({"error": {"type": "budget_exceeded",
+                         "message": "Key=PRIVATE max budget: 4.0"}})}
+            proof = {"bridge": {"mammouth_review": stage}}
+            self.assertEqual(classify_bridge_failure(proof),
+                             "BLOCKED:PROVIDER_API_BUDGET_EXCEEDED")
+            self.assertEqual(classify_bridge_failure({"bridge": {"stages": [stage]}}),
+                             "BLOCKED:PROVIDER_API_BUDGET_EXCEEDED")
+            self.assertNotIn("PRIVATE", classify_bridge_failure(proof))
+            self.assertEqual(classify_bridge_failure({"bridge": {
+                "mammouth_review": {**stage, "detail": "{}"}}}),
+                             "BLOCKED:PROVIDER_RATE_LIMITED")
+            self.assertEqual(classify_bridge_failure({"bridge": None}),
+                             "BLOCKED:see_bridge_proof")
         def test_reject_external_url(self):
             with self.assertRaises(ValueError):
                 local_json("https://api.example.com/private")
@@ -399,11 +437,12 @@ def run(test_mammouth=False):
                 proof = {}
             status["mammouth"] = ("PASS_REAL_BRIDGE" if call.returncode == 0 and
                                   proof.get("status") == "BAZOR_BRIDGE_E2E_OK"
-                                  else "BLOCKED:see_bridge_proof")
+                                  else classify_bridge_failure(proof))
             report["evidence"]["bridge_proof_path"] = str(proof_path)
             report["evidence"]["bridge_status"] = proof.get("status")
     else:
         status["mammouth"] = "PENDING:explicit_paid_test_not_requested"
+    print("Mammouth: " + status.get("mammouth", "UNKNOWN"))
     save_report(report)
     return 0 if status.get("mammouth") == "PASS_REAL_BRIDGE" else 1
 
