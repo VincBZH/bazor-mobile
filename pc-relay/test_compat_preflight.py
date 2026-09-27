@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from unittest.mock import patch
 from pathlib import Path
 import stat
@@ -50,6 +51,9 @@ class CompatibilityPreflightTests(unittest.TestCase):
         if bad_python:
             (folder / "pc-relay" / "bad.py").write_text("def broken(:", encoding="utf-8")
         return folder
+
+    def stage_blobs(self, stage):
+        return {name: pre.git_blob_sha1(stage / name) for name in pre.REQUIRED_STAGE}
 
     def test_backup_restore_to_temporary_only(self):
         archive = self.backup()
@@ -111,7 +115,8 @@ class CompatibilityPreflightTests(unittest.TestCase):
             return "HAS_MODELS" if models else "RESPONDS"
         with patch.object(pre, "probe", side_effect=record_probe):
             pre.audit(self.root, stage, archive,
-                      expected_hash=pre.sha16(stage / pre.REQUIRED_STAGE[0]))
+                      expected_hash=pre.sha16(stage / "pc-relay/bazor_bridge.py"),
+                      expected_blobs=self.stage_blobs(stage))
         self.assertIn("http://127.0.0.1:8765/api/status", requests)
         self.assertNotIn("http://127.0.0.1:8765/health", requests)
 
@@ -142,15 +147,34 @@ class CompatibilityPreflightTests(unittest.TestCase):
 
     def test_stage_identification_and_syntax(self):
         stage = self.stage()
-        digest = pre.sha16(stage / pre.REQUIRED_STAGE[0])
-        report = pre.stage_test(stage, expected_hash=digest)
+        digest = pre.sha16(stage / "pc-relay/bazor_bridge.py")
+        report = pre.stage_test(stage, expected_hash=digest,
+                                expected_blobs=self.stage_blobs(stage))
         self.assertEqual(report["stage"], "OK")
         self.assertEqual(report["syntax_errors"], 0)
         self.assertEqual(pre.stage_test(stage)["stage"], "PATCH_MISMATCH")
 
+    def test_blob_hash_matches_git_object_format(self):
+        stage = self.stage()
+        file = stage / "BAZOR_REPARER_CONNEXIONS_1_CLIC.cmd"
+        data = file.read_bytes()
+        expected = hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + bytes([0]) + data).hexdigest()
+        self.assertEqual(pre.git_blob_sha1(file), expected)
+
+    def test_stale_oneclick_launcher_never_passes(self):
+        stage = self.stage()
+        old_blobs = self.stage_blobs(stage)
+        launcher = stage / "BAZOR_REPARER_CONNEXIONS_1_CLIC.cmd"
+        launcher.write_text("@echo off\\necho old paid default", encoding="utf-8")
+        report = pre.stage_test(stage,
+                                expected_hash=pre.sha16(stage / "pc-relay/bazor_bridge.py"),
+                                expected_blobs=old_blobs)
+        self.assertEqual(report["stage"], "PATCH_MISMATCH")
+
     def test_stage_syntax_error_blocks(self):
         stage = self.stage(bad_python=True)
-        report = pre.stage_test(stage, expected_hash=pre.sha16(stage / pre.REQUIRED_STAGE[0]))
+        report = pre.stage_test(stage, expected_hash=pre.sha16(stage / "pc-relay/bazor_bridge.py"),
+                                expected_blobs=self.stage_blobs(stage))
         self.assertEqual(report["stage"], "SYNTAX_ERRORS")
         self.assertEqual(report["syntax_errors"], 1)
 
@@ -188,7 +212,8 @@ class CompatibilityPreflightTests(unittest.TestCase):
         pre.probe = lambda url, models=False: "HAS_MODELS" if models else "RESPONDS"
         try:
             report = pre.audit(self.root, stage, archive,
-                               expected_hash=pre.sha16(stage / pre.REQUIRED_STAGE[0]))
+                               expected_hash=pre.sha16(stage / "pc-relay/bazor_bridge.py"),
+                               expected_blobs=self.stage_blobs(stage))
         finally:
             pre.probe = old_probe
         self.assertEqual(report["gate"], "READY_FOR_ISOLATED_TEST")
