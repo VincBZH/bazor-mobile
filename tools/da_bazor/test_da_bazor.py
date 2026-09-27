@@ -2,7 +2,7 @@ import unittest
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from da_bazor import checkpoint, inspect, local_answer, report
+from da_bazor import checkpoint, inspect, local_answer, report, allowed_destination
 
 class DaBazorTests(unittest.TestCase):
     def test_http_200_false_is_not_green(self):
@@ -39,6 +39,19 @@ class DaBazorTests(unittest.TestCase):
             self.assertEqual(result['projects'][1]['diagnostic'], 'SONDES_LOCALES_OK')
             self.assertTrue(all(x['delivery'] == 'NON_CERTIFIÉ' for x in result['projects']))
             self.assertEqual(json.loads((Path(folder) / 'checkpoint.json').read_text())['external_paid_calls'], 0)
+
+    def test_local_menu_opens_only_probed_allowlisted_destinations(self):
+        state = inspect(lambda url: {'models': [{'name': 'llama3.2:3b'}]} if url.endswith('/api/tags') else {'ok': True},
+                        lambda url: url.endswith('/system_stats'))
+        self.assertEqual(allowed_destination('comfy', state), 'http://127.0.0.1:8188')
+        self.assertIsNone(allowed_destination('studio', state))
+        self.assertIsNone(allowed_destination('https://example.com', state))
+        self.assertEqual(allowed_destination('room', state), 'http://127.0.0.1:8765')
+
+    def test_failed_health_disables_navigation_even_when_http_200(self):
+        state = inspect(lambda url: {'models': []} if url.endswith('/api/tags') else {'ok': False}, lambda url: False)
+        self.assertIsNone(allowed_destination('room', state))
+        self.assertIsNone(allowed_destination('core', state))
 
 if __name__ == '__main__':
     unittest.main()
