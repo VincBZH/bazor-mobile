@@ -11,8 +11,13 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
+import bazor_console_hub as _legacy_hub
 from bazor_console_hub import Hub
 from bazor_diagnostics import Check, State, diagnose, test_local_chat
+
+# Mode diagnostic : neutralise le nettoyage automatique des anciens wrappers
+# que le Hub d'origine declenche dans son constructeur. Ne ferme rien.
+_legacy_hub.kill_legacy_bazor_wrappers = lambda: 0
 
 COLORS = {
     State.GREEN: "#18834d",
