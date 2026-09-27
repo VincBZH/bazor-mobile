@@ -122,7 +122,9 @@ def local_answer(question: str, names: list[str], sender=generate) -> tuple[str,
 def report(state: dict) -> str:
     lines = ["DA BAZOR — ÉTAT LOCAL", "Ollama : " + state["ollama"]]
     lines.append("Modèles détectés : " + (", ".join(state["models"]) if state["models"] else "aucun"))
-    lines += ["Core : " + state["core"], "Room : " + state["room"], ""]
+    lines += ["Core : " + state["core"], "Room : " + state["room"],
+              "Studio : " + state.get("studio", "NON_VÉRIFIÉ"),
+              "ComfyUI : " + state.get("comfy", "NON_VÉRIFIÉ"), ""]
     lines.append("ORDRE DE TRAVAIL — aucun livrable certifié par ces sondes")
     for number, title, action, missing in TASKS:
         lines.append(f"{number} · {title} — {action}. BLOQUÉ : {missing}.")
@@ -264,7 +266,7 @@ class Dashboard:
             "da": (495, 25, "DA BAZOR\nmenu · preuves · priorités", "#bf1b34"),
             "room": (80, 195, "AI ROOM\n8765 · %LOCALAPPDATA%\\BazorAIROOM", "#53607a"),
             "core": (495, 195, "CORE + WATCHER\n8775 · BAZOR local / GitHub", "#53607a"),
-            "studio": (910, 195, "STUDIO EXPERT\n8191 · C:\\AI\\SimpleStudioV2", "#53607a"),
+            "studio": (910, 195, "STUDIO EXPERT\n8191 · dossier Studio local", "#53607a"),
             "ollama": (80, 395, "OLLAMA\n11434 · modèles locaux", "#386354"),
             "filebus": (495, 395, "FILEBUS / MAMMOUTH\n2 dépôts GitHub · pont à qualifier", "#765b45"),
             "comfy": (910, 395, "COMFYUI\n8188 · modèles / GPU", "#386354"),
