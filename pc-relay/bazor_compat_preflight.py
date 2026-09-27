@@ -104,9 +104,13 @@ def restore_test(archive: Path, work: Path, current_core: Path, current_room: Pa
                 drift = False
                 for label, root in (("Core", current_core), ("AI_Room", current_room)):
                     for relative in (("DEMARRER_BAZOR_PC_RELAY.cmd",) if label == "Core"
-                                     else ("chat_history.json", "control.json", "projects.json", "state.json")):
+                                     else ("DEMARRER_BAZOR_AI_ROOM.cmd", "chat_history.json",
+                                           "control.json", "projects.json", "state.json")):
                         live, saved = root / relative, destination / label / relative
-                        if live.is_file() and saved.is_file() and sha16(live) != sha16(saved):
+                        # An absent live file is also drift: never allow a stale
+                        # backup to replace a changed or removed installation.
+                        if (not live.is_file() or not saved.is_file()
+                                or sha16(live) != sha16(saved)):
                             drift = True
                 result.update(backup="RESTORE_SIMULATED", entries=len(entries),
                               live_data_drift=drift)
@@ -171,11 +175,13 @@ def probe(url: str, models: bool = False) -> str:
             if len(raw) > 65536:
                 return "BLOCKED"
             obj = json.loads(raw.decode("utf-8"))
-            if not isinstance(obj, dict) or obj.get("ok") is False:
+            if not isinstance(obj, dict):
                 return "BLOCKED"
             if models:
-                return "HAS_MODELS" if obj.get("models") else "NO_MODELS"
-            return "RESPONDS"
+                names = obj.get("models")
+                return "HAS_MODELS" if isinstance(names, list) and bool(names) else "NO_MODELS"
+            # A bare HTTP 200 or arbitrary JSON must never pass as BAZOR health.
+            return "RESPONDS" if obj.get("ok") is True else "BLOCKED"
     except (OSError, ValueError, UnicodeError):
         return "BLOCKED"
 
@@ -201,7 +207,7 @@ def audit(local: Path, stage: Path | None = None, archive: Path | None = None,
                    if archive else {"backup": "ABSENT"},
         "health": {
             "core_8775": probe("http://127.0.0.1:8775/api/v1/health"),
-            "room_8765": probe("http://127.0.0.1:8765/health"),
+            "room_8765": probe("http://127.0.0.1:8765/api/status"),
             "ollama_11434": probe("http://127.0.0.1:11434/api/tags", models=True),
         },
     }
