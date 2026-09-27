@@ -98,6 +98,17 @@ class RollbackRehearsalTests(unittest.TestCase):
         self.assertIn("PAID_AI_CALLS: ZERO", text)
         self.assertIn("ACTUAL_DEPLOYMENT_ROLLBACK_TESTED: NO", text)
 
+    def test_one_click_uploads_only_fixed_summary(self):
+        launcher = (Path(__file__).resolve().parents[1] /
+                    "BAZOR_TEST_ROLLBACK_SIMULE_1_CLIC.cmd").read_text(
+                        encoding="utf-8", errors="replace")
+        self.assertIn("bazor_rollback_rehearsal.py", launcher)
+        self.assertIn("--body-file", launcher)
+        self.assertIn('> "%PUBLIC%" 2>nul', launcher)
+        self.assertNotIn("--test-mammouth", launcher)
+        self.assertNotIn("powershell -", launcher.lower())
+        self.assertIn("PAID_AI_CALLS: ZERO", roll.public_summary({}))
+
     def test_detect_live_file_change_during_rehearsal(self):
         original = roll._verify_snapshot
         mutated = []
