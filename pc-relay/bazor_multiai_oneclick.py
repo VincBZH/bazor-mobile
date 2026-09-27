@@ -202,6 +202,15 @@ def classify_bridge_failure(proof):
     return "BLOCKED:see_bridge_proof"
 
 
+def explicitly_authorized_mammouth_budget(env):
+    """No implicit allowance: missing, zero, NaN or infinity prohibit paid calls."""
+    try:
+        value = float(env.get("BAZOR_MAMMOUTH_BUDGET_USD", ""))
+    except (TypeError, ValueError):
+        return False
+    return 0 < value < float("inf")
+
+
 def env_with_user_key():
     env = os.environ.copy()
     if not env.get("MAMMOUTH_API_KEY") and os.name == "nt":
@@ -291,6 +300,13 @@ def selftest():
                              "BLOCKED:PROVIDER_RATE_LIMITED")
             self.assertEqual(classify_bridge_failure({"bridge": None}),
                              "BLOCKED:see_bridge_proof")
+        def test_paid_calls_need_explicit_positive_budget(self):
+            self.assertFalse(explicitly_authorized_mammouth_budget({}))
+            self.assertFalse(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "0"}))
+            self.assertFalse(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "-1"}))
+            self.assertFalse(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "nan"}))
+            self.assertFalse(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "inf"}))
+            self.assertTrue(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "4"}))
         def test_reject_external_url(self):
             with self.assertRaises(ValueError):
                 local_json("https://api.example.com/private")
@@ -419,13 +435,8 @@ def run(test_mammouth=False):
     if test_mammouth:
         h = probe(core_url + "/api/v1/health") or {}
         budget = (h.get("mammouth") or {}).get("budget") or {}
-        # An opt-in flag alone is not a budget authorization. Never silently
-        # invent a $4 allowance from the provider module default.
-        try:
-            configured_budget = float(env.get("BAZOR_MAMMOUTH_BUDGET_USD", ""))
-        except (TypeError, ValueError):
-            configured_budget = 0.0
-        if not 0 < configured_budget < float("inf"):
+        # An opt-in flag alone is not a budget authorization.
+        if not explicitly_authorized_mammouth_budget(env):
             status["mammouth"] = "BLOCKED:explicit_positive_budget_required"
         elif not env.get("MAMMOUTH_API_KEY"):
             status["mammouth"] = "BLOCKED:key_missing"
