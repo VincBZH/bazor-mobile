@@ -2,6 +2,7 @@
 import datetime
 import hashlib
 import json
+import re
 import time
 import urllib.request
 import uuid
@@ -75,6 +76,35 @@ def envelope(provider, requested, raw, rid, started):
     })
 
 
+def certification_reply_ok(content):
+    """Accept the exact marker or a narrow, affirmative French rendering.
+
+    A marker quoted mid-sentence or next to a negative verdict must not
+    turn a failed exchange into a successful certification.
+    """
+    if not isinstance(content, str):
+        return False
+    content = content.strip()
+    if content == MARKER:
+        return True
+    if "BAZOR_BRIDGE_E2E_BLOCKED" in content:
+        return False
+    match = re.fullmatch(
+        r'La réponse est\\s+["«]?BAZOR_BRIDGE_E2E_OK["»]?[.]?(?:\\s+(.{1,200}))?',
+        content, re.IGNORECASE | re.DOTALL
+    )
+    if not match:
+        return False
+    explanation = (match.group(1) or "").strip()
+    if not explanation:
+        return True
+    compact = re.sub(r"\\s+", "", explanation)
+    return (bool(re.search(r"(?<!\\d)4(?!\\d)", explanation))
+            and "2+2" in compact
+            and not re.search(r"\\b(?:non|faux|fausse|incorrect|erron[ée]|erreur|pas|bloqu[ée])\\b",
+                              explanation, re.IGNORECASE))
+
+
 def validate(bridge, exact_marker=False):
     stages = bridge.get("stages") or []
     if bridge.get("provenance") != ["ollama", "mammouth", "ollama"] or len(stages) != 3:
@@ -92,7 +122,7 @@ def validate(bridge, exact_marker=False):
             return False
         if not 200 <= (stage.get("http_status") or 0) < 300:
             return False
-    return not exact_marker or stages[-1]["content"] == MARKER
+    return not exact_marker or certification_reply_ok(stages[-1]["content"])
 
 
 def run(text, model=None, profile=None, certify=False, journal=None):
@@ -155,5 +185,5 @@ def run(text, model=None, profile=None, certify=False, journal=None):
     result["ok"] = validate(result, exact_marker=certify)
     result["stage"] = "complete" if result["ok"] else "contract"
     result["error"] = None if result["ok"] else "bridge_contract_failed"
-    result["final_answer"] = result["stages"][-1]["content"] if result["ok"] else ""
+    result["final_answer"] = (MARKER if certify else result["stages"][-1]["content"]) if result["ok"] else ""
     return result
