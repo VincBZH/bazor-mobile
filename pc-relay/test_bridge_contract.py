@@ -153,6 +153,33 @@ class BridgeTests(unittest.TestCase):
     def test_substring_marker_fails(self):
         self.assertFalse(self.run_bridge("prefix "+bridge.MARKER)["ok"])
 
+    def test_qualified_marker_from_real_windows_report(self):
+        final = ("La réponse est BAZOR_BRIDGE_E2E_OK. "
+                 "Les deux réponses donnent correctement 4 pour 2+2.")
+        result = self.run_bridge(final)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["stage"], "complete")
+        self.assertEqual(result["final_answer"], bridge.MARKER)
+        self.assertEqual(result["ollama_final"]["content"], final)
+        self.assertTrue(bridge.validate(result, True))
+
+    def test_qualified_marker_rejects_incorrect_or_quoted_status(self):
+        replies = (
+            "prefix " + bridge.MARKER,
+            "La réponse est BAZOR_BRIDGE_E2E_BLOCKED. Les deux réponses donnent 4 pour 2+2.",
+            "La réponse est BAZOR_BRIDGE_E2E_OK. Mais 2+2 ne font pas 4.",
+            "La réponse est BAZOR_BRIDGE_E2E_OK. Les deux réponses donnent 3 pour 2+2.",
+            "Le modèle a simplement cité BAZOR_BRIDGE_E2E_OK et donné 4 pour 2+2.",
+            "La réponse est BAZOR_BRIDGE_E2E_OK. Les deux réponses donnent 4 pour 2+2. BAZOR_BRIDGE_E2E_BLOCKED",
+        )
+        for final in replies:
+            with self.subTest(final=final):
+                result = self.run_bridge(final)
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["stage"], "contract")
+                self.assertEqual(result["final_answer"], "")
+
+
     def test_routing_alias_is_not_real_model_identity(self):
         with patch.object(bridge,"local_chat",return_value=self.reply("local-real")), patch.object(client,"chat",return_value=self.reply("mammouth-recommended")):
             result=bridge.run("2+2")
