@@ -1,0 +1,34 @@
+name: BAZOR compatibility preflight (offline)
+
+on:
+  push:
+    paths:
+      - "pc-relay/bazor_compat_preflight.py"
+      - "pc-relay/test_compat_preflight.py"
+      - ".github/workflows/bazor-compat-preflight-ci.yml"
+  pull_request:
+    paths:
+      - "pc-relay/bazor_compat_preflight.py"
+      - "pc-relay/test_compat_preflight.py"
+      - ".github/workflows/bazor-compat-preflight-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Python syntax (no provider credentials)
+        run: python -m py_compile pc-relay/bazor_compat_preflight.py pc-relay/test_compat_preflight.py
+      - name: Read-only backup/restore and confidentiality tests
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_compat_preflight.py' -v
