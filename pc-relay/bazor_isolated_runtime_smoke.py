@@ -106,16 +106,22 @@ def windows_listening_pid(port: int) -> int | None:
         )
         if response.returncode != 0:
             return None
-        owners = set()
+        loopback_owners, wildcard_owners = set(), set()
         for raw in response.stdout.splitlines():
             parts = raw.split()
-            # The LISTENING state is localized on some systems. Restrict by
-            # both the exact loopback address and the empty remote endpoint.
+            # The LISTENING state is localized on some Windows systems.
+            # Prefer the exact loopback listener if a different process also
+            # owns a wildcard socket on the same port. Multiple owners in
+            # the selected class remain ambiguous and MUST NOT be certified.
             if (len(parts) >= 5 and parts[0].upper() == "TCP"
-                    and parts[1] in (f"127.0.0.1:{port}", f"0.0.0.0:{port}")
                     and parts[2] == "0.0.0.0:0" and parts[-1].isdigit()):
-                owners.add(int(parts[-1]))
-        return next(iter(owners)) if len(owners) == 1 and next(iter(owners)) > 0 else None
+                pid = int(parts[-1])
+                if pid > 0 and parts[1] == f"127.0.0.1:{port}":
+                    loopback_owners.add(pid)
+                elif pid > 0 and parts[1] == f"0.0.0.0:{port}":
+                    wildcard_owners.add(pid)
+        owners = loopback_owners if loopback_owners else wildcard_owners
+        return next(iter(owners)) if len(owners) == 1 else None
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return None
 
