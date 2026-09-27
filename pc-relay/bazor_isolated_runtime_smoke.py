@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import bazor_multiai_oneclick as oneclick
@@ -50,10 +52,59 @@ def stable_live(before, after) -> str:
     return "UNCHANGED" if all(before[k] == after[k] for k in keys) else "CHANGED"
 
 
-def check(root: Path, *, allow_local_chat: bool = False, fetch=None) -> dict:
+def windows_listening_pid(port: int) -> int | None:
+    """Read a Windows loopback listener PID; never stop or modify the process.
+
+    The installed Room v1/v2 does not always expose a PID via /api/status.
+    netstat is used only for this local identity check, without shell=True.
+    """
+    if os.name != "nt":
+        return None
+    try:
+        response = subprocess.run(
+            ["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True,
+            timeout=6, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            encoding="utf-8", errors="replace", check=False,
+        )
+        if response.returncode != 0:
+            return None
+        owners = set()
+        for raw in response.stdout.splitlines():
+            parts = raw.split()
+            # The LISTENING state is localized on some systems. Restrict by
+            # both the exact loopback address and the empty remote endpoint.
+            if (len(parts) >= 5 and parts[0].upper() == "TCP"
+                    and parts[1] == f"127.0.0.1:{port}"
+                    and parts[2] == "0.0.0.0:0" and parts[-1].isdigit()):
+                owners.add(int(parts[-1]))
+        return next(iter(owners)) if len(owners) == 1 and next(iter(owners)) > 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+
+
+def stable_room(before, after, before_pid, after_pid) -> str:
+    """Stable listener PID + successful Room health, not an invented API PID."""
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return "NOT_VERIFIED"
+    if before.get("ok") is not True or after.get("ok") is not True:
+        return "NOT_VERIFIED"
+    if not isinstance(before_pid, int) or before_pid <= 0 or not isinstance(after_pid, int):
+        return "NOT_VERIFIED"
+    if before_pid != after_pid:
+        return "CHANGED"
+    # A changed declared server identity blocks preservation claims.
+    for field in ("version", "service"):
+        if before.get(field) != after.get(field):
+            return "CHANGED"
+    return "UNCHANGED"
+
+
+def check(root: Path, *, allow_local_chat: bool = False, fetch=None, owner=None) -> dict:
     """Fixed loopback endpoints only; publishes a fixed, non-sensitive report."""
     if fetch is None:
         fetch = oneclick.local_json
+    if owner is None:
+        owner = windows_listening_pid
     report = {
         "schema": "BAZOR_ISOLATED_RUNTIME_V1",
         "core": "NOT_TESTED", "room": "NOT_TESTED",
@@ -71,6 +122,9 @@ def check(root: Path, *, allow_local_chat: bool = False, fetch=None) -> dict:
 
     live_core_before = local(PRODUCTION_CORE)
     live_room_before = local(PRODUCTION_ROOM)
+    if live_room_before is None:
+        live_room_before = local('http://127.0.0.1:8765/health')
+    room_pid_before = owner(8765)
     signature = expected_signature(root)
     if signature is None:
         report["core"] = "STAGE_FILES_MISSING"
@@ -118,8 +172,12 @@ def check(root: Path, *, allow_local_chat: bool = False, fetch=None) -> dict:
             report["local_chat"] = "FAILED_OR_UNVERIFIABLE"
     live_core_after = local(PRODUCTION_CORE)
     live_room_after = local(PRODUCTION_ROOM)
+    if live_room_after is None:
+        live_room_after = local('http://127.0.0.1:8765/health')
+    room_pid_after = owner(8765)
     report["production_core"] = stable_live(live_core_before, live_core_after)
-    report["production_room"] = stable_live(live_room_before, live_room_after)
+    report["production_room"] = stable_room(live_room_before, live_room_after,
+                                             room_pid_before, room_pid_after)
     if report["production_core"] == "CHANGED" or report["production_room"] == "CHANGED":
         report["result"] = "BLOCKED_PRODUCTION_CHANGED"
     elif allow_local_chat:
