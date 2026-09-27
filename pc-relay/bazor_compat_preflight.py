@@ -72,7 +72,7 @@ def git_blob_sha1(path: Path) -> str:
     size = path.stat().st_size
     if size > 2_000_000:
         raise ValueError("stage_file_too_large")
-    digest = hashlib.sha1(f"blob {size}\\0".encode("ascii"))
+    digest = hashlib.sha1(f"blob {size}".encode("ascii") + bytes([0]))
     with path.open("rb") as source:
         for block in iter(lambda: source.read(131072), b""):
             digest.update(block)
