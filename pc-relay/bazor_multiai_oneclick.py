@@ -202,6 +202,15 @@ def classify_bridge_failure(proof):
     return "BLOCKED:see_bridge_proof"
 
 
+def explicitly_authorized_mammouth_budget(env):
+    """No implicit allowance: missing, zero, NaN or infinity prohibit paid calls."""
+    try:
+        value = float(env.get("BAZOR_MAMMOUTH_BUDGET_USD", ""))
+    except (TypeError, ValueError):
+        return False
+    return 0 < value < float("inf")
+
+
 def env_with_user_key():
     env = os.environ.copy()
     if not env.get("MAMMOUTH_API_KEY") and os.name == "nt":
@@ -291,6 +300,13 @@ def selftest():
                              "BLOCKED:PROVIDER_RATE_LIMITED")
             self.assertEqual(classify_bridge_failure({"bridge": None}),
                              "BLOCKED:see_bridge_proof")
+        def test_paid_calls_need_explicit_positive_budget(self):
+            self.assertFalse(explicitly_authorized_mammouth_budget({}))
+            self.assertFalse(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "0"}))
+            self.assertFalse(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "-1"}))
+            self.assertFalse(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "nan"}))
+            self.assertFalse(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "inf"}))
+            self.assertTrue(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "4"}))
         def test_reject_external_url(self):
             with self.assertRaises(ValueError):
                 local_json("https://api.example.com/private")
@@ -309,8 +325,10 @@ def run(test_mammouth=False):
               "evidence": {}, "limitations": ["GPT/Astra require authorized connector or manual handoff",
                  "NoTrack/Tor are not certified and will not receive credentials"]}
     status = report["statuses"]
-    env = env_with_user_key()
-    env.setdefault("BAZOR_MAMMOUTH_BUDGET_USD", "4")
+    # Local-only runs never pass a Mammouth credential to a newly spawned Core.
+    env = env_with_user_key() if test_mammouth else os.environ.copy()
+    if not test_mammouth:
+        env.pop("MAMMOUTH_API_KEY", None)
     try:
         import py_compile
         with tempfile.TemporaryDirectory(prefix="bazor_preflight_") as td:
@@ -417,7 +435,10 @@ def run(test_mammouth=False):
     if test_mammouth:
         h = probe(core_url + "/api/v1/health") or {}
         budget = (h.get("mammouth") or {}).get("budget") or {}
-        if not env.get("MAMMOUTH_API_KEY"):
+        # An opt-in flag alone is not a budget authorization.
+        if not explicitly_authorized_mammouth_budget(env):
+            status["mammouth"] = "BLOCKED:explicit_positive_budget_required"
+        elif not env.get("MAMMOUTH_API_KEY"):
             status["mammouth"] = "BLOCKED:key_missing"
         elif not (h.get("mammouth") or {}).get("configured"):
             status["mammouth"] = "BLOCKED:key_not_loaded_in_core"
@@ -444,7 +465,9 @@ def run(test_mammouth=False):
         status["mammouth"] = "PENDING:explicit_paid_test_not_requested"
     print("Mammouth: " + status.get("mammouth", "UNKNOWN"))
     save_report(report)
-    return 0 if status.get("mammouth") == "PASS_REAL_BRIDGE" else 1
+    # Success of a free local test must not be reported as a failure solely
+    # because the optional external provider was not called.
+    return 0 if (not test_mammouth or status.get("mammouth") == "PASS_REAL_BRIDGE") else 1
 
 
 if __name__ == "__main__":
