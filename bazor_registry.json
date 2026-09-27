@@ -14,7 +14,9 @@
           "id": "mobile",
           "name": "BAZOR Mobile / Command Center",
           "order": 1,
-          "next": "Faire en sorte que GO n’affiche un succès que pour une action réelle prouvée ; sinon afficher clairement ANALYSE SEULE ou INCOMPATIBLE."
+          "next": "Aucune reprise mobile ; conserver seulement les API Core et les preuves réutilisables sur PC.",
+          "lifecycle": "ABANDONNE_2026-09-27",
+          "reason": "Décision Vincent : interactions téléphone abandonnées, coupures Bluetooth et éloignement."
         },
         {
           "id": "core",
@@ -767,7 +769,9 @@
           "id": "game",
           "name": "Prototype jeu Wii / PC",
           "order": 2,
-          "next": "Poursuivre un prototype minimal jouable et fluide."
+          "next": "Poursuivre un prototype minimal jouable et fluide.",
+          "lifecycle": "SUSPENDU",
+          "reason": "Jeu Wii/PC/Switch reporté ; FileBus PC conservé."
         },
         {
           "id": "maze",
@@ -796,10 +800,10 @@
       "name": "BAZOR Watch",
       "order": 3.5,
       "default_progress": 55,
-      "summary": "Application Android séparée pour liaison montre, BLE, micro/audio et diagnostic.",
+      "summary": "Application Android séparée pour liaison montre, BLE, micro/audio et diagnostic. Projet déclassé et abandonné le 27/09/2026, sources conservées pour historique.",
       "local_root": "%USERPROFILE%\\bazor-mobile\\android\\watchapp",
-      "go_compatible": true,
-      "go_reason": "Code Watch présent dans le dépôt BAZOR et modifiable via bazor_repo.",
+      "go_compatible": false,
+      "go_reason": "Décision Vincent : ne plus lancer de projet téléphone/montre ; coupures Bluetooth et éloignement.",
       "subprojects": [
         {
           "id": "usb-install",
@@ -825,7 +829,8 @@
           "order": 4,
           "next": "Améliorer le diagnostic Watch pour distinguer téléphone, BLE, audio et réseau sans faux statut OK."
         }
-      ]
+      ],
+      "lifecycle": "ABANDONNE_2026-09-27"
     },
     {
       "id": "modo-viewer",
@@ -927,7 +932,9 @@
           "id": "pairing",
           "name": "Appairage téléphone ↔ PC",
           "order": 1,
-          "next": "Maintenir l’appairage QR/code déjà opérationnel et corriger uniquement une régression détectée."
+          "next": "Aucune reprise téléphone.",
+          "lifecycle": "ABANDONNE_2026-09-27",
+          "reason": "Interaction téléphone abandonnée par Vincent (Bluetooth/éloignement)."
         },
         {
           "id": "auth",
@@ -969,7 +976,9 @@
           "id": "usb-android",
           "name": "USB Android / ADB",
           "order": 8,
-          "next": "Maintenir ADB reverse 8775/8776 désormais opérationnel et corriger uniquement une régression détectée."
+          "next": "Aucune reprise téléphone.",
+          "lifecycle": "ABANDONNE_2026-09-27",
+          "reason": "Interaction téléphone abandonnée par Vincent (Bluetooth/éloignement)."
         }
       ],
       "go_compatible": true,
