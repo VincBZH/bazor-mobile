@@ -21,6 +21,8 @@ import zipfile
 
 EXPECTED_BRIDGE_SHA16 = "C21AEDF6ACD2AC72"
 REQUIRED_STAGE = (
+    "BAZOR_REPARER_CONNEXIONS_1_CLIC.cmd",
+    "pc-relay/bazor_action_engine.py",
     "pc-relay/bazor_bridge.py",
     "pc-relay/bazor_pc_relay_v3.py",
     "pc-relay/bazor_security.py",
@@ -36,6 +38,19 @@ CRITICAL_BACKUP = (
     "AI_Room/projects.json",
     "AI_Room/state.json",
 )
+# Published GitHub v24 snapshot (commit 1f41f1e). A matching bridge
+# alone does not prove that the local staging contains the fixed, free-by-
+# default launcher. Keep these blob IDs synchronized with the reviewed PR.
+EXPECTED_STAGE_BLOBS = {
+    "BAZOR_REPARER_CONNEXIONS_1_CLIC.cmd": "e7693f24234838724470766128dab75d3b407e2f",
+    "pc-relay/bazor_action_engine.py": "288632d7cb326976e1c6ad90870ee4c0e666238f",
+    "pc-relay/bazor_bridge.py": "dba70f78498a99f860b73e103dbabb1e0c61e447",
+    "pc-relay/bazor_pc_relay_v3.py": "2e6975ed9b64be38c77877f08766317e25074af8",
+    "pc-relay/bazor_security.py": "07edb434e52a1eb7ffdb45ccbd8722f9df1e8e82",
+    "pc-relay/mammouth_client.py": "8e3654b827c091647c5af69ce736365cd025ddbf",
+    "pc-relay/bazor_multiai_oneclick.py": "6b9bcd550be074f540589e44362ed686950ef966",
+    "room-payload/v2.4/app/room_v2_server.py": "4b4612f499cdf9e431bcc988885a38c67cadd7f4",
+}
 MAX_UNPACKED = 2 * 1024**3
 PUBLIC_STATES = {
     "OK", "ABSENT", "BLOCKED", "INVALID", "NOT_TESTED", "RESPONDS",
@@ -50,6 +65,18 @@ def sha16(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()[:16].upper()
+
+
+def git_blob_sha1(path: Path) -> str:
+    """Match GitHub's content blob SHA, including its Git object header."""
+    size = path.stat().st_size
+    if size > 2_000_000:
+        raise ValueError("stage_file_too_large")
+    digest = hashlib.sha1(f"blob {size}\\0".encode("ascii"))
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(131072), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def safe_member(info: zipfile.ZipInfo) -> bool:
@@ -119,7 +146,8 @@ def restore_test(archive: Path, work: Path, current_core: Path, current_room: Pa
     return result
 
 
-def stage_test(stage: Path, expected_hash: str = EXPECTED_BRIDGE_SHA16) -> dict:
+def stage_test(stage: Path, expected_hash: str = EXPECTED_BRIDGE_SHA16,
+               expected_blobs: dict[str, str] | None = None) -> dict:
     result = {"stage": "BLOCKED", "python_files": 0, "syntax_errors": 0,
               "patch_hash16": "-", "stage_missing": 0}
     if not stage.is_dir():
@@ -131,6 +159,17 @@ def stage_test(stage: Path, expected_hash: str = EXPECTED_BRIDGE_SHA16) -> dict:
         return result
     result["patch_hash16"] = sha16(stage / REQUIRED_STAGE[0])
     if result["patch_hash16"] != expected_hash:
+        result["stage"] = "PATCH_MISMATCH"
+        return result
+    # Verify the exact reviewed snapshot, not just the bridge patch. Older
+    # copies may pass syntax but contain the previous paid-by-default launcher.
+    blobs = EXPECTED_STAGE_BLOBS if expected_blobs is None else expected_blobs
+    try:
+        if any(git_blob_sha1(stage / path) != expected
+               for path, expected in blobs.items()):
+            result["stage"] = "PATCH_MISMATCH"
+            return result
+    except (OSError, ValueError):
         result["stage"] = "PATCH_MISMATCH"
         return result
     # Parse, but NEVER import or execute staged code during preflight.
@@ -193,7 +232,8 @@ def latest(directory: Path, pattern: str, folders: bool = False) -> Path | None:
 
 
 def audit(local: Path, stage: Path | None = None, archive: Path | None = None,
-          expected_hash: str = EXPECTED_BRIDGE_SHA16) -> dict:
+          expected_hash: str = EXPECTED_BRIDGE_SHA16,
+          expected_blobs: dict[str, str] | None = None) -> dict:
     core, room = local / "BAZOR" / "Core", local / "BazorAIROOM"
     stage = stage or latest(local / "BAZOR" / "Staging", "multiia_v24_*", folders=True)
     archive = archive or latest(local / "BAZOR" / "Backups", "PRE_MULTI_IA_*.zip")
@@ -202,7 +242,7 @@ def audit(local: Path, stage: Path | None = None, archive: Path | None = None,
         "core_launcher": "OK" if (core / "DEMARRER_BAZOR_PC_RELAY.cmd").is_file() else "ABSENT",
         "room_launcher": "OK" if (room / "DEMARRER_BAZOR_AI_ROOM.cmd").is_file() else "ABSENT",
         "room_data": json_files_test(room),
-        "stage": stage_test(stage, expected_hash) if stage else {"stage": "ABSENT"},
+        "stage": stage_test(stage, expected_hash, expected_blobs) if stage else {"stage": "ABSENT"},
         "restore": restore_test(archive, local / "BAZOR" / "Reports", core, room)
                    if archive else {"backup": "ABSENT"},
         "health": {
