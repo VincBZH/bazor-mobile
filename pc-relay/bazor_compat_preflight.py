@@ -157,7 +157,7 @@ def stage_test(stage: Path, expected_hash: str = EXPECTED_BRIDGE_SHA16,
     result["stage_missing"] = len(missing)
     if missing:
         return result
-    result["patch_hash16"] = sha16(stage / REQUIRED_STAGE[0])
+    result["patch_hash16"] = sha16(stage / "pc-relay/bazor_bridge.py")
     if result["patch_hash16"] != expected_hash:
         result["stage"] = "PATCH_MISMATCH"
         return result
