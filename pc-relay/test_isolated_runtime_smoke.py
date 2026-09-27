@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 import sys
 import tempfile
 import unittest
@@ -43,19 +44,21 @@ class IsolatedRuntimeTests(unittest.TestCase):
                     "model": "llama3.2:3b", "text": "BAZOR_LOCAL_OK"}]}
         }
         self.calls = []
+        self.room_owner = 8
+        self.owner = lambda port: self.room_owner if port == 8765 else None
 
     def fetch(self, url, payload=None, timeout=3):
         self.calls.append((url, payload))
         return self.data.get(url)
 
     def test_missing_stage_fails_without_outbound_calls(self):
-        out = smoke.check(self.root / "missing", fetch=self.fetch)
+        out = smoke.check(self.root / "missing", fetch=self.fetch, owner=self.owner)
         self.assertEqual(out["core"], "STAGE_FILES_MISSING")
         self.assertNotIn(smoke.ISOLATED_CORE, [x[0] for x in self.calls])
         self.assertFalse(any(payload is not None for _, payload in self.calls))
 
     def test_read_only_checks_identity_without_chat(self):
-        out = smoke.check(self.root, fetch=self.fetch)
+        out = smoke.check(self.root, fetch=self.fetch, owner=self.owner)
         self.assertEqual(out["result"], "IDENTITY_VERIFIED_CHAT_NOT_RUN")
         self.assertEqual(out["core"], "IDENTITY_VERIFIED")
         self.assertEqual(out["room"], "CONNECTED_TO_VERIFIED_CORE")
@@ -65,7 +68,7 @@ class IsolatedRuntimeTests(unittest.TestCase):
         self.assertFalse(any(payload is not None for _, payload in self.calls))
 
     def test_real_local_chat_only_after_explicit_consent(self):
-        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch)
+        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch, owner=self.owner)
         self.assertEqual(out["result"], "PASS_REAL_LOCAL")
         self.assertEqual(out["local_chat"], "VERIFIED_REAL_LOCAL")
         writes = [(url, obj) for url, obj in self.calls if obj is not None]
@@ -77,26 +80,26 @@ class IsolatedRuntimeTests(unittest.TestCase):
 
     def test_false_core_health_blocks_chat(self):
         self.data[smoke.ISOLATED_CORE]["runtime_signature"] = "wrong"
-        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch)
+        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch, owner=self.owner)
         self.assertEqual(out["core"], "ISOLATED_ABSENT_OR_IDENTITY_MISMATCH")
         self.assertEqual(out["result"], "BLOCKED")
         self.assertFalse(any(payload is not None for _, payload in self.calls))
 
     def test_wrong_room_connection_blocks_chat(self):
         self.data[smoke.ISOLATED_ROOM]["engines"]["core"]["port"] = 8775
-        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch)
+        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch, owner=self.owner)
         self.assertEqual(out["room"], "ISOLATED_ABSENT_OR_CORE_MISMATCH")
         self.assertFalse(any(payload is not None for _, payload in self.calls))
 
     def test_empty_ollama_models_blocks_chat(self):
         self.data[smoke.LOCAL_MODELS] = {"models": []}
-        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch)
+        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch, owner=self.owner)
         self.assertEqual(out["ollama"], "NO_SMALL_MODEL")
         self.assertFalse(any(payload is not None for _, payload in self.calls))
 
     def test_wrong_ollama_reply_is_not_success(self):
         self.data["http://127.0.0.1:8768/api/chat"]["results"][0]["text"] = "Some misleading BAZOR_LOCAL_OK suffix"
-        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch)
+        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch, owner=self.owner)
         self.assertEqual(out["local_chat"], "FAILED_OR_UNVERIFIABLE")
         self.assertEqual(out["result"], "BLOCKED")
 
@@ -107,13 +110,47 @@ class IsolatedRuntimeTests(unittest.TestCase):
             if url == smoke.PRODUCTION_CORE and counts[url] == 2:
                 return {"ok": True, "pid": 99, "runtime_signature": "old-production"}
             return self.fetch(url, payload, timeout)
-        out = smoke.check(self.root, allow_local_chat=True, fetch=drifting)
+        out = smoke.check(self.root, allow_local_chat=True, fetch=drifting, owner=self.owner)
         self.assertEqual(out["production_core"], "CHANGED")
         self.assertEqual(out["result"], "BLOCKED_PRODUCTION_CHANGED")
 
-    def test_unknown_production_identity_never_claimed_unchanged(self):
+    def test_unknown_production_owner_never_claimed_unchanged(self):
+        self.room_owner = None
         self.data[smoke.PRODUCTION_ROOM] = {"ok": True, "version": "1.2"}
-        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch)
+        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch, owner=self.owner)
+        self.assertEqual(out["production_room"], "NOT_VERIFIED")
+        self.assertEqual(out["result"], "BLOCKED")
+
+    def test_changed_live_room_pid_blocks_even_if_ollama_passes(self):
+        calls = []
+        def changing_owner(port):
+            calls.append(port)
+            return 8 if len(calls) == 1 else 19
+        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch,
+                          owner=changing_owner)
+        self.assertEqual(out["production_room"], "CHANGED")
+        self.assertEqual(out["result"], "BLOCKED_PRODUCTION_CHANGED")
+
+    def test_production_room_health_fallback(self):
+        self.data[smoke.PRODUCTION_ROOM] = None
+        self.data["http://127.0.0.1:8765/health"] = {"ok": True, "version": "1.2"}
+        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch,
+                          owner=self.owner)
+        self.assertEqual(out["production_room"], "UNCHANGED")
+        self.assertEqual(out["result"], "PASS_REAL_LOCAL")
+
+    def test_windows_netstat_owner_parses_local_listener(self):
+        output = "TCP 127.0.0.1:8765 0.0.0.0:0 EN_ECOUTE 8124\\n"
+        output += "TCP 0.0.0.0:8765 0.0.0.0:0 EN_ECOUTE 9999\\n"
+        result = MagicMock(returncode=0, stdout=output)
+        with patch.object(smoke.os, "name", "nt"), \\
+                patch.object(smoke.subprocess, "run", return_value=result):
+            self.assertEqual(smoke.windows_listening_pid(8765), 8124)
+
+    def test_missing_windows_owner_never_reports_stable(self):
+        out = smoke.check(self.root, allow_local_chat=True, fetch=self.fetch,
+                          owner=lambda port: None)
+        self.assertEqual(out["local_chat"], "VERIFIED_REAL_LOCAL")
         self.assertEqual(out["production_room"], "NOT_VERIFIED")
         self.assertEqual(out["result"], "BLOCKED")
 
