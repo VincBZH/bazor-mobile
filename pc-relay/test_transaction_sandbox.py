@@ -114,6 +114,39 @@ class FakeTransactionTests(unittest.TestCase):
         self.assertEqual(tx.recover(self.root), "RECOVERED")
         self.assert_restored()
 
+    def test_crash_between_two_rollback_renames_is_recoverable(self):
+        with self.assertRaises(tx.InjectedCrash):
+            tx.promote(self.root, crash="after_promote_room")
+        real_rename = Path.rename
+        interrupted = [False]
+        def crash_on_restore(path, dest):
+            if (not interrupted[0] and path == self.root / "previous" / "Room"):
+                interrupted[0] = True
+                raise tx.InjectedCrash("power_loss_during_rollback")
+            return real_rename(path, dest)
+        with patch.object(Path, "rename", crash_on_restore):
+            with self.assertRaises(tx.InjectedCrash):
+                tx.recover(self.root)
+        self.assertEqual(tx.recover(self.root), "RECOVERED")
+        self.assert_restored()
+
+    def test_crash_after_restoring_room_before_core_recovers(self):
+        with self.assertRaises(tx.InjectedCrash):
+            tx.promote(self.root, crash="after_promote_room")
+        real_rename = Path.rename
+        interrupted = [False]
+        def crash_after_room(path, dest):
+            value = real_rename(path, dest)
+            if (not interrupted[0] and path == self.root / "previous" / "Room"):
+                interrupted[0] = True
+                raise tx.InjectedCrash("power_loss_after_room_restored")
+            return value
+        with patch.object(Path, "rename", crash_after_room):
+            with self.assertRaises(tx.InjectedCrash):
+                tx.recover(self.root)
+        self.assertEqual(tx.recover(self.root), "RECOVERED")
+        self.assert_restored()
+
     def test_simulated_suite_reports_only_fixed_vocabulary(self):
         report = tx.run_suite()
         self.assertEqual(report["result"], "PASS_SANDBOX")
