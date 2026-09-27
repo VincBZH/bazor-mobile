@@ -6,6 +6,7 @@ import sys
 from tempfile import TemporaryDirectory
 import unittest
 import uuid
+import xml.etree.ElementTree as ET
 
 from startup_disable import EXPECTED, apply, planned, restore, task_change, task_enabled, task_definition_signature
 
@@ -92,7 +93,21 @@ class StartupDisableTests(unittest.TestCase):
             self.assertTrue(task_enabled(path))
             task_change(name, False)
             self.assertFalse(task_enabled(path))
-            self.assertEqual(task_definition_signature(before), task_definition_signature(path.read_bytes()))
+            after = path.read_bytes()
+            if task_definition_signature(before) != task_definition_signature(after):
+                def fields(raw):
+                    found = {}
+                    def visit(node, route):
+                        key = route + '/' + node.tag.rsplit('}', 1)[-1]
+                        found[key] = (tuple(sorted(node.attrib)), (node.text or '').strip())
+                        for child in node:
+                            visit(child, key)
+                    visit(ET.fromstring(raw), '')
+                    return found
+                left, right = fields(before), fields(after)
+                changed = sorted(k for k in left.keys() | right.keys() if left.get(k) != right.get(k))
+                print('Disposable task XML changed fields:', changed)
+            self.assertEqual(task_definition_signature(before), task_definition_signature(after))
             task_change(name, True)
             self.assertTrue(task_enabled(path))
         finally:
