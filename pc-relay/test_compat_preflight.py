@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 from pathlib import Path
 import stat
 import sys
@@ -66,6 +67,53 @@ class CompatibilityPreflightTests(unittest.TestCase):
         report = pre.restore_test(archive, self.root / "BAZOR" / "Reports", self.core, self.room)
         self.assertEqual(report["backup"], "RESTORE_SIMULATED")
         self.assertTrue(report["live_data_drift"])
+
+    def test_missing_or_changed_live_room_launcher_blocks_gate(self):
+        archive = self.backup()
+        launcher = self.room / "DEMARRER_BAZOR_AI_ROOM.cmd"
+        launcher.write_text("@echo off\\necho NEW\\n", encoding="utf-8")
+        changed = pre.restore_test(archive, self.root / "reports", self.core, self.room)
+        self.assertEqual(changed["backup"], "RESTORE_SIMULATED")
+        self.assertTrue(changed["live_data_drift"])
+        launcher.unlink()
+        removed = pre.restore_test(archive, self.root / "reports", self.core, self.room)
+        self.assertTrue(removed["live_data_drift"])
+
+    def test_health_rejects_bare_http200_without_ok(self):
+        class Response:
+            status = 200
+            def __init__(self, body):
+                self.body = body
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                return False
+            def read(self, limit):
+                return self.body
+        class Opener:
+            body = b"{}"
+            def open(self, url, timeout):
+                return Response(self.body)
+        fake = Opener()
+        with patch.object(pre.urllib.request, "build_opener", return_value=fake):
+            self.assertEqual(pre.probe("http://127.0.0.1:8765/api/status"), "BLOCKED")
+            fake.body = b'{"ok": true, "version":"2.4-core-relay"}'
+            self.assertEqual(pre.probe("http://127.0.0.1:8765/api/status"), "RESPONDS")
+            fake.body = b'{"models": [{"name": "llama3.2:3b"}]}'
+            self.assertEqual(pre.probe("http://127.0.0.1:11434/api/tags", models=True), "HAS_MODELS")
+
+    def test_room_uses_actual_status_endpoint(self):
+        archive = self.backup()
+        stage = self.stage()
+        requests = []
+        def record_probe(url, models=False):
+            requests.append(url)
+            return "HAS_MODELS" if models else "RESPONDS"
+        with patch.object(pre, "probe", side_effect=record_probe):
+            pre.audit(self.root, stage, archive,
+                      expected_hash=pre.sha16(stage / pre.REQUIRED_STAGE[0]))
+        self.assertIn("http://127.0.0.1:8765/api/status", requests)
+        self.assertNotIn("http://127.0.0.1:8765/health", requests)
 
     def test_missing_critical_file_invalidates_backup(self):
         archive = self.backup(missing=("AI_Room/chat_history.json",))
