@@ -17,6 +17,11 @@ class StartupDisableTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'AUDIT_CHANGED'):
             planned(prior + [{'kind': 'STARTUP_FOLDER', 'id': 'extra', 'status': 'PRÉSENT'}], prior)
 
+    def test_task_action_change_is_detected(self):
+        first = b'<Task><Triggers><CalendarTrigger/></Triggers><Actions><Exec><Command>one.exe</Command></Exec></Actions></Task>'
+        second = first.replace(b'one.exe', b'two.exe')
+        self.assertNotEqual(task_definition_signature(first), task_definition_signature(second))
+
     def test_moves_only_two_shortcuts_and_restores_on_failure(self):
         with TemporaryDirectory() as base:
             root = Path(base)
@@ -51,11 +56,11 @@ class StartupDisableTests(unittest.TestCase):
             folder = root / 'backup'
             folder.mkdir()
             task = root / 'task.xml'
-            task.write_text('<Task><Settings><Enabled>true</Enabled></Settings></Task>')
+            task.write_text('<Task><Settings><Enabled>true</Enabled></Settings><Actions><Exec><Command>safe.exe</Command></Exec></Actions></Task>')
             shortcut = root / 'BAZOR.lnk'
             shortcut.write_bytes(b'local shortcut')
             failed = root / 'second_task.xml'
-            failed.write_text('<Task><Settings><Enabled>true</Enabled></Settings></Task>')
+            failed.write_text('<Task><Settings><Enabled>true</Enabled></Settings><Actions><Exec><Command>safe.exe</Command></Exec></Actions></Task>')
             entries = []
             for n, (kind, path) in enumerate((('SCHEDULED_TASK', task),
                                               ('STARTUP_FOLDER', shortcut),
@@ -71,7 +76,7 @@ class StartupDisableTests(unittest.TestCase):
             def change(name, enabled):
                 if name == failed.name and not enabled:
                     raise RuntimeError('injected task failure')
-                task.write_text(f'<Task><Settings><Enabled>{str(enabled).lower()}</Enabled></Settings></Task>')
+                task.write_text(f'<Task><Settings><Enabled>{str(enabled).lower()}</Enabled></Settings><Actions><Exec><Command>safe.exe</Command></Exec></Actions></Task>')
             with self.assertRaisesRegex(RuntimeError, 'injected task failure'):
                 apply(manifest, folder, change=change)
             self.assertTrue(shortcut.exists())
