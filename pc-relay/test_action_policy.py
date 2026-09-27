@@ -55,6 +55,14 @@ class GateTests(unittest.TestCase):
         self.assertFalse(self.gate.allow("SHELL"))
         self.assertFalse(self.gate.allow("OPENAI_API"))
 
+    def test_verified_owner_diagnostic_requires_active_hello(self):
+        self.assertFalse(self.gate.allow("ETAT_SERVICES", origin="verified_github_owner"))
+        self.authorize({"ETAT_SERVICES"})
+        self.assertTrue(self.gate.allow("ETAT_SERVICES", origin="verified_github_owner"))
+        self.assertFalse(self.gate.allow("SHELL", origin="verified_github_owner"))
+        self.gate.panic()
+        self.assertFalse(self.gate.allow("ETAT_SERVICES", origin="verified_github_owner"))
+
     def test_unauthorized_scope_denies_before_hello(self):
         with self.assertRaises(PermissionDenied):
             self.authorize({"ETAT_SERVICES", "SHELL"})
