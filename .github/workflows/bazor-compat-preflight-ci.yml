@@ -7,6 +7,9 @@ on:
       - "pc-relay/test_compat_preflight.py"
       - "pc-relay/bazor_isolated_runtime_smoke.py"
       - "pc-relay/test_isolated_runtime_smoke.py"
+      - "pc-relay/bazor_rollback_simulation.py"
+      - "pc-relay/test_rollback_simulation.py"
+      - "BAZOR_SIMULER_RESTAURATION_1_CLIC.cmd"
       - "pc-relay/bazor_rollback_rehearsal.py"
       - "pc-relay/test_rollback_rehearsal.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
@@ -16,6 +19,9 @@ on:
       - "pc-relay/test_compat_preflight.py"
       - "pc-relay/bazor_isolated_runtime_smoke.py"
       - "pc-relay/test_isolated_runtime_smoke.py"
+      - "pc-relay/bazor_rollback_simulation.py"
+      - "pc-relay/test_rollback_simulation.py"
+      - "BAZOR_SIMULER_RESTAURATION_1_CLIC.cmd"
       - "pc-relay/bazor_rollback_rehearsal.py"
       - "pc-relay/test_rollback_rehearsal.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
@@ -37,6 +43,7 @@ jobs:
         run: |
           python -m py_compile pc-relay/bazor_compat_preflight.py pc-relay/test_compat_preflight.py
           python -m py_compile pc-relay/bazor_multiai_oneclick.py pc-relay/bazor_isolated_runtime_smoke.py pc-relay/test_isolated_runtime_smoke.py
+          python -m py_compile pc-relay/bazor_rollback_simulation.py pc-relay/test_rollback_simulation.py
       - name: Syntax of temp-only rollback rehearsal
         run: python -m py_compile pc-relay/bazor_rollback_rehearsal.py pc-relay/test_rollback_rehearsal.py
       - name: Read-only backup/restore and confidentiality tests
@@ -49,6 +56,11 @@ jobs:
           MAMMOUTH_API_KEY: ""
           OPENAI_API_KEY: ""
         run: python -m unittest discover -s pc-relay -p 'test_isolated_runtime_smoke.py' -v
+      - name: Disposable rollback simulation and hostile-archive tests
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_rollback_simulation.py' -v
       - name: Temp-only failure/rollback tests, no production writes
         env:
           MAMMOUTH_API_KEY: ""
