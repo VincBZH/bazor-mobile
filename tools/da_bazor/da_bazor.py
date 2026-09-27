@@ -135,8 +135,10 @@ class Dashboard:
         root.geometry("880x680")
         root.configure(bg="#101827")
         self.state = {"ollama": "SONDE_EN_ATTENTE", "models": [], "core": "NON_CERTIFIÉ", "room": "NON_CERTIFIÉ"}
+        self.briefed = False
         tk.Label(root, text="✦  Da Bazor", bg="#101827", fg="#7ee2cb", font=("Segoe UI", 25, "bold")).pack(anchor="w", padx=24, pady=(18, 2))
-        tk.Label(root, text="Votre point de départ volontaire · aucun service BAZOR lancé par cette fenêtre", bg="#101827", fg="#b6c4d5", font=("Segoe UI", 10)).pack(anchor="w", padx=26)
+        today = datetime.now().astimezone().strftime("%d/%m/%Y")
+        tk.Label(root, text=f"Aujourd'hui {today} · point de départ volontaire · aucun service BAZOR lancé", bg="#101827", fg="#b6c4d5", font=("Segoe UI", 10)).pack(anchor="w", padx=26)
         self.status = tk.Label(root, text="Lecture des services…", bg="#172339", fg="#fff", justify="left", anchor="w", padx=14, pady=12)
         self.status.pack(fill="x", padx=24, pady=14)
         tk.Label(root, text="À faire, dans l'ordre", bg="#101827", fg="#fff", font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=24)
@@ -165,6 +167,15 @@ class Dashboard:
     def update(self, state):
         self.state = state
         self.status.configure(text=f"Ollama : {state['ollama']} · modèle conseillé : {choose_model(state['models']) or 'aucun'}\nCore : {state['core']} · Room : {state['room']}  (sondes seules)")
+        if choose_model(state["models"]) and not self.briefed:
+            self.briefed = True
+            self.answer.insert("end", "\nChef : je demande à Ollama le programme du jour…\n")
+            prompt = "Présente le programme d'aujourd'hui en trois priorités réalisables. Aucune tâche n'est déclarée livrée. Étapes connues : " + "; ".join(title + " : " + action for _, title, action, _ in TASKS)
+            names = list(state["models"])
+            def work():
+                model, answer = local_answer(prompt, names)
+                self.root.after(0, lambda: self.answer.insert("end", f"Programme du jour [{model}] : {answer}\n"))
+            threading.Thread(target=work, daemon=True).start()
 
     def ask(self):
         question = self.entry.get().strip()
