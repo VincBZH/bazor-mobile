@@ -82,11 +82,11 @@ class FakeTransactionTests(unittest.TestCase):
         (self.root / "candidate" / "Room" / "version.txt").write_text("MALICIOUS")
         with self.assertRaises(tx.UnsafeSandbox):
             tx.promote(self.root)
-        # Core may be moved first in a two-phase transaction, but a fresh
-        # preflight should reject all drift BEFORE the first rename.
-        self.assertEqual(tx.recover(self.root), "BLOCKED" if
-                         (self.root / "journal.json").read_text().find(
-                             "INITIALIZED") != -1 else "BLOCKED")
+        # The entire candidate must be validated BEFORE Core can move.
+        self.assertEqual((self.root / "live" / "Core" / "version.txt").read_text(),
+                         "FAKE_Core_OLD")
+        self.assertFalse((self.root / "previous").exists())
+        self.assertEqual(tx.recover(self.root), "BLOCKED")
 
     def test_symlinked_fixture_refused(self):
         with tempfile.TemporaryDirectory(prefix="bazor_txn_suite_") as outer:
