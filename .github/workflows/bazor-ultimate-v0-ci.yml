@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "console-hub/bazor_diagnostics.py"
+      - "LANCER_BAZOR_ULTIMATE_V0.cmd"
       - "console-hub/bazor_ultimate_dashboard.py"
       - "tests/test_bazor_diagnostics.py"
       - "tests/test_ultimate_dashboard.py"
