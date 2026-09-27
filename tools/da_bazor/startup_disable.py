@@ -48,13 +48,25 @@ def task_enabled(xml_path: Path) -> bool:
 
 
 def task_definition_signature(raw: bytes) -> str:
-    """Compare the task's definition while allowing only its Enabled flag to vary."""
+    """Protect the task's actions and trigger schedule across schtasks rewrites.
+
+    Windows schtasks materializes default Settings and Principal fields on a
+    /Change call, so a whole-file hash cannot establish task identity.
+    """
     root = ET.fromstring(raw)
-    for node in root.iter():
-        if node.tag.rsplit("}", 1)[-1] == "Enabled":
-            node.text = "__ENABLED__"
-    canonical = ET.canonicalize(ET.tostring(root, encoding="unicode"), strip_text=True)
-    return digest(canonical.encode("utf-8"))
+    parts = []
+    for node in root:
+        if node.tag.rsplit("}", 1)[-1] not in ("Actions", "Triggers"):
+            continue
+        copy = ET.fromstring(ET.tostring(node))
+        for parent in copy.iter():
+            for child in list(parent):
+                if child.tag.rsplit("}", 1)[-1] == "Enabled":
+                    parent.remove(child)
+        parts.append(ET.canonicalize(ET.tostring(copy, encoding="unicode"), strip_text=True))
+    if not any("Actions" in part for part in parts):
+        raise RuntimeError("TASK_ACTIONS_MISSING")
+    return digest("\n".join(parts).encode("utf-8"))
 
 
 def task_change(name: str, enable: bool) -> None:
