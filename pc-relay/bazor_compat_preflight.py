@@ -38,7 +38,7 @@ CRITICAL_BACKUP = (
     "AI_Room/projects.json",
     "AI_Room/state.json",
 )
-# Published GitHub v24 snapshot (commit 1f41f1e). A matching bridge
+# Reviewed V24 candidate snapshot on PR #172. A matching bridge
 # alone does not prove that the local staging contains the fixed, free-by-
 # default launcher. Keep these blob IDs synchronized with the reviewed PR.
 EXPECTED_STAGE_BLOBS = {
@@ -48,7 +48,7 @@ EXPECTED_STAGE_BLOBS = {
     "pc-relay/bazor_pc_relay_v3.py": "2e6975ed9b64be38c77877f08766317e25074af8",
     "pc-relay/bazor_security.py": "07edb434e52a1eb7ffdb45ccbd8722f9df1e8e82",
     "pc-relay/mammouth_client.py": "8e3654b827c091647c5af69ce736365cd025ddbf",
-    "pc-relay/bazor_multiai_oneclick.py": "6b9bcd550be074f540589e44362ed686950ef966",
+    "pc-relay/bazor_multiai_oneclick.py": "87f08074ede1a8e89caacca8101ffe88547d8bd9",
     "room-payload/v2.4/app/room_v2_server.py": "4b4612f499cdf9e431bcc988885a38c67cadd7f4",
 }
 MAX_UNPACKED = 2 * 1024**3
