@@ -90,7 +90,7 @@ def certification_reply_ok(content):
     if "BAZOR_BRIDGE_E2E_BLOCKED" in content:
         return False
     match = re.fullmatch(
-        r'La réponse est\\s+["«]?BAZOR_BRIDGE_E2E_OK["»]?[.]?(?:\\s+(.{1,200}))?',
+        r'La réponse est\s+["«]?BAZOR_BRIDGE_E2E_OK["»]?[.]?(?:\s+(.{1,200}))?',
         content, re.IGNORECASE | re.DOTALL
     )
     if not match:
@@ -98,10 +98,10 @@ def certification_reply_ok(content):
     explanation = (match.group(1) or "").strip()
     if not explanation:
         return True
-    compact = re.sub(r"\\s+", "", explanation)
-    return (bool(re.search(r"(?<!\\d)4(?!\\d)", explanation))
+    compact = re.sub(r"\s+", "", explanation)
+    return (bool(re.search(r"(?<!\d)4(?!\d)", explanation))
             and "2+2" in compact
-            and not re.search(r"\\b(?:non|faux|fausse|incorrect|erron[ée]|erreur|pas|bloqu[ée])\\b",
+            and not re.search(r"\b(?:non|faux|fausse|incorrect|erron[ée]|erreur|pas|bloqu[ée])\b",
                               explanation, re.IGNORECASE))
 
 
