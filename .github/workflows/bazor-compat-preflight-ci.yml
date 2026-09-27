@@ -5,11 +5,15 @@ on:
     paths:
       - "pc-relay/bazor_compat_preflight.py"
       - "pc-relay/test_compat_preflight.py"
+      - "pc-relay/bazor_isolated_runtime_smoke.py"
+      - "pc-relay/test_isolated_runtime_smoke.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
   pull_request:
     paths:
       - "pc-relay/bazor_compat_preflight.py"
       - "pc-relay/test_compat_preflight.py"
+      - "pc-relay/bazor_isolated_runtime_smoke.py"
+      - "pc-relay/test_isolated_runtime_smoke.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
   workflow_dispatch:
 
@@ -26,9 +30,16 @@ jobs:
         with:
           python-version: "3.11"
       - name: Python syntax (no provider credentials)
-        run: python -m py_compile pc-relay/bazor_compat_preflight.py pc-relay/test_compat_preflight.py
+        run: |
+          python -m py_compile pc-relay/bazor_compat_preflight.py pc-relay/test_compat_preflight.py
+          python -m py_compile pc-relay/bazor_multiai_oneclick.py pc-relay/bazor_isolated_runtime_smoke.py pc-relay/test_isolated_runtime_smoke.py
       - name: Read-only backup/restore and confidentiality tests
         env:
           MAMMOUTH_API_KEY: ""
           OPENAI_API_KEY: ""
         run: python -m unittest discover -s pc-relay -p 'test_compat_preflight.py' -v
+      - name: Isolated runtime safety and consent tests (mock only)
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_isolated_runtime_smoke.py' -v
