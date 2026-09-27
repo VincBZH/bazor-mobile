@@ -154,6 +154,27 @@ class IsolatedRuntimeTests(unittest.TestCase):
         self.assertEqual(out["production_room"], "NOT_VERIFIED")
         self.assertEqual(out["result"], "BLOCKED")
 
+    def test_one_click_runtime_launcher_contract(self):
+        root = Path(__file__).resolve().parents[1]
+        launcher = (root / "BAZOR_TEST_RUNTIME_ISOLE_1_CLIC.cmd").read_text(
+            encoding="utf-8", errors="replace")
+        self.assertIn("bazor_compat_preflight.py", launcher)
+        self.assertIn("--stage", launcher)
+        self.assertIn("bazor_multiai_oneclick.py", launcher)
+        self.assertIn("--no-github", launcher)
+        self.assertIn("bazor_isolated_runtime_smoke.py", launcher)
+        self.assertIn("--allow-local-chat", launcher)
+        self.assertNotIn("--test-mammouth", launcher)
+        self.assertIn("PAID_AI_CALLS: ZERO", launcher)
+        self.assertIn("DEPLOYMENT: NEVER_PERFORMED", smoke.public_summary({
+            "core":"BLOCKED","room":"BLOCKED","ollama":"BLOCKED",
+            "local_chat":"BLOCKED","production_core":"BLOCKED",
+            "production_room":"BLOCKED","result":"BLOCKED"}))
+        self.assertLess(launcher.index("bazor_compat_preflight.py"),
+                        launcher.index("bazor_multiai_oneclick.py"))
+        self.assertLess(launcher.index("bazor_multiai_oneclick.py"),
+                        launcher.index("bazor_isolated_runtime_smoke.py"))
+
     def test_public_output_never_reflects_provider_secrets(self):
         fields = {"core": "API_KEY=SENSITIVE", "room": "C:\\private\\password",
                   "ollama": "SENSITIVE", "local_chat": "SENSITIVE",
