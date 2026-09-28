@@ -1,0 +1,141 @@
+name: BAZOR compatibility preflight (offline)
+
+on:
+  push:
+    paths:
+      - "pc-relay/bazor_compat_preflight.py"
+      - "pc-relay/test_compat_preflight.py"
+      - "pc-relay/bazor_isolated_runtime_smoke.py"
+      - "pc-relay/test_isolated_runtime_smoke.py"
+      - "pc-relay/bazor_rollback_simulation.py"
+      - "pc-relay/test_rollback_simulation.py"
+      - "BAZOR_SIMULER_RESTAURATION_1_CLIC.cmd"
+      - "pc-relay/bazor_rollback_rehearsal.py"
+      - "pc-relay/test_rollback_rehearsal.py"
+      - "pc-relay/bazor_transactional_deployer.py"
+      - "pc-relay/test_transactional_deployer.py"
+      - "pc-relay/bazor_service_orchestrator.py"
+      - "pc-relay/test_service_orchestrator.py"
+      - "pc-relay/bazor_windows_process_backend.py"
+      - "pc-relay/test_windows_process_backend.py"
+      - "pc-relay/test_windows_orchestration_e2e.py"
+      - "pc-relay/bazor_transaction_sandbox.py"
+      - "pc-relay/test_transaction_sandbox.py"
+      - ".github/workflows/bazor-compat-preflight-ci.yml"
+  pull_request:
+    paths:
+      - "pc-relay/bazor_compat_preflight.py"
+      - "pc-relay/test_compat_preflight.py"
+      - "pc-relay/bazor_isolated_runtime_smoke.py"
+      - "pc-relay/test_isolated_runtime_smoke.py"
+      - "pc-relay/bazor_rollback_simulation.py"
+      - "pc-relay/test_rollback_simulation.py"
+      - "BAZOR_SIMULER_RESTAURATION_1_CLIC.cmd"
+      - "pc-relay/bazor_rollback_rehearsal.py"
+      - "pc-relay/test_rollback_rehearsal.py"
+      - "pc-relay/bazor_transaction_sandbox.py"
+      - "pc-relay/test_transaction_sandbox.py"
+      - "pc-relay/bazor_transactional_deployer.py"
+      - "pc-relay/test_transactional_deployer.py"
+      - "pc-relay/bazor_service_orchestrator.py"
+      - "pc-relay/test_service_orchestrator.py"
+      - "pc-relay/bazor_windows_process_backend.py"
+      - "pc-relay/test_windows_process_backend.py"
+      - "pc-relay/test_windows_orchestration_e2e.py"
+      - ".github/workflows/bazor-compat-preflight-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Python syntax (no provider credentials)
+        run: |
+          python -m py_compile pc-relay/bazor_compat_preflight.py pc-relay/test_compat_preflight.py
+          python -m py_compile pc-relay/bazor_multiai_oneclick.py pc-relay/bazor_isolated_runtime_smoke.py pc-relay/test_isolated_runtime_smoke.py
+          python -m py_compile pc-relay/bazor_rollback_simulation.py pc-relay/test_rollback_simulation.py
+      - name: Syntax of temp-only rollback rehearsal
+        run: python -m py_compile pc-relay/bazor_rollback_rehearsal.py pc-relay/test_rollback_rehearsal.py
+      - name: Compile disposable transaction engine and test suite
+        run: python -m py_compile pc-relay/bazor_transaction_sandbox.py pc-relay/test_transaction_sandbox.py
+      - name: Simulated two-service transaction and crash recovery (mock only)
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: |
+          python -m unittest discover -s pc-relay -p 'test_transaction_sandbox.py' -v
+          python pc-relay/bazor_transaction_sandbox.py --simulate-only
+      - name: Read-only backup/restore and confidentiality tests
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_compat_preflight.py' -v
+      - name: Isolated runtime safety and consent tests (mock only)
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_isolated_runtime_smoke.py' -v
+      - name: Disposable rollback simulation and hostile-archive tests
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_rollback_simulation.py' -v
+      - name: Transactional deployer syntax
+        run: python -m py_compile pc-relay/bazor_transactional_deployer.py pc-relay/test_transactional_deployer.py
+      - name: Bounded process orchestration contract
+        run: |
+          python -m py_compile pc-relay/bazor_service_orchestrator.py pc-relay/test_service_orchestrator.py
+          python -m unittest discover -s pc-relay -p 'test_service_orchestrator.py' -v
+          python -m py_compile pc-relay/bazor_windows_process_backend.py pc-relay/test_windows_process_backend.py
+          python -m unittest discover -s pc-relay -p 'test_windows_process_backend.py' -v
+      - name: Temp-only failure/rollback tests, no production writes
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_rollback_rehearsal.py' -v
+
+  transaction-windows-fixtures:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Test transaction and crash recovery on disposable Windows folders
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: |
+          python -m unittest discover -s pc-relay -p 'test_transaction_sandbox.py' -v
+          python pc-relay/bazor_transaction_sandbox.py --simulate-only
+      - name: Transactional deployer fault matrix (temporary trees only)
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_transactional_deployer.py' -v
+      - name: Process orchestration and rollback contract (mock processes only)
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_service_orchestrator.py' -v
+      - name: Real disposable Windows process adapter
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: |
+          python -m py_compile pc-relay/bazor_windows_process_backend.py pc-relay/test_windows_process_backend.py
+          python -m unittest discover -s pc-relay -p 'test_windows_process_backend.py' -v
+      - name: Full disposable Core Room transaction with real Windows processes
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_windows_orchestration_e2e.py' -v

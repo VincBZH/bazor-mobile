@@ -39,6 +39,6 @@ jobs:
           for key in ("chatPrompt", "chatTarget", "chatBtn", "chatResult", "allowExternal", "copyGPT"):
               assert f'id="{key}"' in html, key
               assert key in js, key
-          assert "NoTrack non certifié" in html, "optional providers must stay honest"
+          assert "NoTrack est intégré mais reste non certifié" in html, "optional providers must stay honest"
           print("Interface de chat et avertissements : OK")
           PY

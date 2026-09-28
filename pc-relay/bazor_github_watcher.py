@@ -106,6 +106,7 @@ def _expected_core_runtime_signature():
         os.path.join("pc-relay","bazor_action_engine.py"),
         os.path.join("pc-relay","bazor_security.py"),
         os.path.join("pc-relay","mammouth_client.py"),
+        os.path.join("pc-relay","notrack_client.py"),
         os.path.join("pc-relay","bazor_bridge.py"),
     ):
         p=os.path.join(ROOT,rel)

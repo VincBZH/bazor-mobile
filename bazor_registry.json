@@ -1012,9 +1012,45 @@
     }
   ],
   "knowledge_base": "BAZOR_ENCYCLOPEDIA.md",
-  "encyclopedia_updated_at": "2026-09-19",
+  "encyclopedia_updated_at": "2026-09-28",
   "encyclopedia_sync_required": true,
   "version_history": [
+    {
+      "component": "BAZOR V24 Windows rollback sharing release",
+      "version": "2026.09.28.5",
+      "generated_at": "2026-09-28",
+      "artifact": null,
+      "changes": "Reap enfants arrêtés et réessayer uniquement WinError 32/33 pendant trois secondes dans la restauration.",
+      "tests": "Injection WinError 32 et refus hors liste ; CI Windows avec services jetables à relancer.",
+      "status": "PATCH_CANDIDATE"
+    },
+    {
+      "component": "BAZOR V24 disposable Windows orchestration E2E",
+      "version": "2026.09.28.4",
+      "generated_at": "2026-09-28",
+      "artifact": null,
+      "changes": "Ports de test variables et lancement/arrêt de vrais processus Windows jetables autour de la transaction ; validation et rollback sur réponse locale invalide.",
+      "tests": "Contrats locaux PASS ; E2E Windows lancé par CI, aucune installation sur PC de Vincent.",
+      "status": "PATCH_CANDIDATE"
+    },
+    {
+      "component": "BAZOR V24 Windows process backend",
+      "version": "2026.09.28.3",
+      "generated_at": "2026-09-28",
+      "artifact": null,
+      "changes": "Environnement enfant sur liste blanche, budget Mammouth réel à zéro, sondes localhost sans proxy et marqueur Ollama exact.",
+      "tests": "Tests locaux de contrat ; Windows CI à exécuter sur processus jetables, pas sur PC de Vincent.",
+      "status": "PATCH_CANDIDATE"
+    },
+    {
+      "component": "BAZOR V24 Core/Room orchestration",
+      "version": "2026.09.28.2",
+      "generated_at": "2026-09-28",
+      "artifact": null,
+      "changes": "Récupération après arrêt partiel avant commit ; refus de redémarrer depuis une génération inconnue après rollback échoué.",
+      "tests": "9 tests unitaires sur backend fictif, dont arrêt Core refusé et rollback échoué ; aucun test sur processus Windows actifs.",
+      "status": "PATCH_CANDIDATE"
+    },
     {
       "component": "BAZOR Studio SDXL Checkpoint Routing",
       "version": "2026.09.20.1",

@@ -319,7 +319,7 @@ def selftest():
     return 0 if result.wasSuccessful() else 1
 
 
-def run(test_mammouth=False):
+def run(test_mammouth=False, test_github=True):
     report = {"tool": "BAZOR_ONECLICK", "date": dt.datetime.now().astimezone().isoformat(),
               "mode": "isolated_not_installation", "statuses": {},
               "evidence": {}, "limitations": ["GPT/Astra require authorized connector or manual handoff",
@@ -427,7 +427,8 @@ def run(test_mammouth=False):
     report["evidence"]["ollama_model"] = answer["results"][0]["model"]
     report["evidence"]["room_url"] = roomurl
     print("PASS local : Room -> Core -> Ollama. Interface : " + roomurl)
-    status["gpt"] = github_smoke(roomurl, sig, model)
+    status["gpt"] = (github_smoke(roomurl, sig, model) if test_github
+                     else "SKIPPED:local_only_no_github")
     status["astra"] = "PENDING:authorized_connector"
     status["notrack"] = "NOT_CONFIGURED"
     status["tor"] = "OPTIONAL_DISABLED"
@@ -475,5 +476,7 @@ if __name__ == "__main__":
     parser.add_argument("--selftest", action="store_true")
     parser.add_argument("--test-mammouth", action="store_true",
                         help="Authorizes one bounded external Mammouth call with a synthetic prompt")
+    parser.add_argument("--no-github", action="store_true",
+                        help="Skip the optional GitHub #168 smoke; keep the run strictly local")
     args = parser.parse_args()
-    sys.exit(selftest() if args.selftest else run(args.test_mammouth))
+    sys.exit(selftest() if args.selftest else run(args.test_mammouth, not args.no_github))

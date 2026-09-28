@@ -5,7 +5,10 @@ on:
     paths:
       - "pc-relay/bazor_bridge.py"
       - "pc-relay/mammouth_client.py"
+      - "pc-relay/notrack_client.py"
+      - "pc-relay/test_notrack_transport.py"
       - "pc-relay/bazor_pc_relay_v3.py"
+      - "pc-relay/bazor_github_watcher.py"
       - "pc-relay/bazor_multiai_oneclick.py"
       - "pc-relay/test_bridge_contract.py"
       - "pc-relay/test_mammouth_transport.py"
@@ -17,7 +20,10 @@ on:
     paths:
       - "pc-relay/bazor_bridge.py"
       - "pc-relay/mammouth_client.py"
+      - "pc-relay/notrack_client.py"
+      - "pc-relay/test_notrack_transport.py"
       - "pc-relay/bazor_pc_relay_v3.py"
+      - "pc-relay/bazor_github_watcher.py"
       - "pc-relay/bazor_multiai_oneclick.py"
       - "pc-relay/test_bridge_contract.py"
       - "pc-relay/test_mammouth_transport.py"
@@ -43,9 +49,9 @@ jobs:
       - name: Compile Core, bridge, Room and launcher
         run: |
           python -m py_compile pc-relay/bazor_bridge.py \
-            pc-relay/bazor_pc_relay_v3.py pc-relay/mammouth_client.py \
+            pc-relay/bazor_pc_relay_v3.py pc-relay/mammouth_client.py pc-relay/notrack_client.py \
             pc-relay/bazor_github_watcher.py pc-relay/bazor_multiai_oneclick.py \
-            pc-relay/test_bridge_contract.py pc-relay/test_mammouth_transport.py \
+            pc-relay/test_bridge_contract.py pc-relay/test_mammouth_transport.py pc-relay/test_notrack_transport.py \
             pc-relay/test_mammouth_ollama_runtime.py \
             room-payload/v2.4/app/room_v2_server.py
           node --check room-payload/v2.4/app/static/app.js
@@ -53,6 +59,12 @@ jobs:
         run: python pc-relay/bazor_multiai_oneclick.py --selftest
       - name: Offline real HTTP/curl tests with fake providers
         run: python -m unittest discover -s pc-relay -p 'test_bridge_contract.py' -v
+      - name: NoTrack offline transport and budget gates
+        env:
+          NOTRACK_API_KEY: ""
+          BAZOR_NOTRACK_ENABLED: "0"
+          BAZOR_NOTRACK_DAILY_CALL_CAP: "0"
+        run: python -m unittest discover -s pc-relay -p 'test_notrack_transport.py' -v
       - name: AI Room to fake Core HTTP tests
         run: python -m unittest discover -s room-payload/v2.4 -p 'test_core_chat_relay.py' -v
       - name: Verify launcher and runtime gate

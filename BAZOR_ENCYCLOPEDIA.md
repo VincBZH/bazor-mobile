@@ -303,3 +303,30 @@ GitHub reste un bus de coordination et de preuve ; aucun shell/exec/eval arbitra
 Référence canonique de conception : `bridge/BAZOR_AI_ROOM_TRIO_SPEC.md`.
 
 Principes ajoutés : versions séparées (app/protocole/registry/contrat), ports 8765/8775/8776/11434, identités persistantes par `agent_id`, bootstrap canonique, mémoire contextuelle sourcée, statuts unifiés, séparation `ROOM_CORE_DELIVERED` / `TRIO_READY`, récupération autonome bornée et interdiction de `DELIVERED` sans preuves runtime. Toute divergence entre spec et dépôt/runtime doit être déclarée `SPEC_DRIFT`.
+
+
+<!-- BAZOR_VERSION:BAZOR V24 Core/Room orchestration::2026.09.28.2 -->
+## Orchestration Core/Room — correctif candidat 2026.09.28.2
+
+- Si Room est arrêtée puis que Core refuse de s’arrêter, le contrôleur tente de restaurer Room depuis les programmes encore en place avant toute bascule de dossiers. Il n’arrête pas un processus inconnu qui occupe le port.
+- Si le retour arrière échoue, il ne redémarre pas des programmes dont la génération n’est pas établie ; le statut devient `MANUAL_REQUIRED`.
+- Preuve : 9 tests locaux sur backend fictif et compilation Python. Pas de backend Windows réel ni de déploiement sur le PC. L’autorisation locale explicite demeure requise pour la future installation.
+- Fichiers : `pc-relay/bazor_service_orchestrator.py`, `pc-relay/test_service_orchestrator.py`.
+
+
+<!-- BAZOR_VERSION:BAZOR V24 Windows process backend::2026.09.28.3 -->
+## Adaptateur Windows — correctif candidat 2026.09.28.3
+
+L’environnement des processus Core/Room redémarrés est reconstruit depuis une liste blanche de chemins système, puis les ports loopback et le budget externe nul sont imposés. Le paramètre réellement lu par Mammouth (`BAZOR_MAMMOUTH_BUDGET_USD`) est fixé à zéro. Les sondes localhost ignorent le proxy système et le contrôle Ollama exige une réponse exacte. Tests de contrat locaux ; processus Windows jetables à vérifier en CI. Aucun déploiement sur le PC de Vincent.
+
+
+<!-- BAZOR_VERSION:BAZOR V24 disposable Windows orchestration E2E::2026.09.28.4 -->
+## Test Windows de bout en bout — candidat 2026.09.28.4
+
+L’orchestrateur accepte des ports temporaires pour tester sur Windows deux vrais processus HTTP jetables, une bascule de dossiers et une restauration après réponse locale invalide. La CI vérifie aussi les JSON protégés, sans toucher Core 8775 ni Room 8765 du PC de Vincent. Les processus de test simulent Ollama ; ce n’est pas une preuve d’appel réel au fournisseur ni une autorisation de déploiement.
+
+
+<!-- BAZOR_VERSION:BAZOR V24 Windows rollback sharing release::2026.09.28.5 -->
+## Restauration Windows — partage temporaire (2026.09.28.5)
+
+Le test E2E jetable a parfois échoué sur `WinError 32` après arrêt d’un processus. Le backend attend désormais la fin de ses processus enfants ; le rollback réessaie un renommage pendant au plus trois secondes uniquement pour les erreurs de partage 32/33. Permission permanente et autre panne restent bloquantes avec `MANUAL_REQUIRED`. CI Windows à vérifier ; pas de déploiement actif.
