@@ -67,6 +67,34 @@ class OrchestratorTests(unittest.TestCase):
         b.identities[orch.ROOM_PORT]=orch.ProcessIdentity("room",102,orch.ROOM_PORT,OLD_ROOM,False)
         with self.assertRaises(RuntimeError): self.run_it(b)
         self.assertEqual(b.stopped,[])
+    def test_core_stop_failure_restarts_room_without_commit(self):
+        b=FakeBackend()
+        original_stop=b.stop_pid
+        def stop(pid):
+            if pid == 101: return False
+            return original_stop(pid)
+        b.stop_pid=stop
+        out=self.run_it(b)
+        self.assertEqual(out["phase"],"PRECOMMIT_RECOVERED")
+        self.assertTrue(out["old_services_restored"])
+        self.assertTrue(self.auth.exists())
+        self.assertEqual((self.core/"app.py").read_text(),"old core")
+        self.assertEqual((self.room/"app.py").read_text(),"old room")
+        self.assertEqual(b.identities[orch.ROOM_PORT].executable_sha256,OLD_ROOM)
+    def test_partial_stop_does_not_overwrite_unknown_listener(self):
+        b=FakeBackend()
+        original_stop=b.stop_pid
+        def stop(pid):
+            if pid == 101:
+                b.identities[orch.ROOM_PORT]=orch.ProcessIdentity(
+                    "room",777,orch.ROOM_PORT,"f"*64,True)
+                return False
+            return original_stop(pid)
+        b.stop_pid=stop
+        out=self.run_it(b)
+        self.assertEqual(out["phase"],"MANUAL_REQUIRED")
+        self.assertEqual(b.identities[orch.ROOM_PORT].pid,777)
+        self.assertTrue(self.auth.exists())
     def test_health_failure_rolls_back_and_restarts_old(self):
         b=FakeBackend(); calls={"room":0}
         def health(component,port):
@@ -83,6 +111,15 @@ class OrchestratorTests(unittest.TestCase):
         b.local_chat=chat; out=self.run_it(b)
         self.assertFalse(out["ok"]); self.assertTrue(out["rollback_ok"])
         self.assertTrue(out["old_services_restored"])
+    def test_failed_rollback_does_not_start_unknown_generation(self):
+        b=FakeBackend()
+        out=orch.promote_with_runtime_verification(
+            self.txroot,"tx-test",self.auth,b,self.old,self.new,
+            commit_fn=lambda *args: {"ok":False},
+            rollback_fn=lambda *args: {"ok":False})
+        self.assertEqual(out["phase"],"MANUAL_REQUIRED")
+        self.assertFalse(out["old_services_restored"])
+        self.assertEqual(b.started,[])
     def test_public_summary_closed_vocabulary(self):
         text=orch.public_summary({"ok":False,"phase":"secret path","rollback_ok":False})
         self.assertIn("PHASE: MANUAL_REQUIRED",text)
