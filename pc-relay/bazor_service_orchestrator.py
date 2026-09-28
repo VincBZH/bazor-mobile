@@ -65,6 +65,27 @@ def _stop_captured(backend: ProcessBackend, captured):
         if not backend.wait_stopped(identity.pid, 15):
             raise RuntimeError("stop_timeout")
 
+def _restore_after_stop_failure(backend: ProcessBackend, captured, roots) -> bool:
+    """Recover a partially stopped old generation before any filesystem move."""
+    try:
+        for component in ("core", "room"):
+            old = captured[component]
+            current = backend.inspect_port(old.port)
+            if current is None:
+                pid = backend.start_service(component, roots[component], old.port)
+                current = backend.inspect_port(old.port)
+                if current is None or current.pid != pid:
+                    return False
+            # A different listener may own the port. Never stop or replace it.
+            if not _verified(current, ExpectedService(component, old.port,
+                                                       old.executable_sha256)):
+                return False
+            if not backend.health(component, old.port):
+                return False
+        return backend.local_chat(CORE_PORT, OLLAMA_PORT, LOCAL_PROBE)
+    except Exception:
+        return False
+
 def _start_and_verify(backend, core_root, room_root, expected):
     by_name, started = {x.component: x for x in expected}, {}
     for component, root in (("core", core_root), ("room", room_root)):
@@ -110,7 +131,18 @@ def promote_with_runtime_verification(
 ) -> dict:
     """Use the one-time local authorization; never expose this to GitHub."""
     captured = _capture(backend, expected_old)
-    _stop_captured(backend, captured)
+    try:
+        _stop_captured(backend, captured)
+    except Exception:
+        try:
+            state = deployer._state(txroot, txid)
+            restored = _restore_after_stop_failure(backend, captured, {
+                "core": Path(state["core_live"]), "room": Path(state["room_live"])})
+        except Exception:
+            restored = False
+        return {"ok": False,
+                "phase": "PRECOMMIT_RECOVERED" if restored else "MANUAL_REQUIRED",
+                "rollback_ok": False, "old_services_restored": restored}
     promoted = {}
     try:
         result = commit_fn(txroot, txid, auth_path)
@@ -124,22 +156,28 @@ def promote_with_runtime_verification(
     except Exception:
         _stop_started(backend, promoted)
         _stop_verified_generation(backend, expected_new)
-        rb = rollback_fn(txroot, txid, "runtime_verification_failed")
         try:
-            state = deployer._state(txroot, txid)
-            _start_and_verify(
-                backend, Path(state["core_live"]), Path(state["room_live"]), expected_old)
-            old_restarted = True
+            rb = rollback_fn(txroot, txid, "runtime_verification_failed")
         except Exception:
-            old_restarted = False
+            rb = {"ok": False}
+        old_restarted = False
+        if rb.get("ok"):
+            try:
+                state = deployer._state(txroot, txid)
+                _start_and_verify(
+                    backend, Path(state["core_live"]), Path(state["room_live"]), expected_old)
+                old_restarted = True
+            except Exception:
+                pass
         return {"ok": False,
-                "phase": "ROLLED_BACK" if rb.get("ok") else "MANUAL_REQUIRED",
+                "phase": "ROLLED_BACK" if rb.get("ok") and old_restarted else "MANUAL_REQUIRED",
                 "rollback_ok": bool(rb.get("ok")),
                 "old_services_restored": old_restarted}
 
 def public_summary(result: dict) -> str:
     phase = result.get("phase")
-    if phase not in {"RUNTIME_VERIFIED", "ROLLED_BACK", "MANUAL_REQUIRED"}:
+    if phase not in {"RUNTIME_VERIFIED", "ROLLED_BACK", "PRECOMMIT_RECOVERED",
+                     "MANUAL_REQUIRED"}:
         phase = "MANUAL_REQUIRED"
     return "\n".join(("[BAZOR-SERVICE-ORCHESTRATION]", "PHASE: " + phase,
         "OK: " + ("YES" if result.get("ok") else "NO"),

@@ -303,3 +303,12 @@ GitHub reste un bus de coordination et de preuve ; aucun shell/exec/eval arbitra
 Référence canonique de conception : `bridge/BAZOR_AI_ROOM_TRIO_SPEC.md`.
 
 Principes ajoutés : versions séparées (app/protocole/registry/contrat), ports 8765/8775/8776/11434, identités persistantes par `agent_id`, bootstrap canonique, mémoire contextuelle sourcée, statuts unifiés, séparation `ROOM_CORE_DELIVERED` / `TRIO_READY`, récupération autonome bornée et interdiction de `DELIVERED` sans preuves runtime. Toute divergence entre spec et dépôt/runtime doit être déclarée `SPEC_DRIFT`.
+
+
+<!-- BAZOR_VERSION:BAZOR V24 Core/Room orchestration::2026.09.28.2 -->
+## Orchestration Core/Room — correctif candidat 2026.09.28.2
+
+- Si Room est arrêtée puis que Core refuse de s’arrêter, le contrôleur tente de restaurer Room depuis les programmes encore en place avant toute bascule de dossiers. Il n’arrête pas un processus inconnu qui occupe le port.
+- Si le retour arrière échoue, il ne redémarre pas des programmes dont la génération n’est pas établie ; le statut devient `MANUAL_REQUIRED`.
+- Preuve : 9 tests locaux sur backend fictif et compilation Python. Pas de backend Windows réel ni de déploiement sur le PC. L’autorisation locale explicite demeure requise pour la future installation.
+- Fichiers : `pc-relay/bazor_service_orchestrator.py`, `pc-relay/test_service_orchestrator.py`.

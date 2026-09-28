@@ -1012,9 +1012,18 @@
     }
   ],
   "knowledge_base": "BAZOR_ENCYCLOPEDIA.md",
-  "encyclopedia_updated_at": "2026-09-19",
+  "encyclopedia_updated_at": "2026-09-28",
   "encyclopedia_sync_required": true,
   "version_history": [
+    {
+      "component": "BAZOR V24 Core/Room orchestration",
+      "version": "2026.09.28.2",
+      "generated_at": "2026-09-28",
+      "artifact": null,
+      "changes": "Récupération après arrêt partiel avant commit ; refus de redémarrer depuis une génération inconnue après rollback échoué.",
+      "tests": "9 tests unitaires sur backend fictif, dont arrêt Core refusé et rollback échoué ; aucun test sur processus Windows actifs.",
+      "status": "PATCH_CANDIDATE"
+    },
     {
       "component": "BAZOR Studio SDXL Checkpoint Routing",
       "version": "2026.09.20.1",
