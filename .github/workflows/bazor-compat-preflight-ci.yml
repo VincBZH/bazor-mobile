@@ -17,6 +17,8 @@ on:
       - "pc-relay/bazor_service_orchestrator.py"
       - "pc-relay/test_service_orchestrator.py"
       - "pc-relay/bazor_windows_process_backend.py"
+      - "pc-relay/bazor_live_readiness.py"
+      - "pc-relay/test_live_readiness.py"
       - "pc-relay/test_windows_process_backend.py"
       - "pc-relay/test_windows_orchestration_e2e.py"
       - "pc-relay/bazor_transaction_sandbox.py"
@@ -40,6 +42,8 @@ on:
       - "pc-relay/bazor_service_orchestrator.py"
       - "pc-relay/test_service_orchestrator.py"
       - "pc-relay/bazor_windows_process_backend.py"
+      - "pc-relay/bazor_live_readiness.py"
+      - "pc-relay/test_live_readiness.py"
       - "pc-relay/test_windows_process_backend.py"
       - "pc-relay/test_windows_orchestration_e2e.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
@@ -96,6 +100,11 @@ jobs:
           python -m unittest discover -s pc-relay -p 'test_service_orchestrator.py' -v
           python -m py_compile pc-relay/bazor_windows_process_backend.py pc-relay/test_windows_process_backend.py
           python -m unittest discover -s pc-relay -p 'test_windows_process_backend.py' -v
+      - name: Read-only live readiness gate contract
+        run: |
+          python -m py_compile pc-relay/bazor_live_readiness.py pc-relay/test_live_readiness.py
+          python -m unittest discover -s pc-relay -p 'test_live_readiness.py' -v
+
       - name: Temp-only failure/rollback tests, no production writes
         env:
           MAMMOUTH_API_KEY: ""
@@ -134,6 +143,14 @@ jobs:
         run: |
           python -m py_compile pc-relay/bazor_windows_process_backend.py pc-relay/test_windows_process_backend.py
           python -m unittest discover -s pc-relay -p 'test_windows_process_backend.py' -v
+      - name: Live readiness pure gate tests (no live services)
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: |
+          python -m py_compile pc-relay/bazor_live_readiness.py pc-relay/test_live_readiness.py
+          python -m unittest discover -s pc-relay -p 'test_live_readiness.py' -v
+
       - name: Full disposable Core Room transaction with real Windows processes
         env:
           MAMMOUTH_API_KEY: ""
