@@ -16,6 +16,17 @@ class DaBazorTests(unittest.TestCase):
         self.assertEqual(state['core'], 'ÉCHEC_DÉCLARÉ')
         self.assertEqual(state['room'], 'ÉCHEC_DÉCLARÉ')
 
+    def test_room_probe_uses_v24_status_endpoint(self):
+        urls = []
+        def probe(url):
+            urls.append(url)
+            if url.endswith('/api/tags'):
+                return {'models': []}
+            return {'ok': True}
+        inspect(probe)
+        self.assertIn('http://127.0.0.1:8765/api/status', urls)
+        self.assertNotIn('http://127.0.0.1:8765/health', urls)
+
     def test_fallback_uses_distinct_local_model(self):
         calls = []
         def sender(prompt, model):
