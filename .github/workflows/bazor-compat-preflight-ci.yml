@@ -30,6 +30,8 @@ on:
       - "pc-relay/test_rollback_rehearsal.py"
       - "pc-relay/bazor_transaction_sandbox.py"
       - "pc-relay/test_transaction_sandbox.py"
+      - "pc-relay/bazor_transactional_deployer.py"
+      - "pc-relay/test_transactional_deployer.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
   workflow_dispatch:
 
