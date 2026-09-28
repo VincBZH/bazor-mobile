@@ -83,7 +83,8 @@ def engine_status():
     except (urllib.error.URLError, TimeoutError, ValueError, OSError):
         ollama = {"available": False, "reason": "no_valid_ollama_response"}
     mammouth = health.get("mammouth") or {}
-    # A configured API key is not proof of a real Mammouth call.
+    notrack = health.get("notrack") or {}
+    # A configured API key is not proof of a real external-provider call.
     return {
         "core": {"available": core["available"], "reason": core.get("reason"),
                  "runtime_signature": health.get("runtime_signature"),
@@ -95,7 +96,9 @@ def engine_status():
                      "reason": "real_provider_call_not_tested"},
         "gpt": {"available": None, "mode": "manual_handoff", "reason": "api_not_connected"},
         "astra": {"available": None, "mode": "manual_handoff", "reason": "api_not_connected"},
-        "notrack": {"available": None, "reason": "api_not_verified"},
+        "notrack": {"available": None, "configured": bool(notrack.get("configured")),
+                    "status": notrack if core["available"] else None,
+                    "reason": "real_provider_call_not_tested"},
     }
 
 
@@ -106,7 +109,7 @@ def choose_route(task_class: str, manual=None):
         selected = "ollama" if available_local else None
     elif manual in {"gpt", "astra"}:
         selected = None  # manual handoff, never a fabricated API call
-    elif manual == "mammouth":
+    elif manual in {"mammouth", "notrack"}:
         selected = None  # consent required in /api/chat
     else:
         selected = "ollama" if available_local else None
@@ -145,7 +148,7 @@ def handle_chat(body):
         return {"ok": True, "mode": "manual_handoff", "recipient": target,
                 "message": prompt.strip(),
                 "notice": "Texte pret a copier. Aucune requete envoyee au fournisseur."}, 200
-    if target not in {"ollama", "mammouth", "both"}:
+    if target not in {"ollama", "mammouth", "notrack", "both"}:
         return {"ok": False, "error": "unsupported_provider"}, 400
     if target != "ollama" and body.get("allow_external") is not True:
         return {"ok": False, "error": "external_consent_required"}, 403
@@ -153,7 +156,7 @@ def handle_chat(body):
     if not status["available"]:
         return {"ok": False, "error": "core_not_responding"}, 503
     health = status["data"]
-    if target != "mammouth" and not (health.get("ollama") or {}).get("online"):
+    if target not in {"mammouth", "notrack"} and not (health.get("ollama") or {}).get("online"):
         return {"ok": False, "error": "ollama_not_confirmed_by_core"}, 503
     if target in {"mammouth", "both"}:
         mammouth = health.get("mammouth") or {}
@@ -162,6 +165,12 @@ def handle_chat(body):
             return {"ok": False, "error": "mammouth_key_missing_on_core"}, 503
         if budget.get("blocked") or (budget.get("remaining_usd") is not None and budget["remaining_usd"] <= 0):
             return {"ok": False, "error": "mammouth_budget_blocked"}, 503
+    if target == "notrack":
+        notrack = health.get("notrack") or {}
+        if not notrack.get("configured"):
+            return {"ok": False, "error": "notrack_not_configured_on_core"}, 503
+        if notrack.get("blocked"):
+            return {"ok": False, "error": "notrack_daily_cap_blocked"}, 503
     results = []
     names = ["ollama", "mammouth"] if target == "both" else [target]
     for name in names:
