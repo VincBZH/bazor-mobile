@@ -26,8 +26,10 @@ class H(BaseHTTPRequestHandler):
  def do_GET(self):
   if kind=="core" and self.path=="/api/v1/health":
    return self.sendj({"ok":True,"service":"BAZOR API","pid":os.getpid(),"ollama":{"online":True},
-    "external_secret_present":bool(os.environ.get("MAMMOUTH_API_KEY") or os.environ.get("OPENAI_API_KEY")),
-    "budget":os.environ.get("BAZOR_EXTERNAL_BUDGET")})
+    "external_secret_present":any(any(x in k.upper() for x in ("API_KEY","TOKEN","SECRET","PASSWORD","CREDENTIAL"))
+                                  for k in os.environ),
+    "budget":os.environ.get("BAZOR_EXTERNAL_BUDGET"),
+    "mammouth_budget":os.environ.get("BAZOR_MAMMOUTH_BUDGET_USD")})
   if kind=="room" and self.path=="/health": return self.sendj({"ok":True})
   self.send_error(404)
  def do_POST(self):
@@ -42,6 +44,18 @@ def free_port():
     s=socket.socket(); s.bind(("127.0.0.1",0)); p=s.getsockname()[1]; s.close(); return p
 
 class ParserTests(unittest.TestCase):
+    def test_child_environment_removes_unknown_provider_secrets_and_zeroes_budget(self):
+        env=win.child_environment({"PATH":"keep","NOTRACK_API_KEY":"private",
+            "OPENROUTER_TOKEN":"private","OTHER_PASSWORD":"private",
+            "MAMMOUTH_KEY":"private",
+            "BAZOR_MAMMOUTH_BUDGET_USD":"999"},"core",{"core":8875,"room":8768})
+        self.assertEqual(env["PATH"],"keep")
+        self.assertNotIn("NOTRACK_API_KEY",env)
+        self.assertNotIn("OPENROUTER_TOKEN",env)
+        self.assertNotIn("OTHER_PASSWORD",env)
+        self.assertNotIn("MAMMOUTH_KEY",env)
+        self.assertEqual(env["BAZOR_MAMMOUTH_BUDGET_USD"],"0")
+        self.assertEqual(env["BAZOR_CORE_URL"],"http://127.0.0.1:8875")
     def test_loopback_listener(self):
         data="  TCP    127.0.0.1:8775   0.0.0.0:0   LISTENING   1234\n"
         self.assertEqual(win.parse_netstat_listeners(data,8775),{1234})
@@ -63,6 +77,11 @@ class ParserTests(unittest.TestCase):
         b=win.WindowsProcessBackend(
             {"core":CORE,"room":ROOM},{"core":8775,"room":8765},True)
         self.assertFalse(b.stop_pid(123))
+    def test_non_exact_local_reply_is_refused(self):
+        b=win.WindowsProcessBackend({"core":CORE,"room":ROOM},{"core":8775,"room":8765})
+        b._json_request=lambda *args,**kwargs: {"ok":True,"ollama":{
+            "ok":True,"provider":"ollama","answer":"NOT BAZOR_LOCAL_OK"}}
+        self.assertFalse(b.local_chat(8775,11434,"probe"))
 
 @unittest.skipUnless(os.name=="nt","Windows integration only")
 class WindowsDisposableProcessTests(unittest.TestCase):
@@ -92,6 +111,10 @@ class WindowsDisposableProcessTests(unittest.TestCase):
     def test_real_loopback_process_identity_health_chat_and_stop(self):
         os.environ["MAMMOUTH_API_KEY"]="MUST_NOT_REACH_CHILD"
         self.addCleanup(os.environ.pop,"MAMMOUTH_API_KEY",None)
+        os.environ["NOTRACK_API_KEY"]="MUST_NOT_REACH_CHILD"
+        self.addCleanup(os.environ.pop,"NOTRACK_API_KEY",None)
+        os.environ["BAZOR_MAMMOUTH_BUDGET_USD"]="999"
+        self.addCleanup(os.environ.pop,"BAZOR_MAMMOUTH_BUDGET_USD",None)
         core_pid=self.backend.start_service("core",self.core,self.cp); self.pids.append(core_pid)
         room_pid=self.backend.start_service("room",self.room,self.rp); self.pids.append(room_pid)
         core=self.wait_identity(self.cp); room=self.wait_identity(self.rp)
@@ -102,6 +125,7 @@ class WindowsDisposableProcessTests(unittest.TestCase):
         core_health=self.backend._health_json("core",self.cp)
         self.assertFalse(core_health["external_secret_present"])
         self.assertEqual(core_health["budget"],"0")
+        self.assertEqual(core_health["mammouth_budget"],"0")
         self.assertTrue(self.backend.health("room",self.rp))
         self.assertTrue(self.backend.local_chat(self.cp,11434,"Reponds BAZOR_LOCAL_OK"))
         self.assertTrue(self.backend.stop_pid(room_pid))
