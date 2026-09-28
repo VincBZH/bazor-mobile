@@ -27,6 +27,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Validate PowerShell one-click launcher
+        shell: pwsh
+        run: |
+          [void][ScriptBlock]::Create((Get-Content -Raw "console-hub/bazor_start_hub.ps1"))
+          Write-Host "PowerShell launcher syntax OK"
       - name: Compile Python
         run: |
           python -m py_compile \
@@ -44,7 +49,8 @@ jobs:
             pc-relay/bazor_studio_workflows_audit.py \
             pc-relay/bazor_studio_h3_converter_hotfix.py \
             pc-relay/test_studio_p0_012_routing.py \
-            pc-relay/mammouth_client.py
+            pc-relay/mammouth_client.py \
+            pc-relay/notrack_client.py
       - name: Test Studio P0-012 routing context
         run: python pc-relay/test_studio_p0_012_routing.py
       - name: Validate mobile UI JavaScript
@@ -179,7 +185,7 @@ jobs:
           assert "ThreadPoolExecutor" in watcher, "Mammouth reviews are not parallel"
           client=Path("pc-relay/mammouth_client.py").read_text(encoding="utf-8")
           assert "_USAGE_LOCK" in client, "parallel usage accounting lock missing"
-          assert 'explicit_provider == "mammouth"' in core, "explicit Mammouth fallback guard missing"
+          assert 'explicit_provider in ("mammouth", "notrack")' in core, "explicit external-provider fallback guard missing"
           assert 'generic_refusal_no_local_fallback' in core, "Mammouth must not silently fall back to Ollama"
           print("Mammouth profile queue regression OK")
           PY
@@ -317,11 +323,11 @@ jobs:
           assert "8188" in launcher and "8191" in launcher
           assert "LANCER_BAZOR_STUDIO.cmd" in launcher
           assert "bazor_studio_certified_launcher.py" in cmd
-          assert "bazor_pc_relay_v3" in cmd
+          assert "RELANCER_WATCHER_STUDIO.cmd" in cmd, "Studio watcher bootstrap missing"
           assert "pause" in cmd.lower(), "CMD must stay open on failure"
           assert "BAZOR_STUDIO_NO_PAUSE" in cmd, "automated no-pause gate missing"
           assert "^|" not in cmd, "CMD must not leak caret-pipe into PowerShell"
-          assert "foreach($cand in $cands)" in cmd, "safe Python candidate loop missing"
+          assert "def find_launcher(" in launcher and "for name in candidates:" in launcher, "safe Python candidate selection missing"
           assert "BAZOR_STUDIO_TEST_ONLY" in launcher, "safe env test gate missing"
           assert "[bazor-certify:studio]" in watcher
           assert "_run_studio_certified_test" in watcher
