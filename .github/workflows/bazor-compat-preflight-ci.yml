@@ -16,6 +16,8 @@ on:
       - "pc-relay/test_transactional_deployer.py"
       - "pc-relay/bazor_service_orchestrator.py"
       - "pc-relay/test_service_orchestrator.py"
+      - "pc-relay/bazor_windows_process_backend.py"
+      - "pc-relay/test_windows_process_backend.py"
       - "pc-relay/bazor_transaction_sandbox.py"
       - "pc-relay/test_transaction_sandbox.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
@@ -36,6 +38,8 @@ on:
       - "pc-relay/test_transactional_deployer.py"
       - "pc-relay/bazor_service_orchestrator.py"
       - "pc-relay/test_service_orchestrator.py"
+      - "pc-relay/bazor_windows_process_backend.py"
+      - "pc-relay/test_windows_process_backend.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
   workflow_dispatch:
 
@@ -88,6 +92,8 @@ jobs:
         run: |
           python -m py_compile pc-relay/bazor_service_orchestrator.py pc-relay/test_service_orchestrator.py
           python -m unittest discover -s pc-relay -p 'test_service_orchestrator.py' -v
+          python -m py_compile pc-relay/bazor_windows_process_backend.py pc-relay/test_windows_process_backend.py
+          python -m unittest discover -s pc-relay -p 'test_windows_process_backend.py' -v
       - name: Temp-only failure/rollback tests, no production writes
         env:
           MAMMOUTH_API_KEY: ""
@@ -119,3 +125,10 @@ jobs:
           MAMMOUTH_API_KEY: ""
           OPENAI_API_KEY: ""
         run: python -m unittest discover -s pc-relay -p 'test_service_orchestrator.py' -v
+      - name: Real disposable Windows process adapter
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: |
+          python -m py_compile pc-relay/bazor_windows_process_backend.py pc-relay/test_windows_process_backend.py
+          python -m unittest discover -s pc-relay -p 'test_windows_process_backend.py' -v
