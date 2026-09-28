@@ -253,12 +253,36 @@ class WatcherRegressionTests(unittest.TestCase):
         exec(compile(ast.Module(body=[fn],type_ignores=[]),str(path),"exec"),scope)
         self.assertEqual(scope[fn.name](),core.CORE_RUNTIME_SIGNATURE)
 
-    def test_legacy_core_restart_is_fail_closed_by_default(self):
+    def test_legacy_core_restart_cannot_bypass_transactional_authorization(self):
         path=Path(__file__).with_name("bazor_github_watcher.py")
-        source=path.read_text(encoding="utf-8")
-        self.assertIn("BAZOR_WATCHER_ALLOW_LEGACY_CORE_RESTART", source)
-        self.assertIn("transactional deployment required", source)
-        self.assertIn("if not _legacy_core_restart_allowed():", source)
+        source=ast.parse(path.read_text(encoding="utf-8"))
+        functions={
+            node.name: node for node in source.body
+            if isinstance(node,ast.FunctionDef)
+            and node.name in {"_legacy_core_restart_allowed","maybe_restart_core"}
+        }
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, {"BAZOR_WATCHER_ALLOW_LEGACY_CORE_RESTART":"1"}
+        ):
+            scope={
+                "os":os,
+                "PENDING_CORE_RESTART":True,
+                "PENDING_RESTART_FILE":str(Path(tmp)/"pending.flag"),
+            }
+            exec(compile(ast.Module(
+                body=[functions["_legacy_core_restart_allowed"],functions["maybe_restart_core"]],
+                type_ignores=[],
+            ),str(path),"exec"),scope)
+            restart_calls=[]
+            scope["_restart_core"]=lambda: restart_calls.append(True)
+            self.assertFalse(scope["_legacy_core_restart_allowed"]())
+            self.assertFalse(scope["maybe_restart_core"]("unit-test"))
+            self.assertEqual(restart_calls,[])
+            self.assertEqual(scope["PENDING_CORE_RESTART"],False)
+            self.assertEqual(
+                Path(scope["PENDING_RESTART_FILE"]).read_text(encoding="utf-8"),
+                "transaction_required:unit-test",
+            )
 
     def test_filebus_rejects_path_traversal_and_unknown_provider(self):
         # Extract only the pure validation function: importing watcher starts its daemon.

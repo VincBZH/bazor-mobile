@@ -79,7 +79,9 @@ def _security_restart_guard():
         return 0,0
 
 def _legacy_core_restart_allowed():
-    return str(os.environ.get("BAZOR_WATCHER_ALLOW_LEGACY_CORE_RESTART","")).strip().lower() in ("1","true","yes","on")
+    # The legacy path is not bound to a one-time transactional authorization.
+    # Keep it permanently disabled; production restarts must use the orchestrator.
+    return False
 
 def maybe_restart_core(reason="update"):
     global PENDING_CORE_RESTART
