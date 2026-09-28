@@ -1,8 +1,13 @@
 # BAZOR V24 — protocole d'installation transactionnelle et reprise après panne
 
-**Statut : spécification / aucun déploiement autorisé.** 27 septembre 2026.  
+**Statut : moteur transactionnel implémenté et testé sur copies jetables Linux + Windows ; aucun déploiement réel autorisé.** 28 septembre 2026.  
 Suivi : #171 · code candidat : #172 (cible #169).  
 Preuves Windows acquises : [vrai trajet isolé](https://github.com/VincBZH/bazor-mobile/issues/171#issuecomment-5857203316) ; [simulation de restauration sur copie](https://github.com/VincBZH/bazor-mobile/issues/171#issuecomment-5857333737).
+
+
+## Implémentation actuelle — 28 septembre 2026
+
+Le moteur `pc-relay/bazor_transactional_deployer.py` implémente maintenant PREPARE, autorisation locale à usage unique liée au manifeste exact, COMMIT par renommages de générations, journal durable, rollback automatique et RECOVER_AFTER_CRASH idempotent. Les tests couvrent les pannes après chaque renommage Core/Room, autorisation expirée ou réutilisée, candidat modifié, dérive des données protégées, conservation de la génération précédente, récupération après crash et refus des symlinks. Les tests CI s'exécutent aussi sur `windows-latest` avec des dossiers jetables. **Le moteur ne démarre/arrête encore aucun service réel et ne doit donc pas être utilisé sur l'installation active.**
 
 ## Périmètre et interdictions
 
