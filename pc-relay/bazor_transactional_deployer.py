@@ -243,8 +243,11 @@ def rollback(txroot: Path, txid: str, reason: str = "failure") -> dict:
         st["rollback_reason"] = reason
         _save(txroot, st, "ROLLED_BACK")
         return {"ok": True, "phase": "ROLLED_BACK", "protected": "UNCHANGED"}
-    except (OSError, ValueError):
-        return {"ok": False, "phase": st.get("phase", "UNKNOWN"), "protected": "UNKNOWN"}
+    except (OSError, ValueError) as exc:
+        # Closed diagnostic only; never expose local paths or exception text.
+        return {"ok": False, "phase": st.get("phase", "UNKNOWN"),
+                "protected": "UNKNOWN", "error_kind": type(exc).__name__,
+                "winerror": getattr(exc, "winerror", None)}
 
 
 def commit(txroot: Path, txid: str, auth_path: Path, fault_after: str | None = None) -> dict:

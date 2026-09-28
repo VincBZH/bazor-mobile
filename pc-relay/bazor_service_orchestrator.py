@@ -178,7 +178,9 @@ def promote_with_runtime_verification(
         return {"ok": False,
                 "phase": "ROLLED_BACK" if rb.get("ok") and old_restarted else "MANUAL_REQUIRED",
                 "rollback_ok": bool(rb.get("ok")),
-                "old_services_restored": old_restarted}
+                "old_services_restored": old_restarted,
+                "rollback_error_kind": rb.get("error_kind"),
+                "rollback_winerror": rb.get("winerror")}
 
 def public_summary(result: dict) -> str:
     phase = result.get("phase")
