@@ -19,6 +19,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import mammouth_client
+import notrack_client
 import bazor_bridge
 from bazor_security import BazorSecurity
 from bazor_action_engine import ActionEngine
@@ -48,6 +49,7 @@ def _runtime_code_signature():
         BASE_DIR / "bazor_action_engine.py",
         BASE_DIR / "bazor_security.py",
         BASE_DIR / "mammouth_client.py",
+        BASE_DIR / "notrack_client.py",
         BASE_DIR / "bazor_bridge.py",
     ):
         try:
@@ -442,7 +444,8 @@ def route_task(text, mode="auto"):
             "profile": mammouth_profile,
             "suggested_model": mammouth_client.MODEL_PROFILES.get(mammouth_profile, mammouth_profile),
             "budget": mammouth_client.budget_status(),
-        }
+        },
+        "notrack": notrack_client.status(),
     }
 
 
@@ -490,7 +493,7 @@ def _retry_mobile_refusal(prompt, route, result, provider):
     """Fallback limité aux sous-tâches techniques BAZOR.
     - provider=ollama : autre modèle Ollama local ;
     - provider=auto : Ollama puis Mammouth si nécessaire ;
-    - provider=mammouth : aucun basculement local silencieux.
+    - provider=mammouth/notrack : aucun basculement local silencieux.
     """
     answer = result.get("answer", "") or result.get("message", "")
     if not _generic_model_refusal(answer):
@@ -502,15 +505,15 @@ def _retry_mobile_refusal(prompt, route, result, provider):
     # Un appel explicitement demandé à Mammouth ne doit jamais se transformer
     # silencieusement en réponse Ollama. Sinon l'interface peut afficher
     # "avis Mammouth" alors que le modèle réel est local (ex: mistral:latest).
-    if explicit_provider == "mammouth":
+    if explicit_provider in ("mammouth", "notrack"):
         failed = dict(result or {})
         failed["ok"] = False
         failed["error"] = "generic_model_refusal"
-        failed["message"] = "Le modèle Mammouth demandé a refusé sans résultat exploitable."
+        failed["message"] = f"Le modèle {explicit_provider} demandé a refusé sans résultat exploitable."
         route = dict(route or {})
-        route["fallback_blocked"] = "explicit_mammouth_provider"
+        route["fallback_blocked"] = "explicit_" + explicit_provider + "_provider"
         journal("MOBILE_MODEL_REFUSAL", {
-            "provider": "mammouth", "model": current,
+            "provider": explicit_provider, "model": current,
             "reason": "generic_refusal_no_local_fallback"
         })
         return route, failed
@@ -569,6 +572,17 @@ def mammouth_chat(text, kind=None, profile=None):
         "profile": result.get("profile"),
         "estimated_cost_usd": result.get("estimated_cost_usd"),
         "error": result.get("error"),
+    })
+    return result
+
+
+def notrack_chat(text):
+    result = notrack_client.chat(text)
+    journal("NOTRACK_CALL", {
+        "ok": result.get("ok", False),
+        "model": result.get("model"),
+        "error": result.get("error"),
+        "http_status": result.get("http_status"),
     })
     return result
 
