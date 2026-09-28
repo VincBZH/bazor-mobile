@@ -318,7 +318,7 @@ jobs:
           assert "8188" in launcher and "8191" in launcher
           assert "LANCER_BAZOR_STUDIO.cmd" in launcher
           assert "bazor_studio_certified_launcher.py" in cmd
-          assert "bazor_pc_relay_v3" in cmd
+          assert "RELANCER_WATCHER_STUDIO.cmd" in cmd, "Studio watcher bootstrap missing"
           assert "pause" in cmd.lower(), "CMD must stay open on failure"
           assert "BAZOR_STUDIO_NO_PAUSE" in cmd, "automated no-pause gate missing"
           assert "^|" not in cmd, "CMD must not leak caret-pipe into PowerShell"
