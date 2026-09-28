@@ -61,7 +61,7 @@ def inspect(probe=json_get, page_probe=http_reachable) -> dict:
             result["ollama"] = "AUCUN_MODÈLE"
     except (OSError, ValueError, TypeError, KeyError):
         pass
-    for label, url in (("core", CORE + "/api/v1/health"), ("room", ROOM + "/health")):
+    for label, url in (("core", CORE + "/api/v1/health"), ("room", ROOM + "/api/status")):
         try:
             data = probe(url)
             if isinstance(data, dict) and data.get("ok") is True:
