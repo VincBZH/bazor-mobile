@@ -78,8 +78,20 @@ def _security_restart_guard():
     except Exception:
         return 0,0
 
+def _legacy_core_restart_allowed():
+    return str(os.environ.get("BAZOR_WATCHER_ALLOW_LEGACY_CORE_RESTART","")).strip().lower() in ("1","true","yes","on")
+
 def maybe_restart_core(reason="update"):
     global PENDING_CORE_RESTART
+    if not _legacy_core_restart_allowed():
+        PENDING_CORE_RESTART=False
+        try:
+            os.makedirs(os.path.dirname(PENDING_RESTART_FILE),exist_ok=True)
+            open(PENDING_RESTART_FILE,"w",encoding="utf-8").write("transaction_required:"+str(reason))
+        except Exception:
+            pass
+        print("[CORE RESTART BLOCKED] Legacy watcher restart disabled; transactional deployment required.")
+        return False
     pairing,guard=_security_restart_guard()
     if pairing>0 or guard>0:
         PENDING_CORE_RESTART=True
