@@ -95,12 +95,12 @@ def _mark_last_attempt_success():
         _usage_file().write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _redact_text(value):
+def _redact_text(value, limit=1200):
     text = str(value or "")
     secret = os.getenv("NOTRACK_API_KEY", "").strip()
     if secret:
         text = text.replace(secret, "[REDACTED]")
-    return text[:1200]
+    return text[:limit]
 
 
 def _request(payload, key, timeout):
@@ -218,7 +218,7 @@ def chat(text, max_tokens=2000, timeout=90, request_id=None):
         "ok": True,
         "provider": "notrack",
         "model": str(data.get("model") or NOTRACK_MODEL),
-        "answer": _redact_text(answer) if len(answer) <= 1200 else answer[:32000],
+        "answer": _redact_text(answer, limit=32000),
         "http_status": http_status,
         "correlation_id": correlation_id,
         "usage": data.get("usage") or {},

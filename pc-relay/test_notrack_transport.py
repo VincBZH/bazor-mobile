@@ -67,6 +67,20 @@ class NoTrackClientTests(unittest.TestCase):
         self.assertEqual(result["status"]["attempted_calls"], 1)
         self.assertEqual(result["status"]["successful_calls"], 1)
 
+    def test_long_success_answer_is_always_redacted(self):
+        secret = os.environ["NOTRACK_API_KEY"]
+        long_answer = "A" * 1400 + secret + "B" * 1400
+        payload = {
+            "model": "notrack-uncensored",
+            "choices": [{"message": {"content": long_answer}}],
+        }
+        with mock.patch("notrack_client.urllib.request.urlopen", return_value=FakeResponse(payload)):
+            result = notrack_client.chat("hello", request_id="long")
+        self.assertTrue(result["ok"])
+        self.assertGreater(len(result["answer"]), 1200)
+        self.assertNotIn(secret, result["answer"])
+        self.assertIn("[REDACTED]", result["answer"])
+
     def test_401_is_classified_and_redacted(self):
         body = json.dumps({"error": {"type": "invalid_key", "message": "sk-notrack-TEST-SECRET invalid"}}).encode()
         err = urllib.error.HTTPError(notrack_client.NOTRACK_URL, 401, "Unauthorized", {}, io.BytesIO(body))
