@@ -77,6 +77,20 @@ class OrchestratorTests(unittest.TestCase):
         b.identities[orch.ROOM_PORT]=orch.ProcessIdentity("room",102,orch.ROOM_PORT,OLD_ROOM,False)
         with self.assertRaises(RuntimeError): self.run_it(b)
         self.assertEqual(b.stopped,[])
+    def test_missing_authorization_refuses_before_process_stop(self):
+        b=FakeBackend()
+        self.auth.unlink()
+        out=self.run_it(b)
+        self.assertEqual(out["phase"],"AUTHORIZATION_REFUSED")
+        self.assertEqual(b.stopped,[])
+        self.assertEqual(set(b.identities),{orch.CORE_PORT,orch.ROOM_PORT})
+        self.assertEqual(tx._state(self.txroot,"tx-test")["phase"],"PREPARED")
+    def test_tampered_authorization_refuses_before_stop(self):
+        b=FakeBackend()
+        self.auth.write_text('{"version":1,"txid":"wrong"}',encoding="utf-8")
+        out=self.run_it(b)
+        self.assertEqual(out["phase"],"AUTHORIZATION_REFUSED")
+        self.assertEqual(b.stopped,[])
     def test_core_stop_failure_restarts_room_without_commit(self):
         b=FakeBackend()
         original_stop=b.stop_pid
@@ -134,5 +148,7 @@ class OrchestratorTests(unittest.TestCase):
         text=orch.public_summary({"ok":False,"phase":"secret path","rollback_ok":False})
         self.assertIn("PHASE: MANUAL_REQUIRED",text)
         self.assertIn("PAID_AI_CALLS: ZERO",text); self.assertNotIn("secret path",text)
+        refused=orch.public_summary({"ok":False,"phase":"AUTHORIZATION_REFUSED"})
+        self.assertIn("PHASE: AUTHORIZATION_REFUSED",refused)
 
 if __name__=="__main__": unittest.main()
