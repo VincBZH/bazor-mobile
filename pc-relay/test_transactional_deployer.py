@@ -137,6 +137,29 @@ class TransactionalDeployerTests(unittest.TestCase):
         self.assertEqual((self.live_core / "app.py").read_text(), "old core")
         self.assertEqual((self.live_room / "app.py").read_text(), "old room")
 
+    def test_rollback_refuses_before_rename_when_candidate_history_changed(self):
+        self.prepare()
+        self.authorize()
+        committed = tx.commit(self.txroot, "tx-test", self.auth)
+        self.assertTrue(committed["ok"])
+        changed = '{"new conversation": true}'
+        (self.live_room / "chat_history.json").write_text(changed, encoding="utf-8")
+        out = tx.rollback(self.txroot, "tx-test", "runtime_failed")
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["protected"], "DRIFT")
+        self.assertEqual(out["error_kind"], "ProtectedDataDrift")
+        self.assertEqual((self.live_room / "app.py").read_text(), "new room")
+        self.assertEqual(
+            (self.live_room / "chat_history.json").read_text(encoding="utf-8"),
+            changed)
+        state = tx._state(self.txroot, "tx-test")
+        previous_room = Path(state["previous_room"])
+        self.assertTrue(previous_room.is_dir())
+        self.assertNotEqual(
+            (previous_room / "chat_history.json").read_text(encoding="utf-8"),
+            changed)
+        self.assertEqual((self.live_core / "app.py").read_text(), "new core")
+
     def test_success_keeps_previous_generation(self):
         self.prepare()
         self.authorize()

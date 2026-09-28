@@ -252,6 +252,19 @@ def rollback(txroot: Path, txid: str, reason: str = "failure") -> dict:
     pc, pr = Path(st["previous_core"]), Path(st["previous_room"])
     fc, fr = Path(st["failed_core"]), Path(st["failed_room"])
     try:
+        # If the promoted Room received newer user data, preserve both
+        # generations and require an explicit reconciliation. Never replace
+        # the live view with the older snapshot silently.
+        candidate_room = None
+        if pr.exists() and room_live.exists():
+            candidate_room = room_live
+        elif fr.exists():
+            candidate_room = fr
+        if (candidate_room is not None
+                and _protected_hashes(candidate_room) != st["protected_before"]):
+            return {"ok": False, "phase": st.get("phase", "UNKNOWN"),
+                    "protected": "DRIFT",
+                    "error_kind": "ProtectedDataDrift"}
         # Move any promoted candidate aside, then restore previous generations.
         if pc.exists():
             if core_live.exists() and not fc.exists():
