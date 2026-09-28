@@ -82,7 +82,11 @@ class WindowsOrchestrationE2E(unittest.TestCase):
 
     def test_real_disposable_chat_failure_restores_old(self):
         result = self.run_transaction("bad")
-        self.assertEqual(result["phase"], "ROLLED_BACK")
+        journal_phase = tx._state(self.txroot, "fixture")["phase"]
+        self.assertEqual(result["phase"], "ROLLED_BACK",
+                         {"result": result, "journal_phase": journal_phase,
+                          "core_version": (self.backend._health_json("core", self.cp) or {}).get("version"),
+                          "room_version": (self.backend._health_json("room", self.rp) or {}).get("version")})
         self.assertTrue(result["old_services_restored"])
         self.assertEqual(self.backend._health_json("core", self.cp)["version"], "old")
         self.assertEqual(self.backend._health_json("room", self.rp)["version"], "old")
