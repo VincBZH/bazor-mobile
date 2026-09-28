@@ -20,6 +20,7 @@ class FakeCore(BaseHTTPRequestHandler):
     offline = False
     fail_mammouth = False
     fail_ollama = False
+    fail_notrack = False
     notrack_configured = False
 
     def respond(self, body, status=200):
@@ -55,8 +56,12 @@ class FakeCore(BaseHTTPRequestHandler):
                       "answer": "MAMMOUTH_OK", "http_status": 200}
             )
         if body.get("target") == "notrack":
-            result["notrack"] = {"ok": True, "provider": "notrack", "model": "notrack-uncensored",
-                                 "answer": "NOTRACK_OK", "http_status": 200}
+            result["notrack"] = (
+                {"ok": False, "provider": "notrack", "error": "notrack_failed", "http_status": 503}
+                if self.fail_notrack else
+                {"ok": True, "provider": "notrack", "model": "notrack-uncensored",
+                 "answer": "NOTRACK_OK", "http_status": 200}
+            )
         self.respond(result)
 
     def log_message(self, *args):
@@ -86,6 +91,7 @@ class HTTPTests(unittest.TestCase):
         FakeCore.offline = False
         FakeCore.fail_mammouth = False
         FakeCore.fail_ollama = False
+        FakeCore.fail_notrack = False
         FakeCore.notrack_configured = False
 
     def post(self, payload):
@@ -165,6 +171,30 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(body["results"][0]["provider"], "notrack")
         self.assertEqual(body["results"][0]["model"], "notrack-uncensored")
         self.assertEqual(FakeCore.chat_calls[0]["target"], "notrack")
+
+    def test_notrack_then_ollama_real_sequence_contract(self):
+        FakeCore.notrack_configured = True
+        status, body = self.post({"target": "notrack_ollama", "text": "Résous ce problème", "allow_external": True})
+        self.assertEqual(status, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual([r["provider"] for r in body["results"]], ["notrack", "ollama"])
+        self.assertEqual([c["target"] for c in FakeCore.chat_calls], ["notrack", "ollama"])
+        self.assertIn("NOTRACK_OK", FakeCore.chat_calls[1]["text"])
+        self.assertIn("STRATEGIE NOTRACK", FakeCore.chat_calls[1]["text"])
+
+    def test_notrack_failure_stops_before_ollama(self):
+        FakeCore.notrack_configured = True
+        FakeCore.fail_notrack = True
+        status, body = self.post({"target": "notrack_ollama", "text": "Résous ce problème", "allow_external": True})
+        self.assertEqual(status, 502)
+        self.assertFalse(body["ok"])
+        self.assertEqual([c["target"] for c in FakeCore.chat_calls], ["notrack"])
+
+    def test_notrack_then_ollama_requires_notrack_configuration(self):
+        status, body = self.post({"target": "notrack_ollama", "text": "Question", "allow_external": True})
+        self.assertEqual(status, 503)
+        self.assertEqual(body["error"], "notrack_not_configured_on_core")
+        self.assertEqual(FakeCore.chat_calls, [])
 
     def test_offline_ollama_cannot_be_green(self):
         FakeCore.offline = True
