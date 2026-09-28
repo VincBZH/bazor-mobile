@@ -312,3 +312,9 @@ Principes ajoutés : versions séparées (app/protocole/registry/contrat), ports
 - Si le retour arrière échoue, il ne redémarre pas des programmes dont la génération n’est pas établie ; le statut devient `MANUAL_REQUIRED`.
 - Preuve : 9 tests locaux sur backend fictif et compilation Python. Pas de backend Windows réel ni de déploiement sur le PC. L’autorisation locale explicite demeure requise pour la future installation.
 - Fichiers : `pc-relay/bazor_service_orchestrator.py`, `pc-relay/test_service_orchestrator.py`.
+
+
+<!-- BAZOR_VERSION:BAZOR V24 Windows process backend::2026.09.28.3 -->
+## Adaptateur Windows — correctif candidat 2026.09.28.3
+
+L’environnement des processus Core/Room redémarrés est reconstruit depuis une liste blanche de chemins système, puis les ports loopback et le budget externe nul sont imposés. Le paramètre réellement lu par Mammouth (`BAZOR_MAMMOUTH_BUDGET_USD`) est fixé à zéro. Les sondes localhost ignorent le proxy système et le contrôle Ollama exige une réponse exacte. Tests de contrat locaux ; processus Windows jetables à vérifier en CI. Aucun déploiement sur le PC de Vincent.

@@ -32,10 +32,30 @@ TOKEN_USER = 1
 STILL_ACTIVE = 259
 WAIT_OBJECT_0 = 0
 
-EXTERNAL_SECRET_NAMES = (
-    "OPENAI_API_KEY", "MAMMOUTH_API_KEY", "ANTHROPIC_API_KEY",
-    "AZURE_OPENAI_API_KEY", "GOOGLE_API_KEY",
-)
+CHILD_INHERITED_NAMES = frozenset({
+    "SYSTEMROOT", "WINDIR", "PATH", "PATHEXT", "TEMP", "TMP", "USERPROFILE",
+    "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA",
+    "PYTHONIOENCODING", "BAZOR_OLLAMA_MODEL",
+})
+
+
+def child_environment(source: dict[str, str], component: str,
+                      ports: dict[str, int]) -> dict[str, str]:
+    # Allowlist OS paths instead of guessing every provider's secret name.
+    env = {name: value for name, value in source.items()
+           if name.upper() in CHILD_INHERITED_NAMES}
+    env.update({
+        "BAZOR_COMPONENT": component,
+        "BAZOR_DISABLE_UDP": "1",
+        "BAZOR_CORE_BIND_HOST": "127.0.0.1",
+        "BAZOR_CORE_PORT": str(ports["core"]),
+        "BAZOR_ROOM_HOST": "127.0.0.1",
+        "BAZOR_ROOM_PORT": str(ports["room"]),
+        "BAZOR_CORE_URL": "http://127.0.0.1:%d" % ports["core"],
+        "BAZOR_EXTERNAL_BUDGET": "0",
+        "BAZOR_MAMMOUTH_BUDGET_USD": "0",
+    })
+    return env
 
 
 @dataclass(frozen=True)
@@ -186,7 +206,9 @@ class WindowsProcessBackend:
             headers={"Content-Type": "application/json"} if data else {},
             method="POST" if data else "GET")
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as response:
+            # Local probes must not traverse a system HTTP proxy.
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=timeout) as response:
                 if response.status != 200:
                     return None
                 raw = response.read(1024 * 1024 + 1)
@@ -297,19 +319,7 @@ class WindowsProcessBackend:
         if component not in self.specs or self.ports[component] != int(port):
             raise RuntimeError("service_spec_mismatch")
         entrypoint = self._entrypoint(component, program_root)
-        env = dict(os.environ)
-        for name in EXTERNAL_SECRET_NAMES:
-            env.pop(name, None)
-        env.update({
-            "BAZOR_COMPONENT": component,
-            "BAZOR_DISABLE_UDP": "1",
-            "BAZOR_CORE_BIND_HOST": "127.0.0.1",
-            "BAZOR_CORE_PORT": str(self.ports["core"]),
-            "BAZOR_ROOM_HOST": "127.0.0.1",
-            "BAZOR_ROOM_PORT": str(self.ports["room"]),
-            "BAZOR_CORE_URL": "http://127.0.0.1:%d" % self.ports["core"],
-            "BAZOR_EXTERNAL_BUDGET": "0",
-        })
+        env = child_environment(dict(os.environ), component, self.ports)
         proc = subprocess.Popen(
             [sys.executable, str(entrypoint)], cwd=str(program_root),
             env=env, shell=False, stdin=subprocess.DEVNULL,
@@ -339,4 +349,4 @@ class WindowsProcessBackend:
         answer = str(local.get("answer") or "")
         return bool((obj or {}).get("ok") is True and local.get("ok") is True
                     and local.get("provider") == "ollama"
-                    and "BAZOR_LOCAL_OK" in answer)
+                    and answer.strip() == "BAZOR_LOCAL_OK")

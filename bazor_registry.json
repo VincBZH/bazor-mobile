@@ -1016,6 +1016,15 @@
   "encyclopedia_sync_required": true,
   "version_history": [
     {
+      "component": "BAZOR V24 Windows process backend",
+      "version": "2026.09.28.3",
+      "generated_at": "2026-09-28",
+      "artifact": null,
+      "changes": "Environnement enfant sur liste blanche, budget Mammouth réel à zéro, sondes localhost sans proxy et marqueur Ollama exact.",
+      "tests": "Tests locaux de contrat ; Windows CI à exécuter sur processus jetables, pas sur PC de Vincent.",
+      "status": "PATCH_CANDIDATE"
+    },
+    {
       "component": "BAZOR V24 Core/Room orchestration",
       "version": "2026.09.28.2",
       "generated_at": "2026-09-28",
