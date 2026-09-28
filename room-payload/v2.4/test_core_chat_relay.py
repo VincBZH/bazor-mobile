@@ -20,6 +20,7 @@ class FakeCore(BaseHTTPRequestHandler):
     offline = False
     fail_mammouth = False
     fail_ollama = False
+    notrack_configured = False
 
     def respond(self, body, status=200):
         raw = json.dumps(body).encode()
@@ -35,6 +36,8 @@ class FakeCore(BaseHTTPRequestHandler):
             "ollama": {"online": not self.offline, "models": ["qwen2.5-coder:7b"]},
             "mammouth": {"configured": self.configured,
                          "budget": {"blocked": False, "remaining_usd": 4}},
+            "notrack": {"configured": self.notrack_configured, "blocked": False,
+                        "daily_call_cap": 2, "remaining_calls": 2},
         })
 
     def do_POST(self):
@@ -51,6 +54,9 @@ class FakeCore(BaseHTTPRequestHandler):
                 else {"ok": True, "provider": "mammouth", "model": "mistral-small-3.2-24b-instruct",
                       "answer": "MAMMOUTH_OK", "http_status": 200}
             )
+        if body.get("target") == "notrack":
+            result["notrack"] = {"ok": True, "provider": "notrack", "model": "notrack-uncensored",
+                                 "answer": "NOTRACK_OK", "http_status": 200}
         self.respond(result)
 
     def log_message(self, *args):
@@ -80,6 +86,7 @@ class HTTPTests(unittest.TestCase):
         FakeCore.offline = False
         FakeCore.fail_mammouth = False
         FakeCore.fail_ollama = False
+        FakeCore.notrack_configured = False
 
     def post(self, payload):
         req = urllib.request.Request(self.url + "/api/chat", json.dumps(payload).encode(),
@@ -143,11 +150,21 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(body["mode"], "manual_handoff")
         self.assertEqual(FakeCore.chat_calls, [])
 
-    def test_no_auto_netrack_or_tor(self):
+    def test_notrack_requires_consent_and_configuration(self):
         status, body = self.post({"target": "notrack", "text": "Question publique"})
-        self.assertEqual(status, 400)
-        self.assertEqual(body["error"], "unsupported_provider")
+        self.assertEqual(status, 403)
+        self.assertEqual(body["error"], "external_consent_required")
         self.assertEqual(FakeCore.chat_calls, [])
+        status, body = self.post({"target": "notrack", "text": "Question publique", "allow_external": True})
+        self.assertEqual(status, 503)
+        self.assertEqual(body["error"], "notrack_not_configured_on_core")
+        self.assertEqual(FakeCore.chat_calls, [])
+        FakeCore.notrack_configured = True
+        status, body = self.post({"target": "notrack", "text": "Question publique", "allow_external": True})
+        self.assertEqual(status, 200)
+        self.assertEqual(body["results"][0]["provider"], "notrack")
+        self.assertEqual(body["results"][0]["model"], "notrack-uncensored")
+        self.assertEqual(FakeCore.chat_calls[0]["target"], "notrack")
 
     def test_offline_ollama_cannot_be_green(self):
         FakeCore.offline = True
