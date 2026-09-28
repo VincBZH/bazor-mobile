@@ -2,7 +2,7 @@
 
 One click starts only missing isolated BAZOR Core/Room services (8875/8768),
 reuses Ollama, tests a real local message and optionally one bounded Mammouth
-bridge call with a public arithmetic prompt. It NEVER installs/overwrites
+or NoTrack call with a synthetic prompt. It NEVER installs/overwrites
 existing services, models, credentials or local Git branches.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ WORK = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "BAZOR_ON
 CORE_PORT = 8875
 ROOM_PORT = 8768
 CORE_FILES = ("bazor_pc_relay_v3.py", "bazor_action_engine.py",
-              "bazor_security.py", "mammouth_client.py", "bazor_bridge.py")
+              "bazor_security.py", "mammouth_client.py", "notrack_client.py", "bazor_bridge.py")
 PREFERRED = ("llama3.2:3b", "qwen2.5-coder:7b", "mistral:latest")
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -104,6 +104,18 @@ def valid_room_reply(reply):
             and row.get("ok") is True and isinstance(row.get("model"), str)
             and bool(row["model"]) and isinstance(row.get("text"), str)
             and "BAZOR_LOCAL_OK" in row["text"])
+
+
+def valid_notrack_room_reply(reply):
+    if not isinstance(reply, dict) or reply.get("ok") is not True:
+        return False
+    rows = reply.get("results")
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+        return False
+    row = rows[0]
+    return (row.get("provider") == "notrack" and row.get("ok") is True
+            and row.get("model") == "notrack-uncensored"
+            and isinstance(row.get("text"), str) and bool(row["text"].strip()))
 
 
 def valid_github_ticket(issue):
@@ -211,15 +223,22 @@ def explicitly_authorized_mammouth_budget(env):
     return 0 < value < float("inf")
 
 
-def env_with_user_key():
+def env_with_user_keys():
     env = os.environ.copy()
-    if not env.get("MAMMOUTH_API_KEY") and os.name == "nt":
+    if os.name == "nt":
         try:
             import winreg
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
-                raw, _ = winreg.QueryValueEx(key, "MAMMOUTH_API_KEY")
-                if isinstance(raw, str) and raw.strip():
-                    env["MAMMOUTH_API_KEY"] = raw.strip()
+                for name in ("MAMMOUTH_API_KEY", "NOTRACK_API_KEY",
+                             "BAZOR_NOTRACK_ENABLED", "BAZOR_NOTRACK_DAILY_CALL_CAP"):
+                    if env.get(name):
+                        continue
+                    try:
+                        raw, _ = winreg.QueryValueEx(key, name)
+                    except OSError:
+                        continue
+                    if isinstance(raw, str) and raw.strip():
+                        env[name] = raw.strip()
         except (OSError, ImportError):
             pass
     return env
@@ -300,6 +319,14 @@ def selftest():
                              "BLOCKED:PROVIDER_RATE_LIMITED")
             self.assertEqual(classify_bridge_failure({"bridge": None}),
                              "BLOCKED:see_bridge_proof")
+        def test_notrack_reply_requires_real_provider_shape(self):
+            good = {"ok": True, "results": [{"provider": "notrack", "ok": True,
+                    "model": "notrack-uncensored", "text": "NOTRACK_OK"}]}
+            self.assertTrue(valid_notrack_room_reply(good))
+            self.assertFalse(valid_notrack_room_reply({"ok": True, "results": []}))
+            self.assertFalse(valid_notrack_room_reply({"ok": True, "results": [
+                {"provider": "ollama", "ok": True, "model": "notrack-uncensored", "text": "x"}]}))
+
         def test_paid_calls_need_explicit_positive_budget(self):
             self.assertFalse(explicitly_authorized_mammouth_budget({}))
             self.assertFalse(explicitly_authorized_mammouth_budget({"BAZOR_MAMMOUTH_BUDGET_USD": "0"}))
@@ -319,16 +346,21 @@ def selftest():
     return 0 if result.wasSuccessful() else 1
 
 
-def run(test_mammouth=False, test_github=True):
+def run(test_mammouth=False, test_notrack=False, test_github=True):
     report = {"tool": "BAZOR_ONECLICK", "date": dt.datetime.now().astimezone().isoformat(),
               "mode": "isolated_not_installation", "statuses": {},
               "evidence": {}, "limitations": ["GPT/Astra require authorized connector or manual handoff",
-                 "NoTrack/Tor are not certified and will not receive credentials"]}
+                 "Tor is not an AI provider and remains disconnected",
+                 "External providers are tested only after an explicit command-line opt-in"]}
     status = report["statuses"]
-    # Local-only runs never pass a Mammouth credential to a newly spawned Core.
-    env = env_with_user_key() if test_mammouth else os.environ.copy()
+    # Default runs strip external-provider credentials from newly spawned Core.
+    env = env_with_user_keys() if (test_mammouth or test_notrack) else os.environ.copy()
     if not test_mammouth:
         env.pop("MAMMOUTH_API_KEY", None)
+    if not test_notrack:
+        env.pop("NOTRACK_API_KEY", None)
+        env.pop("BAZOR_NOTRACK_ENABLED", None)
+        env.pop("BAZOR_NOTRACK_DAILY_CALL_CAP", None)
     try:
         import py_compile
         with tempfile.TemporaryDirectory(prefix="bazor_preflight_") as td:
@@ -430,8 +462,43 @@ def run(test_mammouth=False, test_github=True):
     status["gpt"] = (github_smoke(roomurl, sig, model) if test_github
                      else "SKIPPED:local_only_no_github")
     status["astra"] = "PENDING:authorized_connector"
-    status["notrack"] = "NOT_CONFIGURED"
     status["tor"] = "OPTIONAL_DISABLED"
+
+    if test_notrack:
+        h = probe(core_url + "/api/v1/health") or {}
+        nt = h.get("notrack") or {}
+        if not env.get("NOTRACK_API_KEY"):
+            status["notrack"] = "BLOCKED:key_missing"
+        elif str(env.get("BAZOR_NOTRACK_ENABLED", "")).strip().lower() not in ("1", "true", "yes", "on"):
+            status["notrack"] = "BLOCKED:explicit_enable_required"
+        else:
+            try:
+                cap = int(env.get("BAZOR_NOTRACK_DAILY_CALL_CAP", "0"))
+            except (TypeError, ValueError):
+                cap = 0
+            if cap <= 0:
+                status["notrack"] = "BLOCKED:explicit_positive_daily_cap_required"
+            elif not nt.get("configured"):
+                status["notrack"] = "BLOCKED:key_not_loaded_in_core"
+            elif nt.get("blocked"):
+                status["notrack"] = "BLOCKED:daily_cap_reached"
+            else:
+                try:
+                    nt_reply = local_json(roomurl + "/api/chat", {
+                        "target": "notrack",
+                        "text": "Reponds uniquement par le texte NOTRACK_BAZOR_OK.",
+                        "allow_external": True,
+                    }, timeout=120)
+                    status["notrack"] = ("PASS_REAL_NOTRACK" if valid_notrack_room_reply(nt_reply)
+                                         else "BLOCKED:invalid_provider_reply")
+                    if valid_notrack_room_reply(nt_reply):
+                        report["evidence"]["notrack_model"] = nt_reply["results"][0]["model"]
+                except urllib.error.HTTPError as exc:
+                    status["notrack"] = "BLOCKED:http_" + str(exc.code)
+                except Exception as exc:
+                    status["notrack"] = "BLOCKED:" + type(exc).__name__
+    else:
+        status["notrack"] = "PENDING:explicit_external_test_not_requested"
 
     if test_mammouth:
         h = probe(core_url + "/api/v1/health") or {}
@@ -465,10 +532,13 @@ def run(test_mammouth=False, test_github=True):
     else:
         status["mammouth"] = "PENDING:explicit_paid_test_not_requested"
     print("Mammouth: " + status.get("mammouth", "UNKNOWN"))
+    print("NoTrack: " + status.get("notrack", "UNKNOWN"))
     save_report(report)
     # Success of a free local test must not be reported as a failure solely
-    # because the optional external provider was not called.
-    return 0 if (not test_mammouth or status.get("mammouth") == "PASS_REAL_BRIDGE") else 1
+    # because optional external providers were not called.
+    mammouth_ok = (not test_mammouth or status.get("mammouth") == "PASS_REAL_BRIDGE")
+    notrack_ok = (not test_notrack or status.get("notrack") == "PASS_REAL_NOTRACK")
+    return 0 if mammouth_ok and notrack_ok else 1
 
 
 if __name__ == "__main__":
@@ -476,7 +546,9 @@ if __name__ == "__main__":
     parser.add_argument("--selftest", action="store_true")
     parser.add_argument("--test-mammouth", action="store_true",
                         help="Authorizes one bounded external Mammouth call with a synthetic prompt")
+    parser.add_argument("--test-notrack", action="store_true",
+                        help="Authorizes one bounded external NoTrack call; requires local enable, key and positive daily cap")
     parser.add_argument("--no-github", action="store_true",
                         help="Skip the optional GitHub #168 smoke; keep the run strictly local")
     args = parser.parse_args()
-    sys.exit(selftest() if args.selftest else run(args.test_mammouth, not args.no_github))
+    sys.exit(selftest() if args.selftest else run(args.test_mammouth, args.test_notrack, not args.no_github))
