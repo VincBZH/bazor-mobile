@@ -4,6 +4,66 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Session zero-cost: child BAZOR processes started by this launcher cannot use paid providers.
+$env:BAZOR_EXTERNAL_BUDGET = "0"
+$env:BAZOR_MAMMOUTH_BUDGET_USD = "0"
+$env:BAZOR_NOTRACK_ENABLED = "0"
+$env:MAMMOUTH_API_KEY = ""
+$env:NOTRACK_API_KEY = ""
+$env:OPENAI_API_KEY = ""
+
+function Test-LocalHttp([string]$Url,[int]$TimeoutSec=2) {
+  try {
+    $r = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec $TimeoutSec
+    return ($r.StatusCode -ge 200 -and $r.StatusCode -lt 300)
+  } catch { return $false }
+}
+
+function Start-BazorRoomSafe {
+  if (Test-LocalHttp 'http://127.0.0.1:8765/api/status' 1) {
+    return 'ALREADY_RUNNING'
+  }
+  if (Test-LocalHttp 'http://127.0.0.1:8765/' 1) {
+    return 'ALREADY_RUNNING'
+  }
+
+  $roomRoot = Join-Path $env:LOCALAPPDATA 'BazorAIROOM'
+  if (-not (Test-Path $roomRoot)) { return 'ROOM_ROOT_MISSING' }
+
+  $cmdCandidates = @(
+    'LANCER_BAZOR_AI_ROOM.cmd','LANCER_AI_ROOM.cmd','Lancer.cmd','start.cmd'
+  )
+  foreach ($name in $cmdCandidates) {
+    $p = Join-Path $roomRoot $name
+    if (Test-Path $p) {
+      Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c',('"' + $p + '"')) -WorkingDirectory $roomRoot -WindowStyle Hidden | Out-Null
+      for ($i=0; $i -lt 30; $i++) {
+        Start-Sleep -Milliseconds 500
+        if ((Test-LocalHttp 'http://127.0.0.1:8765/api/status' 1) -or
+            (Test-LocalHttp 'http://127.0.0.1:8765/' 1)) { return 'STARTED' }
+      }
+      return 'START_TIMEOUT'
+    }
+  }
+
+  foreach ($name in @('app.py','main.py','server.py')) {
+    $p = Join-Path $roomRoot $name
+    if (Test-Path $p) {
+      $pyRoom = Resolve-BazorPython
+      if (-not $pyRoom) { return 'PYTHON_MISSING' }
+      $args = @(); $args += @($pyRoom.Prefix); $args += $p
+      Start-Process -FilePath $pyRoom.Path -ArgumentList $args -WorkingDirectory $roomRoot -WindowStyle Hidden | Out-Null
+      for ($i=0; $i -lt 30; $i++) {
+        Start-Sleep -Milliseconds 500
+        if ((Test-LocalHttp 'http://127.0.0.1:8765/api/status' 1) -or
+            (Test-LocalHttp 'http://127.0.0.1:8765/' 1)) { return 'STARTED' }
+      }
+      return 'START_TIMEOUT'
+    }
+  }
+  return 'NO_LAUNCHER'
+}
+
 function Resolve-BazorPython {
   $patterns = 'bazor_console_hub\.py|bazor_pc_relay_v3\.py|bazor_mobile_gateway\.py|bazor_github_watcher\.py'
   try {
@@ -103,4 +163,37 @@ $args += '--centralize'
 Start-Process -FilePath $guiPython -ArgumentList $args -WorkingDirectory $Root | Out-Null
 
 Write-Output ("[OK] Hub BAZOR lance avec: " + $guiPython)
+
+# One-click recovery: the .CMD has already updated main before loading this file.
+# Start the existing Room only; no deployment or file replacement is performed.
+Start-Sleep -Seconds 2
+$roomState = Start-BazorRoomSafe
+$coreOk = (Test-LocalHttp 'http://127.0.0.1:8775/api/v1/health' 2) -or
+          (Test-LocalHttp 'http://127.0.0.1:8775/api/v1/security/status' 2)
+$roomOk = (Test-LocalHttp 'http://127.0.0.1:8765/api/status' 2) -or
+          (Test-LocalHttp 'http://127.0.0.1:8765/' 2)
+$ollamaOk = Test-LocalHttp 'http://127.0.0.1:11434/api/tags' 2
+
+$reportDir = Join-Path $env:LOCALAPPDATA 'BAZOR\Reports'
+New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+$public = Join-Path $reportDir 'oneclick_services_public.txt'
+@(
+  '[BAZOR-ONECLICK-SERVICES]',
+  ('CORE_8775: ' + $(if ($coreOk) {'OK'} else {'BLOCKED'})),
+  ('ROOM_8765: ' + $(if ($roomOk) {'OK'} else {'BLOCKED'})),
+  ('ROOM_START: ' + $roomState),
+  ('OLLAMA_11434: ' + $(if ($ollamaOk) {'OK'} else {'BLOCKED'})),
+  'PAID_AI_CALLS: ZERO',
+  'DEPLOYMENT: NONE'
+) | Set-Content -Path $public -Encoding UTF8
+
+try {
+  $gh = Get-Command 'gh.exe' -ErrorAction Stop
+  & $gh.Source auth status *> $null
+  if ($LASTEXITCODE -eq 0) {
+    & $gh.Source issue comment 171 --repo VincBZH/bazor-mobile --body-file $public *> $null
+  }
+} catch {}
+
+Write-Output ('[BAZOR] Room=' + $roomState + ' Core=' + $coreOk + ' Ollama=' + $ollamaOk)
 exit 0
