@@ -10,12 +10,35 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bazor_transactional_deployer as tx
 
 
 class TransactionalDeployerTests(unittest.TestCase):
+    def test_rollback_rename_retries_only_sharing_violation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, target = Path(temp) / "source", Path(temp) / "target"
+            source.write_text("old", encoding="utf-8")
+            real_replace = tx.os.replace
+            attempts = []
+            def replace_once_locked(src, dst):
+                attempts.append(1)
+                if len(attempts) == 1:
+                    error = PermissionError("synthetic sharing violation")
+                    error.winerror = 32
+                    raise error
+                real_replace(src, dst)
+            with mock.patch.object(tx.os, "replace", side_effect=replace_once_locked):
+                tx._replace_after_sharing_release(source, target)
+            self.assertEqual(len(attempts), 2)
+            self.assertEqual(target.read_text(encoding="utf-8"), "old")
+            source.write_text("new", encoding="utf-8")
+            with mock.patch.object(tx.os, "replace", side_effect=PermissionError("denied")):
+                with self.assertRaises(PermissionError):
+                    tx._replace_after_sharing_release(source, target)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

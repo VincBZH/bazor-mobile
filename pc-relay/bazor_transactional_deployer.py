@@ -111,6 +111,19 @@ def _copy_tree(src: Path, dst: Path):
     # Copytree follows no symlinks only after manifest already rejected them.
 
 
+def _replace_after_sharing_release(src: Path, dst: Path):
+    """Retry only transient Windows sharing violations during recovery."""
+    deadline = time.monotonic() + 3
+    while True:
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError as exc:
+            if getattr(exc, "winerror", None) not in (32, 33) or time.monotonic() >= deadline:
+                raise
+            time.sleep(.1)
+
+
 def _same_manifest(root: Path, expected: dict) -> bool:
     try:
         return _manifest(root) == expected
@@ -225,14 +238,14 @@ def rollback(txroot: Path, txid: str, reason: str = "failure") -> dict:
         # Move any promoted candidate aside, then restore previous generations.
         if pc.exists():
             if core_live.exists() and not fc.exists():
-                os.replace(core_live, fc)
+                _replace_after_sharing_release(core_live, fc)
             if not core_live.exists():
-                os.replace(pc, core_live)
+                _replace_after_sharing_release(pc, core_live)
         if pr.exists():
             if room_live.exists() and not fr.exists():
-                os.replace(room_live, fr)
+                _replace_after_sharing_release(room_live, fr)
             if not room_live.exists():
-                os.replace(pr, room_live)
+                _replace_after_sharing_release(pr, room_live)
         # Protected data must equal the snapshot unless the user modified it;
         # never overwrite a newer value during rollback.
         protected = _protected_hashes(room_live)

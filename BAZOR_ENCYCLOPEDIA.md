@@ -324,3 +324,9 @@ L’environnement des processus Core/Room redémarrés est reconstruit depuis un
 ## Test Windows de bout en bout — candidat 2026.09.28.4
 
 L’orchestrateur accepte des ports temporaires pour tester sur Windows deux vrais processus HTTP jetables, une bascule de dossiers et une restauration après réponse locale invalide. La CI vérifie aussi les JSON protégés, sans toucher Core 8775 ni Room 8765 du PC de Vincent. Les processus de test simulent Ollama ; ce n’est pas une preuve d’appel réel au fournisseur ni une autorisation de déploiement.
+
+
+<!-- BAZOR_VERSION:BAZOR V24 Windows rollback sharing release::2026.09.28.5 -->
+## Restauration Windows — partage temporaire (2026.09.28.5)
+
+Le test E2E jetable a parfois échoué sur `WinError 32` après arrêt d’un processus. Le backend attend désormais la fin de ses processus enfants ; le rollback réessaie un renommage pendant au plus trois secondes uniquement pour les erreurs de partage 32/33. Permission permanente et autre panne restent bloquantes avec `MANUAL_REQUIRED`. CI Windows à vérifier ; pas de déploiement actif.

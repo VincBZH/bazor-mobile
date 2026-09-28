@@ -296,9 +296,15 @@ class WindowsProcessBackend:
         deadline = time.monotonic() + max(1, min(int(timeout_seconds), 30))
         while time.monotonic() < deadline:
             if not self._is_alive(pid):
+                child = self._children.get(pid)
+                if child is not None:
+                    try:
+                        child.wait(timeout=max(.1, deadline-time.monotonic()))
+                    except subprocess.TimeoutExpired:
+                        return False
                 return True
             time.sleep(0.05)
-        return not self._is_alive(pid)
+        return False
 
     def _entrypoint(self, component: str, program_root: Path) -> Path:
         root = program_root.resolve(strict=True)

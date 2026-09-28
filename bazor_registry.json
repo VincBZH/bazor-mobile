@@ -1016,6 +1016,15 @@
   "encyclopedia_sync_required": true,
   "version_history": [
     {
+      "component": "BAZOR V24 Windows rollback sharing release",
+      "version": "2026.09.28.5",
+      "generated_at": "2026-09-28",
+      "artifact": null,
+      "changes": "Reap enfants arrêtés et réessayer uniquement WinError 32/33 pendant trois secondes dans la restauration.",
+      "tests": "Injection WinError 32 et refus hors liste ; CI Windows avec services jetables à relancer.",
+      "status": "PATCH_CANDIDATE"
+    },
+    {
       "component": "BAZOR V24 disposable Windows orchestration E2E",
       "version": "2026.09.28.4",
       "generated_at": "2026-09-28",
