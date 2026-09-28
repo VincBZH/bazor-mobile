@@ -17,6 +17,7 @@ ROOM = win.LaunchSpec("fixture.py", "/health")
 FIXTURE = r"""
 import json, os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+version="__VERSION__"
 kind=os.environ["BAZOR_COMPONENT"]
 port=int(os.environ["BAZOR_CORE_PORT"] if kind=="core" else os.environ["BAZOR_ROOM_PORT"])
 class H(BaseHTTPRequestHandler):
@@ -25,16 +26,17 @@ class H(BaseHTTPRequestHandler):
   self.send_header("Content-Length",str(len(b))); self.end_headers(); self.wfile.write(b)
  def do_GET(self):
   if kind=="core" and self.path=="/api/v1/health":
-   return self.sendj({"ok":True,"service":"BAZOR API","pid":os.getpid(),"ollama":{"online":True},
+   return self.sendj({"ok":True,"service":"BAZOR API","pid":os.getpid(),"version":version,"ollama":{"online":True},
     "external_secret_present":any(any(x in k.upper() for x in ("API_KEY","TOKEN","SECRET","PASSWORD","CREDENTIAL"))
                                   for k in os.environ),
     "budget":os.environ.get("BAZOR_EXTERNAL_BUDGET"),
     "mammouth_budget":os.environ.get("BAZOR_MAMMOUTH_BUDGET_USD")})
-  if kind=="room" and self.path=="/health": return self.sendj({"ok":True})
+  if kind=="room" and self.path=="/health": return self.sendj({"ok":True,"version":version})
   self.send_error(404)
  def do_POST(self):
   if kind=="core" and self.path=="/api/v1/chat":
-   return self.sendj({"ok":True,"ollama":{"ok":True,"provider":"ollama","answer":"BAZOR_LOCAL_OK"}})
+   answer="WRONG" if version=="bad" else "BAZOR_LOCAL_OK"
+   return self.sendj({"ok":True,"ollama":{"ok":True,"provider":"ollama","answer":answer}})
   self.send_error(404)
  def log_message(self,*a): pass
 ThreadingHTTPServer(("127.0.0.1",port),H).serve_forever()

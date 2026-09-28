@@ -8,10 +8,10 @@ import bazor_transactional_deployer as tx
 OLD_CORE, OLD_ROOM, NEW_CORE, NEW_ROOM = "a"*64, "b"*64, "c"*64, "d"*64
 
 class FakeBackend:
-    def __init__(self):
+    def __init__(self, core_port=orch.CORE_PORT, room_port=orch.ROOM_PORT):
         self.identities = {
-            orch.CORE_PORT: orch.ProcessIdentity("core",101,orch.CORE_PORT,OLD_CORE,True),
-            orch.ROOM_PORT: orch.ProcessIdentity("room",102,orch.ROOM_PORT,OLD_ROOM,True)}
+            core_port: orch.ProcessIdentity("core",101,core_port,OLD_CORE,True),
+            room_port: orch.ProcessIdentity("room",102,room_port,OLD_ROOM,True)}
         self.stopped, self.started, self.chat_ok = [], [], True
     def inspect_port(self, port): return self.identities.get(port)
     def stop_pid(self, pid):
@@ -31,7 +31,7 @@ class FakeBackend:
         return pid
     def health(self, component, port): return True
     def local_chat(self, core_port, ollama_port, prompt):
-        return self.chat_ok and prompt == orch.LOCAL_PROBE
+        return self.chat_ok and prompt == orch.LOCAL_PROBE and core_port in self.identities
 
 class OrchestratorTests(unittest.TestCase):
     def setUp(self):
@@ -57,6 +57,16 @@ class OrchestratorTests(unittest.TestCase):
     def test_success(self):
         b=FakeBackend(); out=self.run_it(b)
         self.assertTrue(out["ok"]); self.assertEqual(b.stopped,[102,101])
+    def test_disposable_ports_do_not_call_production_core(self):
+        cp,rp=18875,18765
+        b=FakeBackend(cp,rp)
+        old=(orch.ExpectedService("core",cp,OLD_CORE),
+             orch.ExpectedService("room",rp,OLD_ROOM))
+        new=(orch.ExpectedService("core",cp,NEW_CORE),
+             orch.ExpectedService("room",rp,NEW_ROOM))
+        out=orch.promote_with_runtime_verification(
+            self.txroot,"tx-test",self.auth,b,old,new)
+        self.assertTrue(out["ok"])
     def test_identity_mismatch_refuses_before_stop(self):
         b=FakeBackend()
         b.identities[orch.CORE_PORT]=orch.ProcessIdentity("core",101,orch.CORE_PORT,"f"*64,True)

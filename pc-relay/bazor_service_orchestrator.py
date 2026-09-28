@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
+import time
 import bazor_transactional_deployer as deployer
 
 CORE_PORT, ROOM_PORT, OLLAMA_PORT = 8775, 8765, 11434
@@ -82,7 +83,7 @@ def _restore_after_stop_failure(backend: ProcessBackend, captured, roots) -> boo
                 return False
             if not backend.health(component, old.port):
                 return False
-        return backend.local_chat(CORE_PORT, OLLAMA_PORT, LOCAL_PROBE)
+        return backend.local_chat(captured["core"].port, OLLAMA_PORT, LOCAL_PROBE)
     except Exception:
         return False
 
@@ -91,22 +92,27 @@ def _start_and_verify(backend, core_root, room_root, expected):
     for component, root in (("core", core_root), ("room", room_root)):
         item = by_name[component]
         pid = backend.start_service(component, root, item.port)
+        deadline = time.monotonic() + 15
         identity = backend.inspect_port(item.port)
+        while identity is None and time.monotonic() < deadline:
+            time.sleep(0.1)
+            identity = backend.inspect_port(item.port)
         if not _verified(identity, item) or identity is None or identity.pid != pid:
             raise RuntimeError("started_service_identity_mismatch")
         if not backend.health(component, item.port):
             raise RuntimeError("service_health_failed")
         started[component] = pid
-    if not backend.local_chat(CORE_PORT, OLLAMA_PORT, LOCAL_PROBE):
+    if not backend.local_chat(by_name["core"].port, OLLAMA_PORT, LOCAL_PROBE):
         raise RuntimeError("local_chat_failed")
     return started
 
-def _stop_started(backend, pids):
+def _stop_started(backend, pids, expected):
+    by_name = {item.component: item for item in expected}
     for component in ("room", "core"):
         pid = pids.get(component)
         if not pid:
             continue
-        port = ROOM_PORT if component == "room" else CORE_PORT
+        port = by_name[component].port
         identity = backend.inspect_port(port)
         if identity is not None and identity.pid == pid:
             backend.stop_pid(pid)
@@ -154,7 +160,7 @@ def promote_with_runtime_verification(
         return {"ok": True, "phase": "RUNTIME_VERIFIED", "rollback_ok": False,
                 "old_pids_stopped": 2, "new_pids_started": 2}
     except Exception:
-        _stop_started(backend, promoted)
+        _stop_started(backend, promoted, expected_new)
         _stop_verified_generation(backend, expected_new)
         try:
             rb = rollback_fn(txroot, txid, "runtime_verification_failed")

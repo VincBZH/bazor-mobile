@@ -318,3 +318,9 @@ Principes ajoutés : versions séparées (app/protocole/registry/contrat), ports
 ## Adaptateur Windows — correctif candidat 2026.09.28.3
 
 L’environnement des processus Core/Room redémarrés est reconstruit depuis une liste blanche de chemins système, puis les ports loopback et le budget externe nul sont imposés. Le paramètre réellement lu par Mammouth (`BAZOR_MAMMOUTH_BUDGET_USD`) est fixé à zéro. Les sondes localhost ignorent le proxy système et le contrôle Ollama exige une réponse exacte. Tests de contrat locaux ; processus Windows jetables à vérifier en CI. Aucun déploiement sur le PC de Vincent.
+
+
+<!-- BAZOR_VERSION:BAZOR V24 disposable Windows orchestration E2E::2026.09.28.4 -->
+## Test Windows de bout en bout — candidat 2026.09.28.4
+
+L’orchestrateur accepte des ports temporaires pour tester sur Windows deux vrais processus HTTP jetables, une bascule de dossiers et une restauration après réponse locale invalide. La CI vérifie aussi les JSON protégés, sans toucher Core 8775 ni Room 8765 du PC de Vincent. Les processus de test simulent Ollama ; ce n’est pas une preuve d’appel réel au fournisseur ni une autorisation de déploiement.

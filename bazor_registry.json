@@ -1016,6 +1016,15 @@
   "encyclopedia_sync_required": true,
   "version_history": [
     {
+      "component": "BAZOR V24 disposable Windows orchestration E2E",
+      "version": "2026.09.28.4",
+      "generated_at": "2026-09-28",
+      "artifact": null,
+      "changes": "Ports de test variables et lancement/arrêt de vrais processus Windows jetables autour de la transaction ; validation et rollback sur réponse locale invalide.",
+      "tests": "Contrats locaux PASS ; E2E Windows lancé par CI, aucune installation sur PC de Vincent.",
+      "status": "PATCH_CANDIDATE"
+    },
+    {
       "component": "BAZOR V24 Windows process backend",
       "version": "2026.09.28.3",
       "generated_at": "2026-09-28",
