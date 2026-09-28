@@ -136,6 +136,11 @@ def promote_with_runtime_verification(
     rollback_fn: Callable[..., dict] = deployer.rollback,
 ) -> dict:
     """Use the one-time local authorization; never expose this to GitHub."""
+    try:
+        deployer.validate_authorization(txroot, txid, auth_path)
+    except Exception:
+        return {"ok": False, "phase": "AUTHORIZATION_REFUSED",
+                "rollback_ok": False, "old_services_restored": False}
     captured = _capture(backend, expected_old)
     try:
         _stop_captured(backend, captured)
@@ -185,6 +190,7 @@ def promote_with_runtime_verification(
 def public_summary(result: dict) -> str:
     phase = result.get("phase")
     if phase not in {"RUNTIME_VERIFIED", "ROLLED_BACK", "PRECOMMIT_RECOVERED",
+                     "AUTHORIZATION_REFUSED",
                      "MANUAL_REQUIRED"}:
         phase = "MANUAL_REQUIRED"
     return "\n".join(("[BAZOR-SERVICE-ORCHESTRATION]", "PHASE: " + phase,

@@ -61,11 +61,12 @@ class WindowsOrchestrationE2E(unittest.TestCase):
             time.sleep(.1)
         self.fail("disposable_listener_missing")
 
-    def run_transaction(self, version):
+    def run_transaction(self, version, authorize=True):
         for root in (self.cc, self.cr):
             (root / "fixture.py").write_text(FIXTURE.replace("__VERSION__", version), encoding="utf-8")
         tx.prepare(self.core, self.room, self.cc, self.cr, self.txroot, "fixture")
-        tx.issue_authorization(self.txroot, "fixture", self.auth)
+        if authorize:
+            tx.issue_authorization(self.txroot, "fixture", self.auth)
         digest = win.sha256_file(Path(sys.executable))
         expected = (orch.ExpectedService("core", self.cp, digest),
                     orch.ExpectedService("room", self.rp, digest))
@@ -79,6 +80,19 @@ class WindowsOrchestrationE2E(unittest.TestCase):
         self.assertEqual(self.backend._health_json("room", self.rp)["version"], "new")
         self.assertTrue((self.room / "chat_history.json").exists())
         self.assertTrue(self.core.with_name("Core.previous.fixture").is_dir())
+
+    def test_missing_authorization_does_not_stop_real_windows_processes(self):
+        before_core = self.backend.inspect_port(self.cp)
+        before_room = self.backend.inspect_port(self.rp)
+        result = self.run_transaction("new", authorize=False)
+        self.assertEqual(result["phase"], "AUTHORIZATION_REFUSED")
+        after_core = self.backend.inspect_port(self.cp)
+        after_room = self.backend.inspect_port(self.rp)
+        self.assertEqual(after_core.pid, before_core.pid)
+        self.assertEqual(after_room.pid, before_room.pid)
+        self.assertEqual(self.backend._health_json("core", self.cp)["version"], "old")
+        self.assertEqual(self.backend._health_json("room", self.rp)["version"], "old")
+        self.assertEqual(tx._state(self.txroot, "fixture")["phase"], "PREPARED")
 
     def test_real_disposable_chat_failure_restores_old(self):
         result = self.run_transaction("bad")

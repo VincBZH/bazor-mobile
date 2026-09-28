@@ -79,6 +79,20 @@ class TransactionalDeployerTests(unittest.TestCase):
             tx.commit(self.txroot, "tx-test", self.auth)
         self.assertEqual((self.live_core / "app.py").read_text(), "old core")
 
+    def test_validate_authorization_is_read_only_and_rejects_tampering(self):
+        self.prepare()
+        self.authorize()
+        before = self.auth.read_bytes()
+        self.assertTrue(tx.validate_authorization(
+            self.txroot, "tx-test", self.auth))
+        self.assertEqual(self.auth.read_bytes(), before)
+        self.assertEqual(tx._state(self.txroot, "tx-test")["phase"], "PREPARED")
+        obj = json.loads(self.auth.read_text(encoding="utf-8"))
+        obj["manifest_id"] = "0" * 64
+        self.auth.write_text(json.dumps(obj), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "authorization_invalid"):
+            tx.validate_authorization(self.txroot, "tx-test", self.auth)
+
     def test_authorization_is_one_time(self):
         self.prepare()
         self.authorize()

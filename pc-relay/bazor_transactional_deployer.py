@@ -212,10 +212,13 @@ def issue_authorization(txroot: Path, txid: str, auth_path: Path, ttl: int = AUT
     return auth
 
 
-def _consume_auth(txroot: Path, st: dict, auth_path: Path):
+def _validated_auth(st: dict, auth_path: Path) -> dict:
     if not auth_path.is_file():
         raise ValueError("authorization_missing")
-    auth = json.loads(auth_path.read_text(encoding="utf-8"))
+    try:
+        auth = json.loads(auth_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise ValueError("authorization_invalid")
     now = int(time.time())
     ok = (auth.get("version") == 1 and auth.get("txid") == st["txid"]
           and auth.get("manifest_id") == st["manifest_id"]
@@ -224,6 +227,20 @@ def _consume_auth(txroot: Path, st: dict, auth_path: Path):
           and isinstance(auth.get("nonce"), str) and len(auth["nonce"]) >= 16)
     if not ok:
         raise ValueError("authorization_invalid")
+    return auth
+
+
+def validate_authorization(txroot: Path, txid: str, auth_path: Path) -> bool:
+    """Verify the local authorization without consuming or changing it."""
+    st = _state(txroot, txid)
+    if st["phase"] != "PREPARED":
+        raise ValueError("not_prepared")
+    _validated_auth(st, auth_path)
+    return True
+
+
+def _consume_auth(txroot: Path, st: dict, auth_path: Path):
+    _validated_auth(st, auth_path)
     # One-time: remove before any live rename.
     auth_path.unlink()
     _save(txroot, st, "AUTHORIZED")
