@@ -70,8 +70,8 @@ byId('chatBtn').addEventListener('click', async () => {
   const prompt = byId('chatPrompt').value.trim();
   const target = byId('chatTarget').value;
   if (!prompt) { byId('chatResult').textContent = 'Écris d’abord ta demande.'; return; }
-  if ((target === 'mammouth' || target === 'both') && !byId('allowExternal').checked) {
-    byId('chatResult').textContent = "Coche l’autorisation avant un appel externe à Mammouth.";
+  if ((target === 'mammouth' || target === 'notrack' || target === 'both') && !byId('allowExternal').checked) {
+    byId('chatResult').textContent = "Coche l’autorisation avant un appel externe.";
     return;
   }
   byId('chatBtn').disabled = true;
