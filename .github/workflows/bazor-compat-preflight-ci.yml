@@ -12,6 +12,8 @@ on:
       - "BAZOR_SIMULER_RESTAURATION_1_CLIC.cmd"
       - "pc-relay/bazor_rollback_rehearsal.py"
       - "pc-relay/test_rollback_rehearsal.py"
+      - "pc-relay/bazor_transactional_deployer.py"
+      - "pc-relay/test_transactional_deployer.py"
       - "pc-relay/bazor_transaction_sandbox.py"
       - "pc-relay/test_transaction_sandbox.py"
       - ".github/workflows/bazor-compat-preflight-ci.yml"
@@ -74,6 +76,8 @@ jobs:
           MAMMOUTH_API_KEY: ""
           OPENAI_API_KEY: ""
         run: python -m unittest discover -s pc-relay -p 'test_rollback_simulation.py' -v
+      - name: Transactional deployer syntax
+        run: python -m py_compile pc-relay/bazor_transactional_deployer.py pc-relay/test_transactional_deployer.py
       - name: Temp-only failure/rollback tests, no production writes
         env:
           MAMMOUTH_API_KEY: ""
@@ -95,3 +99,8 @@ jobs:
         run: |
           python -m unittest discover -s pc-relay -p 'test_transaction_sandbox.py' -v
           python pc-relay/bazor_transaction_sandbox.py --simulate-only
+      - name: Transactional deployer fault matrix (temporary trees only)
+        env:
+          MAMMOUTH_API_KEY: ""
+          OPENAI_API_KEY: ""
+        run: python -m unittest discover -s pc-relay -p 'test_transactional_deployer.py' -v
