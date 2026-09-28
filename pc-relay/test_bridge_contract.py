@@ -253,6 +253,13 @@ class WatcherRegressionTests(unittest.TestCase):
         exec(compile(ast.Module(body=[fn],type_ignores=[]),str(path),"exec"),scope)
         self.assertEqual(scope[fn.name](),core.CORE_RUNTIME_SIGNATURE)
 
+    def test_legacy_core_restart_is_fail_closed_by_default(self):
+        path=Path(__file__).with_name("bazor_github_watcher.py")
+        source=path.read_text(encoding="utf-8")
+        self.assertIn("BAZOR_WATCHER_ALLOW_LEGACY_CORE_RESTART", source)
+        self.assertIn("transactional deployment required", source)
+        self.assertIn("if not _legacy_core_restart_allowed():", source)
+
     def test_filebus_rejects_path_traversal_and_unknown_provider(self):
         # Extract only the pure validation function: importing watcher starts its daemon.
         path=Path(__file__).with_name("bazor_github_watcher.py")
