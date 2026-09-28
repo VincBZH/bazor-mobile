@@ -51,16 +51,22 @@ def _usage_file():
 def usage_state():
     path = _usage_file()
     if not path.exists():
-        return {"day": _day_key(), "attempted_calls": 0, "successful_calls": 0}
+        return {"day": _day_key(), "attempted_calls": 0, "successful_calls": 0,
+                "integrity": "OK"}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return {
-            "day": _day_key(),
-            "attempted_calls": int(data.get("attempted_calls", 0) or 0),
-            "successful_calls": int(data.get("successful_calls", 0) or 0),
-        }
+        if not isinstance(data, dict) or data.get("day") != _day_key():
+            raise ValueError("invalid_usage_day")
+        attempted = int(data["attempted_calls"])
+        successful = int(data["successful_calls"])
+        if attempted < 0 or successful < 0 or successful > attempted:
+            raise ValueError("invalid_usage_counts")
+        return {"day": _day_key(), "attempted_calls": attempted,
+                "successful_calls": successful, "integrity": "OK"}
     except Exception:
-        return {"day": _day_key(), "attempted_calls": 0, "successful_calls": 0}
+        # A damaged counter must never restore external-call allowance.
+        return {"day": _day_key(), "attempted_calls": daily_call_cap(),
+                "successful_calls": 0, "integrity": "BLOCKED"}
 
 
 def status():
@@ -76,23 +82,49 @@ def status():
         "attempted_calls": attempted,
         "successful_calls": state["successful_calls"],
         "remaining_calls": max(0, cap - attempted),
-        "blocked": (not configured()) or cap <= 0 or attempted >= cap,
+        "blocked": (not configured()) or cap <= 0 or attempted >= cap
+                   or state["integrity"] != "OK",
+        "usage_integrity": state["integrity"],
         "day": _day_key(),
     }
+
+
+def _write_usage(state):
+    path = _usage_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(
+        path.name + f".{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8") as output:
+            json.dump(state, output, ensure_ascii=False, indent=2)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _record_attempt():
     with _USAGE_LOCK:
         state = usage_state()
+        if state["integrity"] != "OK":
+            raise RuntimeError("notrack_usage_integrity")
         state["attempted_calls"] += 1
-        _usage_file().write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        _write_usage({key: state[key] for key in
+                      ("day", "attempted_calls", "successful_calls")})
 
 
 def _mark_last_attempt_success():
     with _USAGE_LOCK:
         state = usage_state()
+        if state["integrity"] != "OK":
+            raise RuntimeError("notrack_usage_integrity")
         state["successful_calls"] += 1
-        _usage_file().write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        _write_usage({key: state[key] for key in
+                      ("day", "attempted_calls", "successful_calls")})
 
 
 def _redact_text(value, limit=1200):

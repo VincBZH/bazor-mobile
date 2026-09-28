@@ -90,6 +90,14 @@ class NoTrackClientTests(unittest.TestCase):
         self.assertEqual(result["provider_error_type"], "invalid_key")
         self.assertNotIn("TEST-SECRET", json.dumps(result))
 
+    def test_corrupt_usage_counter_fails_closed_without_network(self):
+        notrack_client._usage_file().write_text("{broken", encoding="utf-8")
+        with mock.patch("notrack_client.urllib.request.urlopen") as request:
+            result = notrack_client.chat("hello")
+        self.assertEqual(result["error"], "notrack_daily_cap_reached")
+        self.assertEqual(result["status"]["usage_integrity"], "BLOCKED")
+        request.assert_not_called()
+
     def test_local_daily_cap_blocks_third_attempt(self):
         ok = {"model": "notrack-uncensored", "choices": [{"message": {"content": "OK"}}]}
         with mock.patch("notrack_client.urllib.request.urlopen", return_value=FakeResponse(ok)):
