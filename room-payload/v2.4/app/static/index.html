@@ -48,17 +48,18 @@
       <select id="chatTarget">
         <option value="ollama">Ollama (local)</option>
         <option value="mammouth">Mammouth (externe)</option>
+        <option value="notrack">NoTrack (externe)</option>
         <option value="both">Ollama + Mammouth</option>
         <option value="gpt">Préparer pour GPT</option>
         <option value="astra">Préparer pour Astra</option>
       </select>
     </label>
-    <label class="consent"><input type="checkbox" id="allowExternal"> J'autorise cet envoi à Mammouth et les coûts éventuels.</label>
+    <label class="consent"><input type="checkbox" id="allowExternal"> J'autorise cet envoi au fournisseur externe choisi (Mammouth ou NoTrack) et les coûts éventuels.</label>
     <button id="chatBtn" type="button">Envoyer</button>
     <button id="copyGPT" type="button">Copier le message pour GPT</button>
   </div>
   <pre id="chatResult" class="chatResult" aria-live="polite">Aucun message envoyé.</pre>
-  <small class="disclaimer">NoTrack non certifié ; DuckDuckGo et Tor ne sont pas des modèles d'IA et restent déconnectés.</small>
+  <small class="disclaimer">NoTrack est intégré mais reste non certifié par un appel réel sur ce PC ; DuckDuckGo et Tor ne sont pas des modèles d'IA et restent déconnectés.</small>
 </section>
 
 <section class="panel">
