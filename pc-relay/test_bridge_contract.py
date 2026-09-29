@@ -243,6 +243,22 @@ class BridgeTests(unittest.TestCase):
 
 
 class WatcherRegressionTests(unittest.TestCase):
+    def test_watcher_console_survives_non_cp1252_text(self):
+        path=Path(__file__).with_name("bazor_github_watcher.py")
+        source=ast.parse(path.read_text(encoding="utf-8"))
+        function=next(
+            node for node in source.body
+            if isinstance(node,ast.FunctionDef) and node.name=="_configure_console_stream"
+        )
+        scope={}
+        exec(compile(ast.Module(body=[function],type_ignores=[]),str(path),"exec"),scope)
+        raw=io.BytesIO()
+        stream=io.TextIOWrapper(raw,encoding="cp1252",errors="strict")
+        self.assertTrue(scope["_configure_console_stream"](stream))
+        print("NoTrack → Ollama",file=stream)
+        stream.flush()
+        self.assertIn(b"\\u2192",raw.getvalue())
+
     def test_watcher_core_signatures_match(self):
         import hashlib
         import bazor_pc_relay_v3 as core
