@@ -9,6 +9,8 @@ La veille s'installe pour le compte Windows actuel et démarre **à l'ouverture 
 
 La console du **navigateur** et les fenêtres de commande déjà lancées ne peuvent pas être interceptées ou masquées rétroactivement par cette veille. Une erreur qui n'existe que dans la console du navigateur nécessitera une modification de l'interface Studio à partir de son code installé. Les vignettes vidéo demandent une sortie achevée et un `ffmpeg` déjà présent. Aucune qualité vidéo n'est garantie par la seule veille.
 
+Si l'observateur Studio déjà fourni avec BAZOR écrit un `latest.json` récent dans le même dossier, la fenêtre compacte réutilise son état et évite de sonder les mêmes jobs une seconde fois.
+
 Le rapport distingue « répond sur son port », « fichier présent », « déclaré installé » et « usage réel dans BAZOR ». La présence d'un modèle Ollama ou d'une application ChatGPT ne prouve pas qu'elle est appelée par BAZOR. L'inventaire des processus est un instantané après connexion, complété par les entrées de démarrage et les événements antivirus accessibles.
 
 Pour retirer la veille : `RETIRER_BAZOR_VEILLE.cmd`. L'entrée de démarrage est supprimée et l'instance s'arrête ; les rapports restent dans Documents. La veille refuse de retirer une entrée qui ne pointe pas sur son propre fichier.
