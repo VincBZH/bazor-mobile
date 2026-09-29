@@ -111,16 +111,19 @@ def studio_jobs(data: object) -> list[dict]:
             continue
         params = row.get("params") if isinstance(row.get("params"), dict) else {}
         prompt = params.get("prompt") or row.get("prompt") or ""
+        def numeric(key):
+            value = params.get(key)
+            return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
         item = {
             "id": clean(row.get("id") or row.get("job_id"), 90),
             "prompt_id": clean(row.get("prompt_id"), 90),
             "state": clean(row.get("status") or row.get("state"), 90),
             "mode": clean(params.get("mode") or row.get("mode"), 90),
-            "width": params.get("width"),
-            "height": params.get("height"),
-            "frames": params.get("frames") or params.get("length"),
-            "steps": params.get("steps"),
-            "seed": params.get("seed"),
+            "width": numeric("width"),
+            "height": numeric("height"),
+            "frames": numeric("frames") or numeric("length"),
+            "steps": numeric("steps"),
+            "seed": numeric("seed"),
             "created": clean(row.get("created_at") or row.get("created"), 90),
             "error": clean(row.get("error") or row.get("exception") or row.get("detail"), 900),
             **preview(prompt),
@@ -165,7 +168,8 @@ def comfy_history(data: object) -> list[dict]:
             continue
         status = value.get("status") if isinstance(value.get("status"), dict) else {}
         errors = []
-        for message in status.get("messages", [])[-10:]:
+        messages = status.get("messages")
+        for message in (messages[-10:] if isinstance(messages, list) else []):
             if isinstance(message, (list, tuple)) and len(message) >= 2 and "error" in str(message[0]).lower():
                 payload = message[1] if isinstance(message[1], dict) else {}
                 errors.append(clean(payload.get("exception_message") or payload.get("message") or message[0], 900))
@@ -174,7 +178,8 @@ def comfy_history(data: object) -> list[dict]:
             if not isinstance(node, dict):
                 continue
             for kind in ("images", "videos", "gifs"):
-                for asset in (node.get(kind) or [])[:4]:
+                assets = node.get(kind)
+                for asset in (assets[:4] if isinstance(assets, list) else []):
                     if isinstance(asset, dict):
                         outputs.append({
                             "kind": kind,
