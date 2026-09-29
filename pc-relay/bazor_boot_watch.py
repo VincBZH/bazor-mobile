@@ -522,6 +522,40 @@ def poll_studio(seen: dict) -> list[dict]:
     return events
 
 
+def existing_observer_feed(seen: dict) -> list[dict] | None:
+    """Reuse the dedicated Studio observer if another BAZOR supervisor already runs it."""
+    file = STUDIO_LOGS / "latest.json"
+    try:
+        if time.time() - file.stat().st_mtime > 75:
+            return None
+        data = json.loads(file.read_text(encoding="utf-8"))
+        jobs = data.get("jobs", [])
+        events = []
+        if isinstance(jobs, list) and jobs:
+            job = jobs[-1]
+            if isinstance(job, dict):
+                key = str(job.get("id")) + "|" + str(job.get("state")) + "|" + str(job.get("error")) + "|" + str(data.get("latest_thumbnail"))
+                if seen.get("observer_job") != key:
+                    seen["observer_job"] = key
+                    events.append({"source": "Observateur Studio", "job": clean(job.get("id"), 90),
+                                   "état": clean(job.get("state"), 90),
+                                   "prompt": clean(job.get("prompt_preview"), 180),
+                                   "erreur": clean(job.get("error"), 500),
+                                   "vignette": clean(data.get("latest_thumbnail"), 500),
+                                   "réglages_vidéo": {k: job.get(k) for k in ("mode", "width", "height", "frames", "steps", "seed")}})
+        errors = data.get("console_errors", [])
+        if isinstance(errors, list) and errors:
+            last = errors[-1]
+            if isinstance(last, dict):
+                message = clean(last.get("message"), 500)
+                if message and seen.get("observer_error") != message:
+                    seen["observer_error"] = message
+                    events.append({"source": "Observateur Studio / logs", "erreur": message})
+        return events
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
 def install() -> int:
     if os.name != "nt":
         print("Installation uniquement sous Windows.")
@@ -631,8 +665,10 @@ def watch(show_ui: bool = True) -> int:
             if STOP_FLAG.exists():
                 return
             try:
-                for event in poll_studio(seen):
-                    append_studio(event)
+                observer_events = existing_observer_feed(seen)
+                for event in (observer_events if observer_events is not None else poll_studio(seen)):
+                    if observer_events is None:
+                        append_studio(event)
                     if event.get("job"):
                         latest_job = event
                     messages.put(f"Studio : {event.get('état') or event.get('erreur') or 'nouvelle activité'}")
@@ -719,6 +755,16 @@ def watch(show_ui: bool = True) -> int:
                         preview_image.configure(image=photo)
                         preview_image.image = photo
                     except tk.TclError:
+                        pass
+                elif path.lower().endswith((".jpg", ".jpeg", ".webp")) and Path(path).is_file():
+                    try:
+                        from PIL import Image, ImageTk
+                        with Image.open(path) as source:
+                            source.thumbnail((126, 126))
+                            photo = ImageTk.PhotoImage(source.copy())
+                        preview_image.configure(image=photo)
+                        preview_image.image = photo
+                    except (ImportError, OSError, ValueError, tk.TclError):
                         pass
             window.after(1000, tick)
         window.protocol("WM_DELETE_WINDOW", window.withdraw)
