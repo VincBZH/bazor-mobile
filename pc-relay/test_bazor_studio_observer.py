@@ -5,9 +5,33 @@ import unittest
 from unittest.mock import patch
 
 import bazor_studio_observer as observer
+import bazor_studio_trace_bridge as trace_bridge
 
 
 class ObserverTests(unittest.TestCase):
+    def test_public_trace_never_contains_private_content(self):
+        private = "NomSabrinaConfidentiel secret-prompt-unique"
+        report = {
+            "phase": private, "task_id": private, "time": private, "watcher_head": private,
+            "ports": [{"port": 8191, "command": private}],
+            "studio_probes": {"/api/jobs": {"ok": True, "http": 200, "detail": private}},
+            "studio_jobs": [{"status": "failed", "prompt": private, "output": private},
+                            {"status": private, "prompt": private}],
+            "comfy": {"recent": [{"status": "error", "nodes": [{"inputs": {"text": private}}],
+                                   "outputs": [{"filename": private}]}]},
+            "files": {"workflows.py": {"sha256": "a" * 64, "hits": [{"text": private}]}},
+            "frontend_context": [{"lines": [{"text": private}]}],
+            "logs": [{"name": private, "tail": private}],
+            "task_diag": [{"body": private}],
+        }
+        published = trace_bridge._markdown(report)
+        self.assertNotIn(private, published)
+        self.assertNotIn("NomSabrina", published)
+        self.assertNotIn("secret-prompt", published)
+        self.assertIn('"studio_jobs_count": 2', published)
+        self.assertIn('"failed": 1', published)
+        self.assertIn('"other": 1', published)
+
     def test_existing_services_and_log_error_are_correlated_without_full_prompt(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
