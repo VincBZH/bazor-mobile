@@ -182,19 +182,27 @@ class HTTPTests(unittest.TestCase):
         self.assertIn("NOTRACK_OK", FakeCore.chat_calls[1]["text"])
         self.assertIn("STRATEGIE NOTRACK", FakeCore.chat_calls[1]["text"])
 
-    def test_notrack_failure_stops_before_ollama(self):
+    def test_notrack_failure_falls_back_to_ollama_without_false_strategy(self):
         FakeCore.notrack_configured = True
         FakeCore.fail_notrack = True
         status, body = self.post({"target": "notrack_ollama", "text": "Résous ce problème", "allow_external": True})
-        self.assertEqual(status, 502)
-        self.assertFalse(body["ok"])
-        self.assertEqual([c["target"] for c in FakeCore.chat_calls], ["notrack"])
+        self.assertEqual(status, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["status"], "fallback_complete")
+        self.assertEqual(body["strategist"], "notrack_unavailable")
+        self.assertEqual(body["delegated_to"], "ollama")
+        self.assertEqual([c["target"] for c in FakeCore.chat_calls], ["notrack", "ollama"])
+        self.assertIn("NOTRACK INDISPONIBLE", FakeCore.chat_calls[1]["text"])
+        self.assertNotIn("STRATEGIE NOTRACK", FakeCore.chat_calls[1]["text"])
 
-    def test_notrack_then_ollama_requires_notrack_configuration(self):
+    def test_notrack_missing_configuration_falls_back_to_ollama(self):
         status, body = self.post({"target": "notrack_ollama", "text": "Question", "allow_external": True})
-        self.assertEqual(status, 503)
-        self.assertEqual(body["error"], "notrack_not_configured_on_core")
-        self.assertEqual(FakeCore.chat_calls, [])
+        self.assertEqual(status, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["status"], "fallback_complete")
+        self.assertEqual(body["results"][0]["error"], "notrack_not_configured_on_core")
+        self.assertEqual([c["target"] for c in FakeCore.chat_calls], ["ollama"])
+        self.assertIn("NOTRACK INDISPONIBLE", FakeCore.chat_calls[0]["text"])
 
     def test_offline_ollama_cannot_be_green(self):
         FakeCore.offline = True
