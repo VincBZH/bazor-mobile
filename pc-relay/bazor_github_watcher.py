@@ -1,5 +1,18 @@
 import json, subprocess, time, urllib.request, os, sys, re, concurrent.futures, zipfile, hashlib
 
+def _configure_console_stream(stream):
+    """Keep Windows watcher diagnostics alive when text contains non-CP1252 characters."""
+    try:
+        if stream is not None and hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
+            return True
+    except (AttributeError, OSError, ValueError):
+        pass
+    return False
+
+for _console_stream in (sys.stdout, sys.stderr):
+    _configure_console_stream(_console_stream)
+
 REPO="VincBZH/bazor-mobile"
 COORD_REPO="VincBZH/projetWII-ai-relay"
 CORE="http://127.0.0.1:8775/api/v1/chat"
