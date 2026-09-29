@@ -404,56 +404,86 @@ def build_report(issue_number, task_id, phase):
 
 
 def _markdown(report):
+    """Only allow public, non-content metadata in the GitHub issue comment.
+
+    A local trace may contain prompts, ComfyUI text inputs, code snippets or log
+    lines. Redaction patterns cannot reliably make arbitrary user text public.
+    Therefore this formatter selects fields instead of cleaning the raw report.
+    """
+    def count_status(rows, field):
+        counts = {}
+        allowed = {"pending", "queued", "running", "success", "completed", "complete",
+                   "error", "failed", "failure", "interrupted", "unknown"}
+        for row in rows if isinstance(rows, list) else []:
+            if isinstance(row, dict):
+                status = str(row.get(field) or "unknown").lower()
+                if status not in allowed:
+                    status = "other"
+                counts[status] = counts.get(status, 0) + 1
+        return counts
+
+    phase = str(report.get("phase") or "").lower()
+    if phase not in {"poll", "start", "before", "after", "done", "complete", "error"}:
+        phase = "other"
+    stamp = str(report.get("time") or "")
+    if not re.fullmatch(r"[0-9T:+.Z-]{8,40}", stamp):
+        stamp = "unknown"
+    watcher = str(report.get("watcher_head") or "")
+    if not re.fullmatch(r"[0-9a-f]{7,40}", watcher):
+        watcher = "unknown"
+
+    ports = []
+    for row in report.get("ports") or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            port = int(row.get("port"))
+        except (TypeError, ValueError):
+            continue
+        if port in (8188, 8191):
+            ports.append(port)
+
+    probes = {}
+    for path in ("/", "/health", "/api/status", "/api/history", "/api/jobs", "/api/gallery"):
+        item = (report.get("studio_probes") or {}).get(path)
+        if isinstance(item, dict):
+            probes[path] = {"ok": bool(item.get("ok")), "http": item.get("http") if isinstance(item.get("http"), int) else None}
+
+    comfy = report.get("comfy") or {}
+    recent = comfy.get("recent") or []
+    files = {}
+    for rel in ("static/app.js", "studio.py", "workflows.py"):
+        info = (report.get("files") or {}).get(rel) or {}
+        sha = str(info.get("sha256") or "")
+        files[rel] = sha if re.fullmatch(r"[0-9a-f]{64}", sha) else "absent"
+
+    public = {
+        "ports_listening": sorted(set(ports)),
+        "studio_probes": probes,
+        "studio_jobs_count": len(report.get("studio_jobs") or []),
+        "studio_statuses": count_status(report.get("studio_jobs"), "status"),
+        "comfy_jobs_count": len(recent),
+        "comfy_statuses": count_status(recent, "status"),
+        "code_sha256": files,
+        "studio_log_files_count": len(report.get("logs") or []),
+        "task_events_count": len(report.get("task_diag") or []),
+    }
     lines = [
         MARK,
         "",
-        "**Studio trace auto - " + str(report.get("phase")) + "**",
+        "**Studio trace auto - " + phase + "**",
         "",
-        "- task: " + str(report.get("task_id")),
-        "- time: " + str(report.get("time")),
-        "- watcher: " + str(report.get("watcher_head") or "")[:12],
-        "- ports: " + json.dumps(report.get("ports") or [], ensure_ascii=False, separators=(",", ":"))[:1800],
-        "- Studio probes: " + json.dumps(report.get("studio_probes") or {}, ensure_ascii=False, separators=(",", ":"))[:2200],
+        "- task: STUDIO-P0-012",
+        "- time: " + stamp,
+        "- watcher: " + watcher[:12],
         "",
-        "**Studio /api/jobs - params reels**",
         "~~~json",
-        json.dumps(report.get("studio_jobs") or [], ensure_ascii=False, indent=2)[:4800],
+        json.dumps(public, ensure_ascii=False, indent=2),
         "~~~",
         "",
-        "**ComfyUI - jobs recents / prompt reel recu**",
-        "~~~json",
-        json.dumps(((report.get("comfy") or {}).get("recent") or []), ensure_ascii=False, indent=2)[:5200],
-        "~~~",
-        "",
-        "**Points de controle code**",
+        "Traces détaillées conservées seulement sur le PC. Aucun prompt, texte de nœud, extrait frontend, chemin local ou log brut publié.",
     ]
-    for rel, info in (report.get("files") or {}).items():
-        lines.append("- " + rel + " sha=" + str(info.get("sha256") or "missing")[:12] + " size=" + str(info.get("size") or 0))
-        for hit in (info.get("hits") or [])[:12]:
-            lines.append("  - L" + str(hit.get("line")) + ": " + str(hit.get("text") or "")[:420])
-
-    lines += ["", "**Contexte frontend cible**"]
-    for block in (report.get("frontend_context") or [])[:8]:
-        lines.append("- marker="+str(block.get("marker"))+" lines="+str(block.get("start"))+"-"+str(block.get("end")))
-        for row in (block.get("lines") or []):
-            lines.append("  L"+str(row.get("line"))+": "+str(row.get("text") or "")[:700])
-    lines += ["", "**Logs Studio recents**"]
-    for row in (report.get("logs") or [])[:4]:
-        lines.append("- " + str(row.get("name") or "?") + " size=" + str(row.get("size") or 0))
-        tail = str(row.get("tail") or "")
-        if tail:
-            lines += ["~~~text", tail[-1600:], "~~~"]
-
-    lines += [
-        "",
-        "**Task diag recent**",
-        "~~~json",
-        json.dumps(report.get("task_diag") or [], ensure_ascii=False, indent=2)[:2600],
-        "~~~",
-        "",
-        "Collecte bornee et expurgee: pas de cookie, pas de cle API, pas de token volontairement publie.",
-    ]
-    return "\n".join(lines)[:11800]
+    return "\n".join(lines)
 
 
 def collect_and_post(issue_number, task_id, phase="poll", force=False):
