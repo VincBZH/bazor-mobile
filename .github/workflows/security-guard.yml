@@ -14,31 +14,48 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Reject tracked secret/signing files
+      - name: Reject tracked credentials and signing material
         shell: bash
         run: |
-          set -euo pipefail
-          bad=$(git ls-files | grep -E '(^|/)(\.env($|\.)|[^/]+\.(pem|key|p12|pfx|jks|keystore)$|secrets?/)' || true)
-          if [ -n "$bad" ]; then
-            echo "Forbidden secret/signing material is tracked:"
-            echo "$bad"
-            exit 1
-          fi
-      - name: Reject hardcoded Android signing passwords
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git grep -nE '(^|[[:space:]])(storePassword|keyPassword)[[:space:]]+["'"''][^$][^"'"'']*["'"'']' -- 'android/**' ; then
-            echo 'Hardcoded Android signing password detected.'
-            exit 1
-          fi
-      - name: Reject known placeholder API credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git grep -nE 'bazor-local-change-moi|BAZOR_API_TOKEN=change-moi' -- ':!*.example' ; then
-            echo 'Known placeholder credential detected outside example files.'
-            exit 1
-          fi
-      - name: Security guard passed
-        run: echo 'BAZOR security guard OK'
+          python - <<'PY'
+          import pathlib, re, subprocess, sys
+
+          tracked = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
+          bad_paths = []
+          secret_suffixes = {".pem", ".key", ".p12", ".pfx", ".jks", ".keystore"}
+          for raw in tracked:
+              p = pathlib.PurePosixPath(raw)
+              name = p.name.lower()
+              if name == ".env" or name.startswith(".env."):
+                  if name != ".env.example":
+                      bad_paths.append(raw)
+              if p.suffix.lower() in secret_suffixes:
+                  bad_paths.append(raw)
+              if any(part.lower() in {"secret", "secrets", ".secrets"} for part in p.parts):
+                  bad_paths.append(raw)
+
+          findings = []
+          signing_re = re.compile(r"\b(storePassword|keyPassword)\s+['\"]([^$][^'\"]*)['\"]")
+          placeholder_re = re.compile(r"bazor-local-change-moi|BAZOR_API_TOKEN=change-moi")
+          for raw in tracked:
+              if not raw.startswith("android/") and raw.endswith(".example"):
+                  continue
+              path = pathlib.Path(raw)
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except Exception:
+                  continue
+              if raw.startswith("android/") and signing_re.search(text):
+                  findings.append(f"hardcoded Android signing password: {raw}")
+              if not raw.endswith(".example") and placeholder_re.search(text):
+                  findings.append(f"placeholder credential outside example: {raw}")
+
+          if bad_paths or findings:
+              print("BAZOR security guard blocked this change.")
+              for item in sorted(set(bad_paths)):
+                  print("tracked secret/signing material:", item)
+              for item in findings:
+                  print(item)
+              sys.exit(1)
+          print("BAZOR security guard OK")
+          PY
