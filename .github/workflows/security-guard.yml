@@ -1,0 +1,44 @@
+name: BAZOR Security Guard
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reject tracked secret/signing files
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=$(git ls-files | grep -E '(^|/)(\.env($|\.)|[^/]+\.(pem|key|p12|pfx|jks|keystore)$|secrets?/)' || true)
+          if [ -n "$bad" ]; then
+            echo "Forbidden secret/signing material is tracked:"
+            echo "$bad"
+            exit 1
+          fi
+      - name: Reject hardcoded Android signing passwords
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE '(^|[[:space:]])(storePassword|keyPassword)[[:space:]]+["'"''][^$][^"'"'']*["'"'']' -- 'android/**' ; then
+            echo 'Hardcoded Android signing password detected.'
+            exit 1
+          fi
+      - name: Reject known placeholder API credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE 'bazor-local-change-moi|BAZOR_API_TOKEN=change-moi' -- ':!*.example' ; then
+            echo 'Known placeholder credential detected outside example files.'
+            exit 1
+          fi
+      - name: Security guard passed
+        run: echo 'BAZOR security guard OK'
