@@ -1,5 +1,18 @@
 plugins { id 'com.android.application' }
 
+def bazorKeystorePath = System.getenv('BAZOR_ANDROID_KEYSTORE')
+def bazorStorePassword = System.getenv('BAZOR_ANDROID_STORE_PASSWORD')
+def bazorKeyAlias = System.getenv('BAZOR_ANDROID_KEY_ALIAS')
+def bazorKeyPassword = System.getenv('BAZOR_ANDROID_KEY_PASSWORD')
+def bazorSigningReady = [bazorKeystorePath, bazorStorePassword, bazorKeyAlias, bazorKeyPassword].every { it != null && !it.trim().isEmpty() }
+
+if (System.getenv('CI') == 'true' && !bazorSigningReady) {
+    throw new GradleException('BAZOR Android signing secrets are required in CI; no repository-embedded keystore/password is allowed.')
+}
+if (bazorSigningReady && !file(bazorKeystorePath).exists()) {
+    throw new GradleException('BAZOR_ANDROID_KEYSTORE does not point to an existing file.')
+}
+
 android {
     namespace 'com.bazor.skyperelay'
     compileSdk 35
@@ -13,21 +26,25 @@ android {
     }
 
     signingConfigs {
-        stable {
-            storeFile file("../watchapp/bazor-watch.keystore")
-            storePassword "bazor123"
-            keyAlias "bazorwatch"
-            keyPassword "bazor123"
-            enableV1Signing true
-            enableV2Signing true
-            enableV3Signing true
-            enableV4Signing false
+        if (bazorSigningReady) {
+            stable {
+                storeFile file(bazorKeystorePath)
+                storePassword bazorStorePassword
+                keyAlias bazorKeyAlias
+                keyPassword bazorKeyPassword
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+                enableV4Signing false
+            }
         }
     }
 
     buildTypes {
         debug {
-            signingConfig signingConfigs.stable
+            if (bazorSigningReady) {
+                signingConfig signingConfigs.stable
+            }
         }
     }
 }
