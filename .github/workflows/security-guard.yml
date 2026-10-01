@@ -36,7 +36,10 @@ jobs:
 
           findings = []
           signing_re = re.compile(r"\b(storePassword|keyPassword)\s+['\"]([^$][^'\"]*)['\"]")
-          placeholder_re = re.compile(r"bazor-local-change-moi|BAZOR_API_TOKEN=change-moi")
+          forbidden_literals = (
+              "bazor-local-" + "change-moi",
+              "BAZOR_API_TOKEN" + "=change-moi",
+          )
           for raw in tracked:
               if not raw.startswith("android/") and raw.endswith(".example"):
                   continue
@@ -47,7 +50,7 @@ jobs:
                   continue
               if raw.startswith("android/") and signing_re.search(text):
                   findings.append(f"hardcoded Android signing password: {raw}")
-              if not raw.endswith(".example") and placeholder_re.search(text):
+              if not raw.endswith(".example") and any(x in text for x in forbidden_literals):
                   findings.append(f"placeholder credential outside example: {raw}")
 
           if bad_paths or findings:
