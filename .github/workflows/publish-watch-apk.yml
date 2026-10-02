@@ -1,12 +1,7 @@
 name: Publish BAZOR Montre APK
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "android/watchapp/**"
-      - "android/watchrelay/**"
-      - ".github/workflows/publish-watch-apk.yml"
+  # Archived Watch/C28 code: publishing requires a deliberate manual dispatch.
   workflow_dispatch:
 
 permissions:
