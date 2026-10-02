@@ -53,6 +53,19 @@ jobs:
               if not raw.endswith(".example") and any(x in text for x in forbidden_literals):
                   findings.append(f"placeholder credential outside example: {raw}")
 
+          publish_workflows = (
+              ".github/workflows/publish-watch-apk.yml",
+              ".github/workflows/publish-watch-relay.yml",
+          )
+          for raw in publish_workflows:
+              workflow = pathlib.Path(raw).read_text(encoding="utf-8")
+              if re.search(r"(?m)^  push:\\s*$", workflow):
+                  findings.append(f"automatic archived Watch/C28 publication trigger: {raw}")
+
+          build_workflow = pathlib.Path(".github/workflows/build-apk.yml").read_text(encoding="utf-8")
+          if "git push" in build_workflow:
+              findings.append("build-apk CI must not publish or push to main")
+
           if bad_paths or findings:
               print("BAZOR security guard blocked this change.")
               for item in sorted(set(bad_paths)):
