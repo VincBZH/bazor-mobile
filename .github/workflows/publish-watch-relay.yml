@@ -1,12 +1,7 @@
 name: Publish BAZOR C28 Skype Relay
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "android/watchrelay/**"
-      - "android/settings.gradle"
-      - ".github/workflows/publish-watch-relay.yml"
+  # Archived Watch/C28 code: publishing requires a deliberate manual dispatch.
   workflow_dispatch:
 
 permissions:
