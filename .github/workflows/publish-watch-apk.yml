@@ -37,6 +37,29 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
+      - name: Prepare rotated Android signing key
+        shell: bash
+        env:
+          BAZOR_ANDROID_KEYSTORE_B64: ${{ secrets.BAZOR_ANDROID_KEYSTORE_B64 }}
+          BAZOR_ANDROID_STORE_PASSWORD_SECRET: ${{ secrets.BAZOR_ANDROID_STORE_PASSWORD }}
+          BAZOR_ANDROID_KEY_ALIAS_SECRET: ${{ secrets.BAZOR_ANDROID_KEY_ALIAS }}
+          BAZOR_ANDROID_KEY_PASSWORD_SECRET: ${{ secrets.BAZOR_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$BAZOR_ANDROID_KEYSTORE_B64"
+          test -n "$BAZOR_ANDROID_STORE_PASSWORD_SECRET"
+          test -n "$BAZOR_ANDROID_KEY_ALIAS_SECRET"
+          test -n "$BAZOR_ANDROID_KEY_PASSWORD_SECRET"
+          SIGNING_FILE="$RUNNER_TEMP/bazor-android-release.jks"
+          printf '%s' "$BAZOR_ANDROID_KEYSTORE_B64" | base64 --decode > "$SIGNING_FILE"
+          chmod 600 "$SIGNING_FILE"
+          {
+            echo "BAZOR_ANDROID_KEYSTORE=$SIGNING_FILE"
+            echo "BAZOR_ANDROID_STORE_PASSWORD=$BAZOR_ANDROID_STORE_PASSWORD_SECRET"
+            echo "BAZOR_ANDROID_KEY_ALIAS=$BAZOR_ANDROID_KEY_ALIAS_SECRET"
+            echo "BAZOR_ANDROID_KEY_PASSWORD=$BAZOR_ANDROID_KEY_PASSWORD_SECRET"
+          } >> "$GITHUB_ENV"
+
       - name: Build watch APKs
         run: gradle -p android :watchapp:assembleDebug :watchrelay:assembleDebug --no-daemon
 
