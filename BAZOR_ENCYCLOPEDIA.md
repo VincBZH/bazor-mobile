@@ -303,3 +303,23 @@ GitHub reste un bus de coordination et de preuve ; aucun shell/exec/eval arbitra
 Référence canonique de conception : `bridge/BAZOR_AI_ROOM_TRIO_SPEC.md`.
 
 Principes ajoutés : versions séparées (app/protocole/registry/contrat), ports 8765/8775/8776/11434, identités persistantes par `agent_id`, bootstrap canonique, mémoire contextuelle sourcée, statuts unifiés, séparation `ROOM_CORE_DELIVERED` / `TRIO_READY`, récupération autonome bornée et interdiction de `DELIVERED` sans preuves runtime. Toute divergence entre spec et dépôt/runtime doit être déclarée `SPEC_DRIFT`.
+
+
+## Source disponible — Studio Session S2.2, 20 septembre 2026
+
+Handoff GPT : `studio-deliverables/session-s2/HANDOFF.json`. Archive complète, correctif lisible, installateur CMD et rapports dans ce dossier. Application `3.0.5-session-s2.2`. Il s’agit d’un candidat source, pas de la version runtime confirmée du PC.
+
+30 tests Python ciblés + 33 régressions et 13 scénarios JavaScript réussis localement. Treize scénarios Windows simulés ont réussi sous PowerShell 5.1, ainsi que les suites Python/JavaScript et le contrôle d’extraction propre. Preuve : `studio-deliverables/session-s2/CI_RESULT.json`, commit source `5ad802628dd05a16c7e60b6400eb4d4e0591afa4`, PR #141. Le contrôle global Console Hub échoue sur une assertion de l’ancien lanceur inchangé ; aucune fusion automatique. UAC réelle, génération GPU et rendu navigateur non confirmés. Le retour Windows utilisateur confirme seulement préflight réussi puis accès refusé lors de l’arrêt du Studio, avant écriture applicative. S2.2 ajoute un assistant UAC limité à l’arrêt du seul Studio identifié, et conserve le convertisseur H3 UI/API antérieur.
+
+Ce travail aide P0-001/002/008/009/010/012 sans les marquer DONE. Comparer aux fichiers locaux et au workflow actif ; conserver les garde-fous RESOURCE_PRESSURE. Les plafonds hérités (10 corrections/10 s par clip) ne satisfont pas les critères P1 d’arrêt intelligent et segmentation. Le README détaille les autres limites. Publication documentaire autorisée par Vincent ; aucun déclenchement de shell distant ni déploiement local impliqué.
+
+
+## Source disponible — Studio Session S2.3, 20 septembre 2026
+
+PR #141 et `studio-deliverables/session-s2/HANDOFF.json`. Le dernier refus vidéo identifie un nœud Hailuo en ligne sélectionné à tort comme H3 local. S2.3 construit la topologie native H3, vérifie les contrats et modèles installés, rejette les workflows API, conserve T2I/I2I sur SD/SDXL, et enregistre une fiche immuable du prompt réellement envoyé et du graphe. Préparation anglaise séparée et modifiable ; cinq styles par mots-clés sur option. Les styles ne réduisent plus les scènes à un seul sujet.
+
+51 tests Python ciblés, 33 régressions et 21 scénarios JavaScript passent localement. CI S2.3 Windows et navigateur en attente à ce commit ; voir `CI_RESULT.json` pour la preuve ultérieure. Tests moteur simulés, vidéo native silencieuse, UAC et GPU réels non validés. Aucune promesse de conformité visuelle automatique, aucun statut DONE, aucune génération explicite ajoutée. Sources et prompts privés de l'utilisateur non joints au dépôt.
+
+Complément : préserver les corrections visuelles ajoutées après le bloc de styles du navigateur ; aligner les styles affichés et les styles serveur. Le premier build S2.3 a passé Chromium et PowerShell 5.1 ; la preuve du paquet final est suivie séparément.
+
+Preuve du paquet final S2.3 : CI Studio réussie sur `1d1af50623ff00f31b2a0c206b585b30bd32fd50`, https://github.com/VincBZH/bazor-mobile/actions/runs/35514866361. 51 tests Python ciblés + 33 régressions, 21 scénarios JavaScript, 13 scénarios Windows simulés et parcours Chromium avec moteurs simulés. SHA-256 et limites consignés dans `CI_RESULT.json`. Le contrôle global de l’ancien lanceur échoue toujours ; PR non fusionnée. Validation du GPU et de l’UAC réelle toujours requise.

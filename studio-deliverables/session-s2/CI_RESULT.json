@@ -1,0 +1,17 @@
+{
+  "status": "PASSED",
+  "tested_commit": "1d1af50623ff00f31b2a0c206b585b30bd32fd50",
+  "workflow_url": "https://github.com/VincBZH/bazor-mobile/actions/runs/35514866361",
+  "archive_sha256": "f918d72748be1f08c7f85d470f689c0555822e2b31d1980b033f16e80aa22d1d",
+  "installer_sha256": "b9d271307611efe49607591ebefe081b922bbae63f5757c5226f405c18a7cdf4",
+  "python_targeted": 51,
+  "python_regression": 33,
+  "javascript_scenarios": 21,
+  "windows_powershell_51_scenarios": 13,
+  "windows_system_calls": "MOCKED",
+  "browser_functional_flow": "PASSED Chromium with controlled engine responses",
+  "browser_visual_review": false,
+  "uac_real": false,
+  "gpu_real": false,
+  "global_console_hub_gate": "Unchanged certified-launcher assertion fails; PR not merged"
+}
