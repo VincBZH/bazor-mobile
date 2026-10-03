@@ -1,0 +1,31 @@
+name: Da Bazor local pilot (offline)
+
+on:
+  push:
+    paths:
+      - "tools/da_bazor/**"
+      - ".github/workflows/da-bazor-ci.yml"
+  pull_request:
+    paths:
+      - "tools/da_bazor/**"
+      - ".github/workflows/da-bazor-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-windows:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Syntax and isolated unit tests
+        run: |
+          python -m py_compile tools/da_bazor/da_bazor.py tools/da_bazor/startup_audit.py
+          python -m unittest discover -s tools/da_bazor -p "test_*.py" -v
+      - name: No access to user PC, no paid provider
+        run: echo "Tests on runner Windows only; real PC audit remains pending."
