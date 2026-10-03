@@ -1,0 +1,77 @@
+name: BAZOR Security Guard
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reject tracked credentials and signing material
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib, re, subprocess, sys
+
+          tracked = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
+          bad_paths = []
+          secret_suffixes = {".pem", ".key", ".p12", ".pfx", ".jks", ".keystore"}
+          for raw in tracked:
+              p = pathlib.PurePosixPath(raw)
+              name = p.name.lower()
+              if name == ".env" or name.startswith(".env."):
+                  if name != ".env.example":
+                      bad_paths.append(raw)
+              if p.suffix.lower() in secret_suffixes:
+                  bad_paths.append(raw)
+              if any(part.lower() in {"secret", "secrets", ".secrets"} for part in p.parts):
+                  bad_paths.append(raw)
+
+          findings = []
+          signing_re = re.compile(r"\b(storePassword|keyPassword)\s+['\"]([^$][^'\"]*)['\"]")
+          forbidden_literals = (
+              "bazor-local-" + "change-moi",
+              "BAZOR_API_TOKEN" + "=change-moi",
+          )
+          for raw in tracked:
+              if not raw.startswith("android/") and raw.endswith(".example"):
+                  continue
+              path = pathlib.Path(raw)
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except Exception:
+                  continue
+              if raw.startswith("android/") and signing_re.search(text):
+                  findings.append(f"hardcoded Android signing password: {raw}")
+              if not raw.endswith(".example") and any(x in text for x in forbidden_literals):
+                  findings.append(f"placeholder credential outside example: {raw}")
+
+          publish_workflows = (
+              ".github/workflows/publish-watch-apk.yml",
+              ".github/workflows/publish-watch-relay.yml",
+          )
+          for raw in publish_workflows:
+              workflow = pathlib.Path(raw).read_text(encoding="utf-8")
+              if re.search(r"(?m)^  push:\\s*$", workflow):
+                  findings.append(f"automatic archived Watch/C28 publication trigger: {raw}")
+
+          build_workflow = pathlib.Path(".github/workflows/build-apk.yml").read_text(encoding="utf-8")
+          if "git push" in build_workflow:
+              findings.append("build-apk CI must not publish or push to main")
+
+          if bad_paths or findings:
+              print("BAZOR security guard blocked this change.")
+              for item in sorted(set(bad_paths)):
+                  print("tracked secret/signing material:", item)
+              for item in findings:
+                  print(item)
+              sys.exit(1)
+          print("BAZOR security guard OK")
+          PY

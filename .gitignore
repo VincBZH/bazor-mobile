@@ -7,3 +7,24 @@ __pycache__/
 
 # Local transient files
 *.log
+
+# Secrets / local credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+.secrets/
+secrets/
+
+# Local Android / IDE state
+local.properties
+android/**/local.properties
+
+# Local backups that must not be committed
+*.bak
+*.backup
