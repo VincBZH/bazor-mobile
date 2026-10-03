@@ -1,0 +1,30 @@
+[19:52:33] API 127.0.0.1 - "POST /api/v1/chat HTTP/1.1" 200 -
+test_external_failure_no_fallback (__main__.BridgeTests.test_external_failure_no_fallback) ... ok
+test_loopback_http_core_entry_with_fake_providers (__main__.BridgeTests.test_loopback_http_core_entry_with_fake_providers) ... ok
+test_missing_forged_provenance_or_http_fails (__main__.BridgeTests.test_missing_forged_provenance_or_http_fails) ... ok
+test_model_output_is_inert_and_logs_omit_content (__main__.BridgeTests.test_model_output_is_inert_and_logs_omit_content) ... ok
+test_output_limit_and_local_model_missing (__main__.BridgeTests.test_output_limit_and_local_model_missing) ... ok
+test_oversize_input_and_unknown_model_no_calls (__main__.BridgeTests.test_oversize_input_and_unknown_model_no_calls) ... ok
+test_routing_alias_is_not_real_model_identity (__main__.BridgeTests.test_routing_alias_is_not_real_model_identity) ... ok
+test_substring_marker_fails (__main__.BridgeTests.test_substring_marker_fails) ... ok
+test_three_envelopes_and_exact_marker (__main__.BridgeTests.test_three_envelopes_and_exact_marker) ... ok
+test_existing_manual_room_routes (__main__.RoomRegressionTests.test_existing_manual_room_routes) ... ok
+test_auth_stops_immediately (__main__.TransportTests.test_auth_stops_immediately) ... ok
+test_error_body_secrets_are_redacted (__main__.TransportTests.test_error_body_secrets_are_redacted) ... ok
+test_footer_integrity (__main__.TransportTests.test_footer_integrity) ... ok
+test_input_token_and_budget_limits (__main__.TransportTests.test_input_token_and_budget_limits) ... ok
+test_invalid_json_and_choices (__main__.TransportTests.test_invalid_json_and_choices) ... ok
+test_key_not_in_argv_and_returned_model_is_actual (__main__.TransportTests.test_key_not_in_argv_and_returned_model_is_actual) ... ok
+test_legacy_regressions (__main__.TransportTests.test_legacy_regressions) ... ok
+test_missing_actual_model_is_not_invented (__main__.TransportTests.test_missing_actual_model_is_not_invented) ... ok
+test_real_curl_config_stdin_with_loopback_fixture (__main__.TransportTests.test_real_curl_config_stdin_with_loopback_fixture) ... ok
+test_timeout_is_transient_but_bounded (__main__.TransportTests.test_timeout_is_transient_but_bounded) ... ok
+test_timeout_redacted_and_minimal_call_not_retried (__main__.TransportTests.test_timeout_redacted_and_minimal_call_not_retried) ... ok
+test_transient_retries_at_most_three_same_model (__main__.TransportTests.test_transient_retries_at_most_three_same_model) ... ok
+test_filebus_rejects_path_traversal_and_unknown_provider (__main__.WatcherRegressionTests.test_filebus_rejects_path_traversal_and_unknown_provider) ... ok
+test_watcher_core_signatures_match (__main__.WatcherRegressionTests.test_watcher_core_signatures_match) ... ok
+
+----------------------------------------------------------------------
+Ran 24 tests in 1.135s
+
+OK

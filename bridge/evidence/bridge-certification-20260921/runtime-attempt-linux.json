@@ -1,0 +1,8 @@
+{
+  "status": "BAZOR_BRIDGE_E2E_BLOCKED",
+  "environment": "Linux",
+  "room_url": "http://127.0.0.1:8776",
+  "http_status": null,
+  "bridge": null,
+  "error": "URLError: <urlopen error [Errno 111] Connection refused>"
+}
