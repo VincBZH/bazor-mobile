@@ -1,3 +1,4 @@
+# CI revalidation after credential-history rewrite; runtime behavior unchanged.
 name: BAZOR compatibility preflight (offline)
 
 on:
