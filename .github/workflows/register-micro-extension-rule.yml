@@ -1,0 +1,221 @@
+name: Register BAZOR Micro Extension Rule
+
+on:
+  push:
+    branches:
+      - feature/micro-extension-automation-rule
+
+permissions:
+  contents: write
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/micro-extension-automation-rule
+          fetch-depth: 0
+
+      - name: Register rule in encyclopedia and registry
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          reg_path = Path('bazor_registry.json')
+          enc_path = Path('BAZOR_ENCYCLOPEDIA.md')
+          data = json.loads(reg_path.read_text(encoding='utf-8'))
+
+          data['version'] = '2026.10.06.2'
+          data['encyclopedia_updated_at'] = '2026-10-06'
+          data['encyclopedia_sync_required'] = True
+
+          projects = data.setdefault('projects', [])
+          def project(pid):
+              return next((p for p in projects if p.get('id') == pid), None)
+
+          ai_room = project('ai-room')
+          if ai_room:
+              subs = ai_room.setdefault('subprojects', [])
+              if not any(s.get('id') == 'micro-extension-automation' for s in subs):
+                  subs.append({
+                      'id': 'micro-extension-automation',
+                      'name': 'Détection de routines navigateur / micro-extensions',
+                      'order': max([s.get('order', 0) for s in subs] + [0]) + 1,
+                      'next': "Repérer les analogies et séquences multi-onglets répétitives; proposer d'abord une extension existante, sinon demander l'autorisation de journaliser quelques cycles puis modéliser la routine."
+                  })
+
+          tools = project('bazor-tools')
+          if tools:
+              subs = tools.setdefault('subprojects', [])
+              if not any(s.get('id') == 'extension-factory' for s in subs):
+                  subs.append({
+                      'id': 'extension-factory',
+                      'name': 'Micro-extensions Chrome / Opera & agents temporaires',
+                      'order': max([s.get('order', 0) for s in subs] + [0]) + 1,
+                      'next': "Réutiliser les micro-extensions connues, observer avec consentement les routines répétitives, puis créer un micro-agent temporaire BAZOR + Ollama quand le but et la séquence sont compris."
+                  })
+              if not any(s.get('id') == 'extension-packer' for s in subs):
+                  subs.append({
+                      'id': 'extension-packer',
+                      'name': 'BAZOR Extension Packer',
+                      'order': max([s.get('order', 0) for s in subs] + [0]) + 1,
+                      'next': "Construire l'empaqueteur automatique Chrome / Opera : validation manifest/permissions, tests, ZIP reproductible, SHA-256, fiche Registry/Encyclopédie et installation locale guidée."
+                  })
+
+              tasks = tools.setdefault('tasks', [])
+              if not any(t.get('id') == 'TOOLS-P1-EXT-PACKER-001' for t in tasks):
+                  tasks.append({
+                      'id': 'TOOLS-P1-EXT-PACKER-001',
+                      'order': 100,
+                      'priority': 'P1',
+                      'subproject': 'extension-packer',
+                      'title': "Créer BAZOR Extension Packer automatique pour Chrome / Opera",
+                      'status': 'TODO',
+                      'action': "Construire un empaqueteur local qui prend un dossier d'extension validé, contrôle manifest.json, permissions, fichiers référencés, syntaxe JS/JSON et version, exécute les tests obligatoires, produit un ZIP reproductible et son SHA-256, génère la fiche Registry/Encyclopédie et refuse le packaging si un contrôle obligatoire échoue. Aucune publication store sans accord explicite.",
+                      'acceptance': [
+                          "Un dossier d'extension valide produit un ZIP reproductible avec version et SHA-256.",
+                          "Un manifest invalide, une permission interdite ou un fichier référencé manquant bloque le packaging avec une cause précise.",
+                          "Les tests JS/JSON configurés sont exécutés avant création du livrable final.",
+                          "La fiche BAZOR inclut but, navigateurs, permissions, domaines, données locales, statut de tests, artefact et hash.",
+                          "Le packer sait préparer Chrome et Opera sans publier automatiquement sur un store."
+                      ],
+                      'dependencies': [],
+                      'preferred_models': ['qwen'],
+                      'proof_required': 'artifact_hash_tests_registry_encyclopedia'
+                  })
+
+          caps = data.setdefault('capabilities', [])
+          cap = next((c for c in caps if c.get('id') == 'micro-extension-automation'), None)
+          payload = {
+              'id': 'micro-extension-automation',
+              'name': 'BAZOR Micro Extension Automation',
+              'version': '1.0.0',
+              'status': 'RULE_ACTIVE_PACKER_PENDING',
+              'spec': 'bridge/BAZOR_MICRO_EXTENSION_AUTOMATION_RULE.md',
+              'purpose': "Détecter les routines navigateur répétitives, réutiliser les micro-extensions existantes et transformer les workflows stables en agents temporaires BAZOR + Ollama puis, si utile, en extensions permanentes.",
+              'browsers': ['chrome', 'opera'],
+              'recommendation_policy': {
+                  'prefer_existing_extension_first': True,
+                  'propose_when_any': [
+                      'repeated_tab_back_and_forth',
+                      'repeated_copy_paste_between_tabs',
+                      'same_click_form_import_download_sequence',
+                      'multi_agent_browser_coordination',
+                      'same_operation_chain_reappears',
+                      'manual_sequence_has_clear_stable_goal'
+                  ],
+                  'do_not_propose_when': [
+                      'one_off_simple_action',
+                      'no_clear_repeat_pattern',
+                      'existing_tool_already_active_and_sufficient'
+                  ],
+                  'suggest_existing_or_composite_extension': True
+              },
+              'observation_policy': {
+                  'explicit_logging_consent_required': True,
+                  'consent_scope': 'current_workflow_session_by_default',
+                  'ask_before_logging': "Je vois une séquence répétitive entre plusieurs onglets. M'autorises-tu à journaliser localement les étapes pendant quelques cycles pour comprendre le mécanisme et te proposer une automatisation ?",
+                  'local_only_by_default': True,
+                  'log_root': 'Téléchargements\\BAZOR AI\\Logs\\MicroExtensions',
+                  'recommended_observation_cycles': 3,
+                  'raw_logs_lifetime': 'session_or_until_recipe_validated',
+                  'exclude': [
+                      'passwords', 'mfa_otp', 'auth_tokens', 'api_secrets',
+                      'full_bank_data', 'password_fields', 'unrelated_private_content', 'incognito'
+                  ],
+                  'reduce_or_delete_raw_logs_after_recipe_validation': True
+              },
+              'temporary_agent_policy': {
+                  'engine': 'BAZOR+Ollama',
+                  'create_when': [
+                      'goal_is_understood',
+                      'inputs_and_outputs_are_known',
+                      'sequence_is_stable_enough',
+                      'success_condition_is_known'
+                  ],
+                  'activation_requires_user_confirmation': True,
+                  'scope_limited_to_workflow': True,
+                  'state_machine_required': True,
+                  'pause_resume_cancel_manual_takeover_required': True,
+                  'stop_on_repeated_error_or_unknown_page_state': True,
+                  'temporary_by_default': True,
+                  'promote_to_permanent_extension_if_reused_and_stable': True
+              },
+              'registration_required_for_each_extension': [
+                  'id', 'name', 'version', 'browsers', 'purpose', 'proposal_triggers',
+                  'browser_permissions', 'target_domains', 'local_data', 'logging_mode',
+                  'validation_status', 'known_limits', 'artifact', 'artifact_hash', 'disable_remove_path'
+              ],
+              'next_step': {
+                  'id': 'TOOLS-P1-EXT-PACKER-001',
+                  'name': 'BAZOR Extension Packer',
+                  'status': 'TODO'
+              }
+          }
+          if cap:
+              cap.clear(); cap.update(payload)
+          else:
+              caps.append(payload)
+
+          hist = data.setdefault('version_history', [])
+          if not any(h.get('component') == 'BAZOR Micro Extension Automation Rule' and h.get('version') == '1.0.0' for h in hist):
+              hist.insert(0, {
+                  'component': 'BAZOR Micro Extension Automation Rule',
+                  'version': '1.0.0',
+                  'generated_at': '2026-10-06',
+                  'artifact': None,
+                  'changes': "Règle transverse Chrome/Opera : suggestion par analogie, détection copier-coller multi-onglets, consentement avant journalisation locale, apprentissage de séquence, micro-agent temporaire BAZOR+Ollama, promotion éventuelle en extension permanente; Extension Packer enregistré comme prochaine étape.",
+                  'tests': 'JSON registry parse + règles structurées + git diff --check.',
+                  'status': 'RULE_ACTIVE'
+              })
+
+          reg_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          enc = enc_path.read_text(encoding='utf-8')
+          enc = enc.replace('Version de référence : 2026-10-06', 'Version de référence : 2026-10-06')
+          marker = '<!-- BAZOR_RULE:MICRO_EXTENSION_AUTOMATION::1.0.0 -->'
+          if marker not in enc:
+              enc += r'''
+
+<!-- BAZOR_RULE:MICRO_EXTENSION_AUTOMATION::1.0.0 -->
+## Règle transverse — micro-extensions Chrome / Opera et routines navigateur (2026-10-06)
+
+Référence canonique : `bridge/BAZOR_MICRO_EXTENSION_AUTOMATION_RULE.md`.
+
+BAZOR doit désormais considérer chaque micro-extension navigateur comme une capacité réutilisable. Lorsqu'une situation analogue réapparaît, il doit chercher d'abord un outil existant. Lorsqu'il détecte des combinaisons d'opérations répétitives — en particulier des va-et-vient entre onglets, copier/coller, envoyer, attendre, récupérer un résultat puis le transférer ailleurs — il doit proposer une organisation par micro-extension ou automatisation minimale.
+
+Avant toute observation détaillée, BAZOR demande explicitement l'autorisation de journaliser localement quelques cycles du workflow. La journalisation est limitée au besoin courant, locale par défaut, et exclut mots de passe, MFA/OTP, jetons d'authentification, secrets API, données bancaires complètes, champs mot de passe, contenu privé sans rapport et navigation privée. Les traces brutes sont supprimées ou réduites à une recette abstraite une fois le motif compris, sauf demande contraire.
+
+Quand le but, les entrées/sorties, les étapes stables, les attentes et le critère de réussite sont compris, BAZOR peut proposer un **micro-agent temporaire BAZOR + Ollama**. Il orchestre la séquence via une machine d'état bornée, avec pause/reprise/annulation/reprise manuelle, permissions minimales et arrêt sur erreur répétée ou page inconnue. L'activation du micro-agent reste soumise à confirmation utilisateur.
+
+Si la routine devient récurrente et stable, BAZOR propose sa transformation en micro-extension permanente et l'enregistre dans l'Encyclopédie/Registry avec version, navigateurs, permissions, domaines, données locales, règles de proposition, tests, limites, artefact et hash.
+
+**Prochaine étape enregistrée : `TOOLS-P1-EXT-PACKER-001` — BAZOR Extension Packer**, destiné à valider automatiquement une extension Chrome/Opera puis produire un ZIP reproductible, son SHA-256, le rapport de tests et sa fiche BAZOR. Aucune publication sur un store ne doit être automatique sans accord explicite.
+'''
+          enc_path.write_text(enc, encoding='utf-8')
+
+      - name: Validate registry and encyclopedia
+        shell: bash
+        run: |
+          python -m json.tool bazor_registry.json >/dev/null
+          grep -q 'micro-extension-automation' bazor_registry.json
+          grep -q 'TOOLS-P1-EXT-PACKER-001' bazor_registry.json
+          grep -q 'BAZOR_RULE:MICRO_EXTENSION_AUTOMATION::1.0.0' BAZOR_ENCYCLOPEDIA.md
+          test -f bridge/BAZOR_MICRO_EXTENSION_AUTOMATION_RULE.md
+          git diff --check
+
+      - name: Commit synchronized rule
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No changes to commit'
+            exit 0
+          fi
+          git config user.name 'BAZOR Registry Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add bazor_registry.json BAZOR_ENCYCLOPEDIA.md
+          git commit -m 'Register micro-extension automation rule and extension packer task'
+          git push origin HEAD:feature/micro-extension-automation-rule
