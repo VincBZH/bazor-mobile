@@ -5,7 +5,7 @@
 - Statut : `READY_FOR_LOCAL_RUN`
 - Objet : audit et correction réversible des consoles BAZOR/Ollama visibles et des lancements BAZOR au démarrage Windows.
 - Paquet : `BAZOR_RUNTIME_SILENT_AUTOFIX_V1_0_0.zip`
-- SHA-256 du paquet : `d42a714332fcd6bd643c9c497fb5f2427c4d8e6fc3cf35489183a8eba3b0756e`
+- SHA-256 du paquet : `010073b4a0d6f0eb282d7649fec608dfdadac8e26b9a007b5e47d8d5fbf703e3`
 
 ## Principes
 
