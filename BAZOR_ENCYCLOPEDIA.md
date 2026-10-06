@@ -331,3 +331,19 @@ Une fois actif, les agents doivent respecter les numéros de séquence et les HO
 Contrôles effectués sur le ZIP livré `BAZOR_TAB_TRACKER_V1_0_0.zip` : manifest JSON valide, syntaxe JS Node OK pour `core.js`, `background.js`, `content.js`, `popup.js`, tests unitaires core OK et intégrité ZIP OK. SHA-256 du ZIP : `370e5ecd2ddbc705fcc0025493471b65a9bb20cf3015ff891bfed186fa8943e6`.
 
 Limite réelle : la détection automatique de l'état `running` et de la dernière bulle dépend du DOM de ChatGPT/NoTrack et doit être confirmée sur les interfaces réelles. Le compteur, HOLD/RELEASE, les formes/couleurs et le mode manuel restent disponibles indépendamment de ces sélecteurs.
+
+
+<!-- BAZOR_RULE:MICRO_EXTENSION_AUTOMATION::1.0.0 -->
+## Règle transverse — micro-extensions Chrome / Opera et routines navigateur (2026-10-06)
+
+Référence canonique : `bridge/BAZOR_MICRO_EXTENSION_AUTOMATION_RULE.md`.
+
+BAZOR doit considérer chaque micro-extension navigateur comme une capacité réutilisable. Lorsqu'une situation analogue réapparaît, il cherche d'abord un outil existant. Lorsqu'il détecte des combinaisons répétitives — va-et-vient entre onglets, copier/coller, envoyer, attendre, récupérer puis transférer — il propose une organisation par micro-extension ou automatisation minimale.
+
+Avant toute observation détaillée, BAZOR demande explicitement l'autorisation de journaliser localement quelques cycles du workflow. La journalisation est locale par défaut et exclut mots de passe, MFA/OTP, jetons d'authentification, secrets API, données bancaires complètes, champs mot de passe, contenu privé sans rapport et navigation privée. Les traces brutes sont supprimées ou réduites à une recette abstraite une fois le motif compris, sauf demande contraire.
+
+Quand le but, les entrées/sorties, les étapes stables, les attentes et le critère de réussite sont compris, BAZOR peut proposer un **micro-agent temporaire BAZOR + Ollama**. Il utilise une machine d'état bornée, pause/reprise/annulation/reprise manuelle, permissions minimales et arrêt sur erreur répétée ou page inconnue. Son activation reste soumise à confirmation utilisateur.
+
+Si la routine devient récurrente et stable, BAZOR propose sa transformation en micro-extension permanente et l'enregistre dans l'Encyclopédie/Registry avec version, navigateurs, permissions, domaines, données locales, règles de proposition, tests, limites, artefact et hash.
+
+**Prochaine étape : `TOOLS-P1-EXT-PACKER-001` — BAZOR Extension Packer**, pour valider automatiquement une extension Chrome/Opera puis produire un ZIP reproductible, son SHA-256, le rapport de tests et sa fiche BAZOR. Aucune publication store automatique sans accord explicite.

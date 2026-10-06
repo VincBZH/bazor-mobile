@@ -1,5 +1,5 @@
 {
-  "version": "2026.10.06.1",
+  "version": "2026.10.06.2",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -69,6 +69,12 @@
           "name": "Coordination Chrome / Tab Tracker",
           "order": 10,
           "next": "Détecter les travaux multi-agents et proposer Tab Tracker une seule fois quand le séquencement, le traçage ou HOLD/RELEASE apporte un bénéfice réel."
+        },
+        {
+          "id": "micro-extension-automation",
+          "name": "Détection de routines navigateur / micro-extensions",
+          "order": 11,
+          "next": "Repérer les analogies et séquences multi-onglets répétitives; proposer d'abord une extension existante, sinon demander l'autorisation de journaliser quelques cycles puis modéliser la routine."
         }
       ],
       "go_compatible": true,
@@ -922,10 +928,45 @@
           "name": "BAZOR Tab Tracker",
           "order": 7,
           "next": "Proposer uniquement lorsqu'une coordination multi-conversations/agents, un ordre de passage, un risque de collision ou un besoin de traçage/HOLD est réellement détecté."
+        },
+        {
+          "id": "extension-factory",
+          "name": "Micro-extensions Chrome / Opera & agents temporaires",
+          "order": 8,
+          "next": "Réutiliser les micro-extensions connues, observer avec consentement les routines répétitives, puis créer un micro-agent temporaire BAZOR + Ollama quand le but et la séquence sont compris."
+        },
+        {
+          "id": "extension-packer",
+          "name": "BAZOR Extension Packer",
+          "order": 9,
+          "next": "Construire l'empaqueteur automatique Chrome / Opera : validation manifest/permissions, tests, ZIP reproductible, SHA-256, fiche Registry/Encyclopédie et installation locale guidée."
         }
       ],
       "go_compatible": true,
-      "go_reason": "Racine locale reliée au BAZOR Action Engine."
+      "go_reason": "Racine locale reliée au BAZOR Action Engine.",
+      "tasks": [
+        {
+          "id": "TOOLS-P1-EXT-PACKER-001",
+          "order": 100,
+          "priority": "P1",
+          "subproject": "extension-packer",
+          "title": "Créer BAZOR Extension Packer automatique pour Chrome / Opera",
+          "status": "TODO",
+          "action": "Construire un empaqueteur local qui prend un dossier d'extension validé, contrôle manifest.json, permissions, fichiers référencés, syntaxe JS/JSON et version, exécute les tests obligatoires, produit un ZIP reproductible et son SHA-256, génère la fiche Registry/Encyclopédie et refuse le packaging si un contrôle obligatoire échoue. Aucune publication store sans accord explicite.",
+          "acceptance": [
+            "Un dossier d'extension valide produit un ZIP reproductible avec version et SHA-256.",
+            "Un manifest invalide, une permission interdite ou un fichier référencé manquant bloque le packaging avec une cause précise.",
+            "Les tests JS/JSON configurés sont exécutés avant création du livrable final.",
+            "La fiche BAZOR inclut but, navigateurs, permissions, domaines, données locales, statut de tests, artefact et hash.",
+            "Le packer sait préparer Chrome et Opera sans publier automatiquement sur un store."
+          ],
+          "dependencies": [],
+          "preferred_models": [
+            "qwen"
+          ],
+          "proof_required": "artifact_hash_tests_registry_encyclopedia"
+        }
+      ]
     },
     {
       "id": "bazor-security",
@@ -1028,6 +1069,15 @@
   "encyclopedia_sync_required": true,
   "version_history": [
     {
+      "component": "BAZOR Micro Extension Automation Rule",
+      "version": "1.0.0",
+      "generated_at": "2026-10-06",
+      "artifact": null,
+      "changes": "Règle transverse Chrome/Opera : suggestion par analogie, détection copier-coller multi-onglets, consentement avant journalisation locale, apprentissage de séquence, micro-agent temporaire BAZOR+Ollama, promotion éventuelle en extension permanente; Extension Packer enregistré comme prochaine étape.",
+      "tests": "JSON registry parse + règles structurées + git diff --check.",
+      "status": "RULE_ACTIVE"
+    },
+    {
       "component": "BAZOR Tab Tracker",
       "version": "1.0.0",
       "generated_at": "2026-10-06",
@@ -1103,6 +1153,93 @@
         "never_infer_hold_from_natural_language"
       ],
       "known_limit": "La détection automatique running/dernière bulle dépend du DOM ChatGPT/NoTrack; le mode manuel, le compteur et HOLD/RELEASE restent disponibles."
+    },
+    {
+      "id": "micro-extension-automation",
+      "name": "BAZOR Micro Extension Automation",
+      "version": "1.0.0",
+      "status": "RULE_ACTIVE_PACKER_PENDING",
+      "spec": "bridge/BAZOR_MICRO_EXTENSION_AUTOMATION_RULE.md",
+      "purpose": "Détecter les routines navigateur répétitives, réutiliser les micro-extensions existantes et transformer les workflows stables en agents temporaires BAZOR + Ollama puis, si utile, en extensions permanentes.",
+      "browsers": [
+        "chrome",
+        "opera"
+      ],
+      "recommendation_policy": {
+        "prefer_existing_extension_first": true,
+        "propose_when_any": [
+          "repeated_tab_back_and_forth",
+          "repeated_copy_paste_between_tabs",
+          "same_click_form_import_download_sequence",
+          "multi_agent_browser_coordination",
+          "same_operation_chain_reappears",
+          "manual_sequence_has_clear_stable_goal"
+        ],
+        "do_not_propose_when": [
+          "one_off_simple_action",
+          "no_clear_repeat_pattern",
+          "existing_tool_already_active_and_sufficient"
+        ],
+        "suggest_existing_or_composite_extension": true
+      },
+      "observation_policy": {
+        "explicit_logging_consent_required": true,
+        "consent_scope": "current_workflow_session_by_default",
+        "ask_before_logging": "Je vois une séquence répétitive entre plusieurs onglets. M'autorises-tu à journaliser localement les étapes pendant quelques cycles pour comprendre le mécanisme et te proposer une automatisation ?",
+        "local_only_by_default": true,
+        "log_root": "Téléchargements\\BAZOR AI\\Logs\\MicroExtensions",
+        "recommended_observation_cycles": 3,
+        "raw_logs_lifetime": "session_or_until_recipe_validated",
+        "exclude": [
+          "passwords",
+          "mfa_otp",
+          "auth_tokens",
+          "api_secrets",
+          "full_bank_data",
+          "password_fields",
+          "unrelated_private_content",
+          "incognito"
+        ],
+        "reduce_or_delete_raw_logs_after_recipe_validation": true
+      },
+      "temporary_agent_policy": {
+        "engine": "BAZOR+Ollama",
+        "create_when": [
+          "goal_is_understood",
+          "inputs_and_outputs_are_known",
+          "sequence_is_stable_enough",
+          "success_condition_is_known"
+        ],
+        "activation_requires_user_confirmation": true,
+        "scope_limited_to_workflow": true,
+        "state_machine_required": true,
+        "pause_resume_cancel_manual_takeover_required": true,
+        "stop_on_repeated_error_or_unknown_page_state": true,
+        "temporary_by_default": true,
+        "promote_to_permanent_extension_if_reused_and_stable": true
+      },
+      "registration_required_for_each_extension": [
+        "id",
+        "name",
+        "version",
+        "browsers",
+        "purpose",
+        "proposal_triggers",
+        "browser_permissions",
+        "target_domains",
+        "local_data",
+        "logging_mode",
+        "validation_status",
+        "known_limits",
+        "artifact",
+        "artifact_hash",
+        "disable_remove_path"
+      ],
+      "next_step": {
+        "id": "TOOLS-P1-EXT-PACKER-001",
+        "name": "BAZOR Extension Packer",
+        "status": "TODO"
+      }
     }
   ]
 }
