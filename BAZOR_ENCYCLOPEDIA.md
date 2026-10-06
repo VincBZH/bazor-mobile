@@ -303,3 +303,12 @@ GitHub reste un bus de coordination et de preuve ; aucun shell/exec/eval arbitra
 Référence canonique de conception : `bridge/BAZOR_AI_ROOM_TRIO_SPEC.md`.
 
 Principes ajoutés : versions séparées (app/protocole/registry/contrat), ports 8765/8775/8776/11434, identités persistantes par `agent_id`, bootstrap canonique, mémoire contextuelle sourcée, statuts unifiés, séparation `ROOM_CORE_DELIVERED` / `TRIO_READY`, récupération autonome bornée et interdiction de `DELIVERED` sans preuves runtime. Toute divergence entre spec et dépôt/runtime doit être déclarée `SPEC_DRIFT`.
+
+
+## Complément critique du 27 septembre 2026 — Da Bazor
+
+Le dossier [ENCYCLOPEDIE_REPRISE_20260927.md](tools/da_bazor/ENCYCLOPEDIE_REPRISE_20260927.md) compare `bazor-mobile`, `projetWII-ai-relay`, la source Sites Repères et les outils locaux Studio/Mission Locale ; il documente les preuves, choix, abandons, pauses et l'ordre de reprise. Cette section complète l'état historique du 19 septembre sans le réécrire.
+
+**Décision Vincent du 27/09 :** toutes les interactions avec son téléphone sont déclassées et abandonnées pour la feuille de route (coupures Bluetooth, éloignement), notamment Command Center mobile, GO/ADB/USB, BLE, BAZOR Montre et relais C28/Da Fit. Les sources sont conservées pour mémoire ; Core, Room et FileBus utilisables sur PC restent dans le socle. `bazor_registry.json` indique `go_compatible=false` pour BAZOR Watch et le cycle de vie des sous-projets mobiles. Aucune désinstallation n'est impliquée.
+
+**Da Bazor V0, PR #175 :** fenêtre locale rouge centrée, quatre onglets, carte des dépendances, sondes des cinq ports locaux et navigation autorisée seulement si la sonde répond. Cela ne certifie aucun livrable métier, n'arrête aucun démarrage Windows et n'installe pas les services. Les tests sur Linux et Windows CI restent à distinguer du test sur le PC de Vincent.
