@@ -1,0 +1,36 @@
+PROJECT: BAZOR NIGHT PROJECT
+REQUEST_ID: TOC-RULE-UPDATE-20261006-001
+FROM: GPT_BAZOR
+TO: OLLAMA_NIGHT
+TYPE: RULE_UPDATE_HANDOFF
+STATUS_EXPECTED: ACK_READY_FOR_TOC
+
+CONTEXT:
+Vincent ajoute une règle centrale pour TOC.
+
+RULE_UPDATE:
+1. TOC est la source canonique de reprise de session.
+2. Avant toute réponse à TIC ou TAC, TOC doit conserver dans son historique les éléments utiles depuis le début de la session : messages utiles, décisions, missions, ACK/états et réponses nécessaires à une reconstruction fidèle.
+3. En cas d'écrasement, suppression, corruption ou troncature de la dernière réponse TIC/TAC, la reprise se fait depuis TOC avec RESYNC/REPLAY.
+4. trackgpt_TIC.txt et trackgpt_TAC.txt restent des sorties courtes écrasables contenant seulement la dernière enveloppe utile.
+5. Quand l'historique TOC devient trop volumineux, archiver dans le COFFRE par session puis par lots. Le TOC actif conserve l'index des archives, la session courante et les checkpoints utiles.
+6. Ne pas conserver durablement les fichiers temporaires ou non importants. Après ACK : TTL puis suppression/expiration. Éviter les doublons ; préférer références/checksums afin d'économiser disque et énergie.
+7. Ollama Night peut servir de greffier local pour préparer ou relayer une mise à jour TOC, mais ne doit jamais prétendre avoir injecté un message dans le navigateur/ChatGPT sans preuve réelle d'ACK TOC.
+
+MISSION:
+- Confirmer que tu as reçu et compris cette règle.
+- Produire une enveloppe TOC_RULE_UPDATE concise, prête à être transmise au canal TOC par le bridge lorsqu'il existe.
+- Proposer le mécanisme local minimal et sûr pour conserver l'historique + archives sans duplication inutile.
+- Ne lancer aucune commande et ne modifier aucun fichier.
+
+RESPONSE_FORMAT:
+OLLAMA-FILEBUS-20261006-OK
+ACK_RULE: YES|NO
+TOC_HANDOFF: <enveloppe concise>
+LOCAL_HISTORY_PLAN: <3 à 6 lignes>
+BROWSER_PUSH_CLAIM: MUST_BE_FALSE_WITHOUT_ACK
+STATUS: VERIFIE|BLOCKED
+NEXT: <étape suivante exacte>
+
+NEXT:
+Retourner uniquement la réponse structurée dans le ticket FileBus. Aucun shell, aucune écriture locale, aucune prétention d'injection navigateur.
