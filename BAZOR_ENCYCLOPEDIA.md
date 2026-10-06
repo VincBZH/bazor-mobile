@@ -1,6 +1,6 @@
 # BAZOR Encyclopédie — état de référence
 
-Version de référence : 2026-09-19
+Version de référence : 2026-10-06
 
 ## Règle de fonctionnement
 
@@ -117,7 +117,6 @@ BAZOR doit utiliser plusieurs avis au lieu d’un seul moteur :
 Mammouth ne doit pas appliquer directement une modification critique par défaut. Il sert d’abord de seconde lecture. L’Action Engine applique seulement une action structurée autorisée et vérifiable.
 
 ## Pipeline de validation
-
 1. Lire l’état réel et les fichiers autorisés.
 2. Demander une proposition à l’IA principale.
 3. Pour les P0 et les changements structurants, demander au moins un second avis Mammouth.
@@ -178,7 +177,7 @@ Le watcher GitHub accepte désormais une file `[bazor-task:ID]` limitée aux IDs
 5. l’Action Engine effectue le préflight Git sandbox avant toute écriture ;
 6. si aucune modification n’est prouvée, une seule relance corrective est autorisée ;
 7. le statut final est limité à DONE, VERIFIE, ANALYSE_SEULE ou BLOCKED ;
-8. le résultat, les avis IA, le moteur réel, les fichiers, les tests et la preuve de préflight sont recopiés dans l’état mobile central.
+8. le résultat, les avis IA, le moteur réel, les fichiers, les tests et la preuve de preflight sont recopiés dans l’état mobile central.
 
 Cette file ne transmet aucune commande shell depuis GitHub et ne permet pas d’inventer une tâche hors registre.
 
@@ -303,3 +302,32 @@ GitHub reste un bus de coordination et de preuve ; aucun shell/exec/eval arbitra
 Référence canonique de conception : `bridge/BAZOR_AI_ROOM_TRIO_SPEC.md`.
 
 Principes ajoutés : versions séparées (app/protocole/registry/contrat), ports 8765/8775/8776/11434, identités persistantes par `agent_id`, bootstrap canonique, mémoire contextuelle sourcée, statuts unifiés, séparation `ROOM_CORE_DELIVERED` / `TRIO_READY`, récupération autonome bornée et interdiction de `DELIVERED` sans preuves runtime. Toute divergence entre spec et dépôt/runtime doit être déclarée `SPEC_DRIFT`.
+
+
+<!-- BAZOR_VERSION:BAZOR Tab Tracker::1.0.0 -->
+## BAZOR Tab Tracker — coordination visuelle et séquencement multi-agents (2026-10-06)
+
+Référence détaillée : `bridge/BAZOR_TAB_TRACKER_V1.md`.
+
+BAZOR Tab Tracker 1.0.0 est une extension Chrome locale destinée aux travaux impliquant plusieurs conversations ou agents en parallèle, notamment TIC / TOC / TAC.
+
+Convention :
+- **carré** = travail en cours ;
+- **rond** = réponse terminée / OK ;
+- **triangle** = erreur ;
+- **couleur** = projet ou groupe ;
+- **numéro** = séquence globale monotone partagée entre les onglets surveillés.
+
+Le tracker ajoute un traçage `START #NNNN` / `END #NNNN` lorsqu'une réponse IA terminée est détectée. TOC peut imposer un HOLD strict, par exemple `[[BAZOR:HOLD target=TAC until=50 resume=51 owner=TIC_TOC]]`; si la séquence est réservée jusqu'à #50 inclus, TAC reprend à #51. La libération anticipée utilise `[[BAZOR:RELEASE ...]]`.
+
+### Règle de proposition BAZOR / agents
+
+Proposer Tab Tracker **uniquement** lorsqu'un besoin réel de coordination est détecté : plusieurs conversations/agents/onglets sur le même travail, ordre de passage, risque de collision, nécessité de tracer la chronologie, besoin de HOLD/RELEASE ou reprise après interruption. Ne pas le proposer pour une conversation isolée normale et ne pas répéter la suggestion si elle a déjà été traitée dans la session.
+
+Une fois actif, les agents doivent respecter les numéros de séquence et les HOLD/RELEASE ; une incohérence de numéro ou de `START/END` doit être signalée comme erreur plutôt que corrigée silencieusement.
+
+### État de validation 1.0.0
+
+Contrôles effectués sur le ZIP livré `BAZOR_TAB_TRACKER_V1_0_0.zip` : manifest JSON valide, syntaxe JS Node OK pour `core.js`, `background.js`, `content.js`, `popup.js`, tests unitaires core OK et intégrité ZIP OK. SHA-256 du ZIP : `370e5ecd2ddbc705fcc0025493471b65a9bb20cf3015ff891bfed186fa8943e6`.
+
+Limite réelle : la détection automatique de l'état `running` et de la dernière bulle dépend du DOM de ChatGPT/NoTrack et doit être confirmée sur les interfaces réelles. Le compteur, HOLD/RELEASE, les formes/couleurs et le mode manuel restent disponibles indépendamment de ces sélecteurs.

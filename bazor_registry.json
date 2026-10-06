@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.20.1",
+  "version": "2026.10.06.1",
   "title": "BAZOR Project Registry",
   "projects": [
     {
@@ -63,6 +63,12 @@
           "name": "Bibliothèque / Encyclopédie synchronisée",
           "order": 9,
           "next": "Mettre à jour automatiquement l'Encyclopédie et le registre à chaque version/build/patch généré et afficher la fraîcheur dans ROOM."
+        },
+        {
+          "id": "tab-tracker-coordination",
+          "name": "Coordination Chrome / Tab Tracker",
+          "order": 10,
+          "next": "Détecter les travaux multi-agents et proposer Tab Tracker une seule fois quand le séquencement, le traçage ou HOLD/RELEASE apporte un bénéfice réel."
         }
       ],
       "go_compatible": true,
@@ -910,6 +916,12 @@
           "name": "ChatGPT Extractor",
           "order": 6,
           "next": "Fiabiliser export DOCX/PDF et suivi des validations."
+        },
+        {
+          "id": "tab-tracker",
+          "name": "BAZOR Tab Tracker",
+          "order": 7,
+          "next": "Proposer uniquement lorsqu'une coordination multi-conversations/agents, un ordre de passage, un risque de collision ou un besoin de traçage/HOLD est réellement détecté."
         }
       ],
       "go_compatible": true,
@@ -1012,9 +1024,18 @@
     }
   ],
   "knowledge_base": "BAZOR_ENCYCLOPEDIA.md",
-  "encyclopedia_updated_at": "2026-09-19",
+  "encyclopedia_updated_at": "2026-10-06",
   "encyclopedia_sync_required": true,
   "version_history": [
+    {
+      "component": "BAZOR Tab Tracker",
+      "version": "1.0.0",
+      "generated_at": "2026-10-06",
+      "artifact": "BAZOR_TAB_TRACKER_V1_0_0.zip",
+      "changes": "Carré=en cours, rond=OK, triangle=erreur; compteur global; START/END; HOLD/RELEASE; politique contextuelle de proposition aux agents.",
+      "tests": "manifest JSON OK; syntaxe JS Node OK; core tests OK; intégrité ZIP OK; DOM réel ChatGPT/NoTrack à confirmer.",
+      "status": "TESTED_LOCAL"
+    },
     {
       "component": "BAZOR Studio SDXL Checkpoint Routing",
       "version": "2026.09.20.1",
@@ -1032,6 +1053,56 @@
       "changes": "Ollama local -> Mammouth Claude/Gemini -> GPT-5.6 Sol arbiter -> optional local repair -> re-review",
       "tests": "Action Engine preflight/tests/rollback remain required at runtime",
       "status": "PATCH"
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "tab-tracker",
+      "name": "BAZOR Tab Tracker",
+      "version": "1.0.0",
+      "status": "TESTED_LOCAL_PENDING_REAL_DOM_CONFIRMATION",
+      "spec": "bridge/BAZOR_TAB_TRACKER_V1.md",
+      "artifact": "BAZOR_TAB_TRACKER_V1_0_0.zip",
+      "artifact_sha256": "370e5ecd2ddbc705fcc0025493471b65a9bb20cf3015ff891bfed186fa8943e6",
+      "purpose": "Coordination visuelle, séquencement et traçage de plusieurs conversations/agents Chrome.",
+      "visual_states": {
+        "running": "square",
+        "ok": "circle",
+        "error": "triangle"
+      },
+      "sequence": {
+        "scope": "global",
+        "monotonic": true,
+        "response_markers": [
+          "START #NNNN",
+          "END #NNNN"
+        ],
+        "hold_release": true
+      },
+      "recommendation_policy": {
+        "propose_when_any": [
+          "multiple_conversations_or_agents_same_work",
+          "ordered_turns_required",
+          "collision_risk_between_agents",
+          "chronological_trace_required",
+          "hold_release_required",
+          "resume_after_interruption_needs_sequence"
+        ],
+        "do_not_propose_when": [
+          "single_normal_conversation",
+          "already_active",
+          "already_declined_for_session"
+        ],
+        "suggestion": "Coordination multi-agents détectée : BAZOR Tab Tracker peut afficher l'état de chaque onglet et séquencer les réponses. L'activer ?"
+      },
+      "agent_rules": [
+        "respect_global_sequence",
+        "respect_hold_release",
+        "never_reuse_sequence_number",
+        "report_start_end_or_sequence_mismatch_as_error",
+        "never_infer_hold_from_natural_language"
+      ],
+      "known_limit": "La détection automatique running/dernière bulle dépend du DOM ChatGPT/NoTrack; le mode manuel, le compteur et HOLD/RELEASE restent disponibles."
     }
   ]
 }
