@@ -463,8 +463,11 @@ def gh(args):
     if p.returncode: raise RuntimeError(p.stderr.strip() or p.stdout.strip())
     return p.stdout
 
-def core_chat(text, timeout=180):
-    data=json.dumps({"text":text,"target":"ollama","room":"GITHUB QUEUE"}).encode("utf-8")
+def core_chat(text, timeout=180, model=None):
+    payload={"text":text,"target":"ollama","room":"GITHUB QUEUE"}
+    if model:
+        payload["model"]=model
+    data=json.dumps(payload).encode("utf-8")
     req=urllib.request.Request(CORE,data=data,headers={"Content-Type":"application/json"},method="POST")
     with urllib.request.urlopen(req,timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
@@ -2224,6 +2227,37 @@ def answer_text(result):
             if inner.get(k): return str(inner[k])
     return json.dumps(result,ensure_ascii=False,indent=2)[:12000]
 
+def ollama_queue_receipt(result, issue_number, requested_model=None):
+    """Account for the *actual* Ollama response from Core, not model self-claims."""
+    outer = result if isinstance(result, dict) else {}
+    candidate = outer.get("ollama")
+    model_result = candidate if isinstance(candidate, dict) else {}
+    actual_model = str(model_result.get("model") or "UNKNOWN")
+    provider_ok = bool(
+        outer.get("ok") is True
+        and outer.get("target") == "ollama"
+        and model_result.get("ok") is True
+        and model_result.get("provider") == "ollama"
+        and actual_model != "UNKNOWN"
+        and str(model_result.get("answer") or "").strip()
+    )
+    status = "MODEL_RESPONSE_RECEIVED" if provider_ok else "BLOCKED"
+    content = answer_text(outer)
+    if len(content) > 15000:
+        content = content[:15000] + "\n[TRONQUE: contenu limite pour le commentaire GitHub]"
+    return (
+        MARK + "\n\n**BAZOR/Ollama — resultat du transport**\n\n"
+        + "REQUEST_ID: ISSUE-" + str(issue_number) + "\n"
+        + "STATUS: " + status + "\n"
+        + "PROVIDER_OK: " + ("true" if provider_ok else "false") + "\n"
+        + "MODEL_FROM_CORE: " + actual_model + "\n"
+        + ("MODEL_REQUESTED: " + requested_model + "\n" if requested_model else "")
+        + ("MODEL_MATCH: " + ("true" if requested_model == actual_model else "false") + "\n" if requested_model else "")
+        + "NOTE: le retour API d'un modele ne certifie ni sa qualite ni son exactitude.\n\n"
+        + content
+    )
+
+
 if not _single_instance():
     print("[WATCHER] Une instance existe deja. Sortie sans relance.")
     raise SystemExit(0)
@@ -2630,8 +2664,10 @@ while True:
                 if MARK in comments: continue
                 print(f"[QUEUE] #{issue['number']} {issue['title']}")
                 prompt=(issue.get("body") or "").strip()
-                result=core_chat(prompt)
-                reply=MARK+"\n\n**BAZOR/Ollama — résultat**\n\n"+answer_text(result)
+                model_match=re.search(r"(?im)^MODEL_REQUEST:\s*([a-z0-9_.:/-]+)\s*$",prompt)
+                requested_model=model_match.group(1) if model_match else None
+                result=core_chat(prompt,model=requested_model)
+                reply=ollama_queue_receipt(result,issue["number"],requested_model)
                 gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                 print(f"[OK] #{issue['number']} traite et retourne dans GitHub.")
         except Exception as e:
