@@ -2224,6 +2224,35 @@ def answer_text(result):
             if inner.get(k): return str(inner[k])
     return json.dumps(result,ensure_ascii=False,indent=2)[:12000]
 
+def ollama_queue_receipt(result, issue_number):
+    """Account for the *actual* Ollama response from Core, not model self-claims."""
+    outer = result if isinstance(result, dict) else {}
+    candidate = outer.get("ollama")
+    model_result = candidate if isinstance(candidate, dict) else {}
+    actual_model = str(model_result.get("model") or "UNKNOWN")
+    provider_ok = bool(
+        outer.get("ok") is True
+        and outer.get("target") == "ollama"
+        and model_result.get("ok") is True
+        and model_result.get("provider") == "ollama"
+        and actual_model != "UNKNOWN"
+        and str(model_result.get("answer") or "").strip()
+    )
+    status = "MODEL_RESPONSE_RECEIVED" if provider_ok else "BLOCKED"
+    content = answer_text(outer)
+    if len(content) > 15000:
+        content = content[:15000] + "\n[TRONQUE: contenu limite pour le commentaire GitHub]"
+    return (
+        MARK + "\n\n**BAZOR/Ollama — resultat du transport**\n\n"
+        + "REQUEST_ID: ISSUE-" + str(issue_number) + "\n"
+        + "STATUS: " + status + "\n"
+        + "PROVIDER_OK: " + ("true" if provider_ok else "false") + "\n"
+        + "MODEL_FROM_CORE: " + actual_model + "\n"
+        + "NOTE: le retour API d'un modele ne certifie ni sa qualite ni son exactitude.\n\n"
+        + content
+    )
+
+
 if not _single_instance():
     print("[WATCHER] Une instance existe deja. Sortie sans relance.")
     raise SystemExit(0)
@@ -2631,7 +2660,7 @@ while True:
                 print(f"[QUEUE] #{issue['number']} {issue['title']}")
                 prompt=(issue.get("body") or "").strip()
                 result=core_chat(prompt)
-                reply=MARK+"\n\n**BAZOR/Ollama — résultat**\n\n"+answer_text(result)
+                reply=ollama_queue_receipt(result,issue["number"])
                 gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                 print(f"[OK] #{issue['number']} traite et retourne dans GitHub.")
         except Exception as e:
