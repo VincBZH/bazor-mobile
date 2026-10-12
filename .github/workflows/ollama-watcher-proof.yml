@@ -1,0 +1,28 @@
+name: BAZOR Ollama Watcher Proof
+
+on:
+  pull_request:
+    paths:
+      - "pc-relay/bazor_github_watcher.py"
+      - "tests/test_bazor_watcher_queue_receipt.py"
+      - ".github/workflows/ollama-watcher-proof.yml"
+  push:
+    branches: [main]
+    paths:
+      - "pc-relay/bazor_github_watcher.py"
+      - "tests/test_bazor_watcher_queue_receipt.py"
+      - ".github/workflows/ollama-watcher-proof.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-and-provider-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python and standalone watcher receipt tests (no API or services)
+        run: |
+          python3 -m py_compile pc-relay/bazor_github_watcher.py
+          python3 -m unittest discover -s tests -p 'test_bazor_watcher_queue_receipt.py' -v
