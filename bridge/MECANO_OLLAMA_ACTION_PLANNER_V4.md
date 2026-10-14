@@ -42,7 +42,7 @@ Après inspection de l'empreinte SHA-256 locale :
 
 ## Preuves / limites
 \`python -m unittest -v pc-relay/tests/test_bazor_ollama_action_planner.py\`
-17 tests unitaires hors ligne (Core / ActionEngine simulés). Ils ne démontrent
+18 tests unitaires hors ligne (Core / ActionEngine simulés). Ils ne démontrent
 ni mise à jour du PC, ni succès sur une vraie correction BAZOR.
 
 **Statut : CODE PREPARÉ SUR BRANCHE, NON INSTALLÉ SUR WINDOWS.**
