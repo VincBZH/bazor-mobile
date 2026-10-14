@@ -69,7 +69,7 @@ def run_probe(request=None, nonce=None):
     try:
         health = request(CORE + "/api/v1/health", timeout=4)
         report["checks"]["core"] = health.get("ok") is True
-    except (OSError, ValueError, RuntimeError, TimeoutError):
+    except (OSError, ValueError, RuntimeError, TimeoutError, TypeError, AttributeError):
         pass
 
     try:
@@ -77,7 +77,7 @@ def run_probe(request=None, nonce=None):
         report["checks"]["room"] = isinstance(room, dict) and (
             room.get("ok") is True or room.get("status") in ("ok", "healthy")
         )
-    except (OSError, ValueError, RuntimeError, TimeoutError):
+    except (OSError, ValueError, RuntimeError, TimeoutError, TypeError, AttributeError):
         pass
 
     try:
@@ -88,7 +88,7 @@ def run_probe(request=None, nonce=None):
         ]
         report["model"] = next((m for m in PREFERRED_MODELS if m in names), None)
         report["checks"]["ollama"] = bool(report["model"])
-    except (OSError, ValueError, RuntimeError, TimeoutError):
+    except (OSError, ValueError, RuntimeError, TimeoutError, TypeError, AttributeError):
         pass
 
     report["checks"]["action_engine_api"] = _action_engine_api_present()
@@ -114,7 +114,7 @@ def run_probe(request=None, nonce=None):
                 and ollama.get("model") == report["model"]
                 and token in str(ollama.get("answer") or "")
             )
-        except (OSError, ValueError, RuntimeError, TimeoutError):
+        except (OSError, ValueError, RuntimeError, TimeoutError, TypeError, AttributeError):
             pass
 
     failed = [key for key, ok in report["checks"].items() if not ok]
