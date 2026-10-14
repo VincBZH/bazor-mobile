@@ -158,6 +158,13 @@ class TestPlanner(unittest.TestCase):
         self.assertEqual(r["reason"], "source_anchor_missing")
         self.assertEqual(len(p), 0)
 
+    def test_unique_action_engine_request_ids(self):
+        engine = FakeEngine()
+        run([reply([GOOD])], engine=engine)
+        run([reply([GOOD])], engine=engine)
+        self.assertEqual(len(engine.calls), 2)
+        self.assertNotEqual(engine.calls[0][2], engine.calls[1][2])
+
     def test_missing_model_no_retry(self):
         r,e,p = run([reply([GOOD], model="")])
         self.assertEqual(r["status"], "BLOCKED")
