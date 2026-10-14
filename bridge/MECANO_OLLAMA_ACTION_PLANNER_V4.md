@@ -13,6 +13,7 @@ strictement encadrée \`run_bounded_task(core_task, action_engine, scope, read_b
 - La mission vient d'une **liste locale approuvée**, jamais du corps d'un ticket GitHub.
 - \`provider="ollama"\`, \`apply_actions=False\` lors de la proposition. Le Core
   rapporte le moteur et le modèle réellement utilisés.
+- Pour les remplacements, le SHA-256 du fichier et une ancre attendue sont vérifiés **avant** tout appel au modèle. Un court extrait exact du code local est fourni à Ollama avec un exemple JSON valide.
 - Une proposition non conforme autorise **un seul nouvel essai**, avec un code
   d'erreur assaini (pas de contenu de réponse réinjecté).
 - On refuse toute opération hors du fichier, racine et type d'action inscrits
@@ -41,7 +42,7 @@ Après inspection de l'empreinte SHA-256 locale :
 
 ## Preuves / limites
 \`python -m unittest -v pc-relay/tests/test_bazor_ollama_action_planner.py\`
-14 tests unitaires hors ligne (Core / ActionEngine simulés). Ils ne démontrent
+17 tests unitaires hors ligne (Core / ActionEngine simulés). Ils ne démontrent
 ni mise à jour du PC, ni succès sur une vraie correction BAZOR.
 
 **Statut : CODE PREPARÉ SUR BRANCHE, NON INSTALLÉ SUR WINDOWS.**
