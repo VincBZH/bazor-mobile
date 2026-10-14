@@ -2306,6 +2306,15 @@ while True:
             issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
             for issue in issues:
                 title=issue["title"].lower()
+                # Ignore unrelated GitHub issues before requesting comments.
+                if not title.startswith((
+                    "[bazor-room-control:", "[bazor-v3-beta]", "[bazor-diag]",
+                    "[bazor-hotfix:h3-ui-api]", "[bazor-workflows-audit]",
+                    "[bazor-h3-audit]", "[bazor-certify:studio]",
+                    "[bazor-qualify:studio]", "[bazor-task:", "[bazor-filebus:",
+                    "[bazor-mammouth", "[bazor-queue]"
+                )):
+                    continue
                 number=int(issue["number"])
                 # Cache only immutable one-shot receipts. Studio retries and
                 # open controls remain uncached. Cache is RAM-only.
