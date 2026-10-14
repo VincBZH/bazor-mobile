@@ -946,6 +946,24 @@
       "go_reason": "Racine locale reliée au BAZOR Action Engine.",
       "tasks": [
         {
+          "id": "CONTROL-P0-001",
+          "order": 95,
+          "priority": "P0",
+          "subproject": "autopilot",
+          "title": "Corriger la fausse alerte AUTOCHAIN-BLOCKED après une tâche ponctuelle réussie",
+          "status": "TODO",
+          "action": "Inspecter uniquement pc-relay/bazor_github_watcher.py et la logique de finalisation d'une mission du registre. Après un résultat VERIFIE ou DONE sur BAZOR-OLLAMA-LOCAL-SMOKE-001, le Watcher publie à tort [BAZOR-AUTOCHAIN-BLOCKED] parce que cette mission volontairement ponctuelle n'appartient pas au registre. Corriger la condition de finalisation pour distinguer cette fin normale du vrai blocage d'une chaîne du registre, sans modifier la politique des autres tâches, les gardes de sécurité, Git ni aucun service. Garder l'exécution des tâches Ollama locales indépendante de Mammouth/GPT. Exiger une modification réelle minimaliste et testable, ne jamais inventer une validation runtime après simple modification de code.",
+          "acceptance": [
+            "Une mission ponctuelle de contrôle Ollama VERIFIE n'émet plus de fausse alerte AUTOCHAIN-BLOCKED.",
+            "Les vraies chaînes du registre et les erreurs de dépendances gardent leurs gardes existants.",
+            "Aucune commande distante arbitraire, aucun appel payant ni redémarrage forcé.",
+            "La modification du Watcher est réalisée par Action Engine avec préflight, sauvegarde, compilation et tests déterministes."
+          ],
+          "dependencies": [],
+          "preferred_models": ["qwen2.5-coder:7b"],
+          "proof_required": "action_engine_preflight_backup_compile_tests"
+        },
+        {
           "id": "TOOLS-P1-EXT-PACKER-001",
           "order": 100,
           "priority": "P1",
