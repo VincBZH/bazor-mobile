@@ -1079,6 +1079,40 @@ exit 42
         return {"ok":False,"task_status":"BLOCKED","error":"airoom_runtime_exception","detail":type(exc).__name__+": "+str(exc)[:500]}
 
 def _run_registry_task(task_id):
+    # This explicit, hardcoded task is independent from the multi-provider
+    # AIROOM-P0-003 gate. It cannot execute arbitrary GitHub issue instructions.
+    if str(task_id).upper() == "BAZOR-OLLAMA-LOCAL-SMOKE-001":
+        try:
+            from bazor_ollama_local_smoke import run_probe
+            report = run_probe()
+        except Exception as exc:
+            report = {
+                "status": "LOCAL_ONLY_BLOCKED",
+                "model": None,
+                "reason": "local_probe_exception:" + type(exc).__name__,
+                "files_changed": 0,
+                "paid_api_used": False,
+                "trio_ready": "NOT_EVALUATED",
+            }
+        passed = report.get("status") == "LOCAL_ONLY_READY"
+        return {
+            "ok": passed,
+            "task_status": "VERIFIE" if passed else "BLOCKED",
+            "summary": ("LOCAL_ONLY_READY: Core/Ollama/Room et API Action Engine controles; aucune action appliquee."
+                        if passed else "LOCAL_ONLY_BLOCKED: " + str(report.get("reason") or "unknown")),
+            "engine": "runtime_probe",
+            "model": report.get("model") or "none",
+            "reviews": [],
+            "local_context": report,
+            "detail": report.get("reason"),
+            "execution": {
+                "mode": "read_only_local_probe",
+                "action_result": {
+                    "ok": passed, "applied": False, "reason": "no_actions",
+                    "tests": [], "files": [],
+                },
+            },
+        }
     project,task,sub=_registry_task(task_id)
     if str(task.get("id") or "").upper()=="AIROOM-P0-001":
         return _run_airoom_p0_001_deterministic(project,task)
@@ -2493,7 +2527,8 @@ while True:
                         continue
                     retrying=(TASK_MARK in comments)
                     print(f"[TASK{' RETRY' if retrying else ''}] #{issue['number']} {task_id}")
-                    if not _ensure_core_runtime_current():
+                    # The standalone local probe is read-only and must not restart Core.
+                    if task_id != "BAZOR-OLLAMA-LOCAL-SMOKE-001" and not _ensure_core_runtime_current():
                         print(f"[TASK WAIT] #{issue['number']} {task_id} - Core runtime pas encore sur le code courant")
                         continue
                     if retrying:
