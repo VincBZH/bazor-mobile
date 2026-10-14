@@ -12,6 +12,7 @@ from typing import Callable, Mapping, Any
 import hashlib
 import json
 import re
+import uuid
 
 
 @dataclass(frozen=True)
@@ -191,7 +192,8 @@ def run_bounded_task(core_task: Callable[[dict], dict], action_engine: Any,
                 return report
             continue
         try:
-            result = action_engine.apply(scope.project_id, actions, request_id=scope.task_id)
+            result = action_engine.apply(scope.project_id, actions,
+                                         request_id=scope.task_id + "-" + uuid.uuid4().hex[:12])
         except Exception as exc:
             report["reason"] = "action_engine_exception_" + type(exc).__name__
             return report
