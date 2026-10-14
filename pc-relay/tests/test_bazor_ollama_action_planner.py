@@ -111,7 +111,7 @@ class TestPlanner(unittest.TestCase):
     def test_sha_mismatch_halts(self):
         r,e,p = run([reply([GOOD]), reply([GOOD])], read=lambda *_: b"changed")
         self.assertEqual(r["reason"], "target_sha256_mismatch")
-        self.assertEqual(len(p), 1)
+        self.assertEqual(len(p), 0)
         self.assertFalse(e.calls)
 
     def test_bad_action_extra_fields(self):
@@ -137,6 +137,25 @@ class TestPlanner(unittest.TestCase):
         bad = replace(SCOPE, path="../private.txt")
         r,e,p = run([reply([GOOD])], scope=bad)
         self.assertEqual(r["reason"], "invalid_local_scope")
+        self.assertEqual(len(p), 0)
+
+    def test_template_json_and_local_source_excerpt(self):
+        r,e,p = run([reply([GOOD])])
+        template = p[0]["task"].split("BAZOR_ACTIONS: ", 1)[1].split("\n", 1)[0]
+        parsed = json.loads(template)
+        self.assertEqual(len(parsed["actions"]), 1)
+        self.assertIn("return 'old'", p[0]["task"])
+
+    def test_source_anchor_required_before_core(self):
+        scope = replace(SCOPE, find_must_contain=())
+        r,e,p = run([reply([GOOD])], scope=scope)
+        self.assertEqual(r["reason"], "source_anchor_required")
+        self.assertEqual(len(p), 0)
+
+    def test_source_anchor_missing_before_core(self):
+        scope = replace(SCOPE, find_must_contain=("missing text",))
+        r,e,p = run([reply([GOOD])], scope=scope)
+        self.assertEqual(r["reason"], "source_anchor_missing")
         self.assertEqual(len(p), 0)
 
     def test_missing_model_no_retry(self):
