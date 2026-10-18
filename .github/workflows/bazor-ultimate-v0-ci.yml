@@ -1,0 +1,39 @@
+name: BAZOR Ultimate V0 — diagnostic local
+
+on:
+  pull_request:
+    paths:
+      - "console-hub/bazor_diagnostics.py"
+      - "LANCER_BAZOR_ULTIMATE_V0.cmd"
+      - "console-hub/bazor_ultimate_dashboard.py"
+      - "tests/test_bazor_diagnostics.py"
+      - "tests/test_ultimate_dashboard.py"
+      - ".github/workflows/bazor-ultimate-v0-ci.yml"
+  push:
+    paths:
+      - "console-hub/bazor_diagnostics.py"
+      - "console-hub/bazor_ultimate_dashboard.py"
+      - "tests/test_bazor_diagnostics.py"
+      - "tests/test_ultimate_dashboard.py"
+      - ".github/workflows/bazor-ultimate-v0-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Vérifier la syntaxe (sans démarrer Tkinter)
+        run: |
+          python -m py_compile \
+            console-hub/bazor_console_hub.py \
+            console-hub/bazor_diagnostics.py \
+            console-hub/bazor_ultimate_dashboard.py
+      - name: Tests isolés (aucun service ni API payante)
+        run: python -m unittest discover -s tests -p "test_bazor_diagnostics.py" -v
+      - name: Tests de structure du tableau de bord
+        run: python -m unittest discover -s tests -p "test_ultimate_dashboard.py" -v
