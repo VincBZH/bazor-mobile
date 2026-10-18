@@ -37,6 +37,30 @@
   </div>
 </section>
 
+<section class="panel" id="discussion">
+  <div class="panelTitle"><h2>Discuter avec les IA</h2></div>
+  <p>Ollama reste sur ce PC. Mammouth est facultatif et nécessite votre autorisation.
+  GPT et Astra proposent un texte à copier tant que leurs connexions ne sont pas validées.</p>
+  <label for="chatPrompt">Votre demande</label>
+  <textarea id="chatPrompt" rows="4" maxlength="4000" placeholder="Par exemple : résume les trois prochaines étapes de BAZOR, simplement."></textarea>
+  <div class="chatActions">
+    <label for="chatTarget">Destinataire
+      <select id="chatTarget">
+        <option value="ollama">Ollama (local)</option>
+        <option value="mammouth">Mammouth (externe)</option>
+        <option value="both">Ollama + Mammouth</option>
+        <option value="gpt">Préparer pour GPT</option>
+        <option value="astra">Préparer pour Astra</option>
+      </select>
+    </label>
+    <label class="consent"><input type="checkbox" id="allowExternal"> J'autorise cet envoi à Mammouth et les coûts éventuels.</label>
+    <button id="chatBtn" type="button">Envoyer</button>
+    <button id="copyGPT" type="button">Copier le message pour GPT</button>
+  </div>
+  <pre id="chatResult" class="chatResult" aria-live="polite">Aucun message envoyé.</pre>
+  <small class="disclaimer">NoTrack non certifié ; DuckDuckGo et Tor ne sont pas des modèles d'IA et restent déconnectés.</small>
+</section>
+
 <section class="panel">
   <div class="panelTitle"><h2>Projet courant</h2><span id="progressText">0%</span></div>
   <div class="progress"><div id="progressBar"></div></div>

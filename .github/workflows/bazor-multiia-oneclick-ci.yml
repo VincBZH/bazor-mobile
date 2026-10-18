@@ -1,0 +1,72 @@
+name: BAZOR multi-IA one-click integration
+
+on:
+  push:
+    paths:
+      - "pc-relay/bazor_bridge.py"
+      - "pc-relay/mammouth_client.py"
+      - "pc-relay/bazor_pc_relay_v3.py"
+      - "pc-relay/bazor_multiai_oneclick.py"
+      - "pc-relay/test_bridge_contract.py"
+      - "pc-relay/test_mammouth_transport.py"
+      - "pc-relay/test_mammouth_ollama_runtime.py"
+      - "room-payload/v2.4/**"
+      - "BAZOR_REPARER_CONNEXIONS_1_CLIC.cmd"
+      - ".github/workflows/bazor-multiia-oneclick-ci.yml"
+  pull_request:
+    paths:
+      - "pc-relay/bazor_bridge.py"
+      - "pc-relay/mammouth_client.py"
+      - "pc-relay/bazor_pc_relay_v3.py"
+      - "pc-relay/bazor_multiai_oneclick.py"
+      - "pc-relay/test_bridge_contract.py"
+      - "pc-relay/test_mammouth_transport.py"
+      - "pc-relay/test_mammouth_ollama_runtime.py"
+      - "room-payload/v2.4/**"
+      - "BAZOR_REPARER_CONNEXIONS_1_CLIC.cmd"
+      - ".github/workflows/bazor-multiia-oneclick-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  offline-integration:
+    name: Isolated smoke tests (no tokens, no real providers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Compile Core, bridge, Room and launcher
+        run: |
+          python -m py_compile pc-relay/bazor_bridge.py \
+            pc-relay/bazor_pc_relay_v3.py pc-relay/mammouth_client.py \
+            pc-relay/bazor_github_watcher.py pc-relay/bazor_multiai_oneclick.py \
+            pc-relay/test_bridge_contract.py pc-relay/test_mammouth_transport.py \
+            pc-relay/test_mammouth_ollama_runtime.py \
+            room-payload/v2.4/app/room_v2_server.py
+          node --check room-payload/v2.4/app/static/app.js
+      - name: One-click safety selftest
+        run: python pc-relay/bazor_multiai_oneclick.py --selftest
+      - name: Offline real HTTP/curl tests with fake providers
+        run: python -m unittest discover -s pc-relay -p 'test_bridge_contract.py' -v
+      - name: AI Room to fake Core HTTP tests
+        run: python -m unittest discover -s room-payload/v2.4 -p 'test_core_chat_relay.py' -v
+      - name: Verify launcher and runtime gate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          cmd = Path("BAZOR_REPARER_CONNEXIONS_1_CLIC.cmd").read_text(encoding="utf-8")
+          runtime = Path("pc-relay/test_mammouth_ollama_runtime.py").read_text(encoding="utf-8")
+          core = Path("pc-relay/bazor_pc_relay_v3.py").read_text(encoding="utf-8")
+          assert "bazor_multiai_oneclick.py" in cmd and "--test-mammouth" not in cmd
+          oneclick = Path("pc-relay/bazor_multiai_oneclick.py").read_text(encoding="utf-8")
+          assert "explicit_positive_budget_required" in oneclick
+          assert "return 0 if (not test_mammouth or " in oneclick
+          assert '"--model"' in runtime and 'args.model' in runtime
+          assert 'BAZOR_CORE_BIND_HOST' in core and 'BAZOR_DISABLE_UDP' in core
+          print("Launcher + isolated runtime gates OK; Windows execution NOT tested")
+          PY
