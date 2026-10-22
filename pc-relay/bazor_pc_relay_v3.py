@@ -584,7 +584,7 @@ def run_routed(text, mode="auto"):
     return route, {"ok": False, "error": "no_engine_available", "message": "Aucun moteur IA disponible."}
 
 
-def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None, current_progress=None):
+def go_auto(project_id, task, room="ROOM PRINCIPALE", files=None, current_progress=None, provider="auto"):
     projects = load_projects()
     project = next((p for p in projects if p.get("id") == project_id), None)
     if not project:
@@ -877,6 +877,49 @@ TASK_JOBS = {}
 TASK_JOBS_LOCK = threading.Lock()
 TASK_JOB_TTL_SECONDS = 3600
 TASK_JOB_MAX = 120
+TASK_JOB_STATE_FILE = DATA_DIR / "task_jobs_state.json"
+
+def _persist_task_jobs_locked():
+    """Save task status only, never task prompts, responses or secrets."""
+    rows = {}
+    for rid, job in TASK_JOBS.items():
+        rows[rid] = {k: job.get(k) for k in (
+            "state", "created_ts", "updated_ts", "created_at",
+            "updated_at", "project_id", "subproject_name")}
+    try:
+        tmp = TASK_JOB_STATE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+        os.replace(str(tmp), str(TASK_JOB_STATE_FILE))
+    except OSError as exc:
+        journal("TASK_STATE_SAVE_ERROR", {"type": type(exc).__name__})
+
+def _restore_task_jobs():
+    try:
+        rows = json.loads(TASK_JOB_STATE_FILE.read_text(encoding="utf-8"))
+        if not isinstance(rows, dict):
+            return
+        now = time.time()
+        with TASK_JOBS_LOCK:
+            for rid, saved in list(rows.items())[:TASK_JOB_MAX]:
+                if not isinstance(rid, str) or not isinstance(saved, dict):
+                    continue
+                try:
+                    updated = float(saved.get("updated_ts", 0))
+                except (TypeError, ValueError):
+                    continue
+                if now - updated > TASK_JOB_TTL_SECONDS or updated > now + 60:
+                    continue
+                job = {k: saved.get(k) for k in (
+                    "created_ts", "updated_ts", "created_at", "updated_at",
+                    "project_id", "subproject_name")}
+                job["state"] = "interrupted" if saved.get("state") == "running" else saved.get("state", "interrupted")
+                job["result"] = None
+                TASK_JOBS[rid] = job
+            _persist_task_jobs_locked()
+    except (OSError, ValueError, TypeError):
+        return
+
+_restore_task_jobs()
 
 def _cleanup_task_jobs():
     now = time.time()
@@ -915,6 +958,7 @@ def _task_worker(request_id, kwargs):
             "result": result,
         })
         TASK_JOBS[request_id] = job
+        _persist_task_jobs_locked()
     journal("MOBILE_TASK_JOB_DONE", {
         "request_id": request_id,
         "state": state,
@@ -941,7 +985,7 @@ def start_mobile_task(request_id, **kwargs):
                 "ok": True,
                 "request_id": rid,
                 "job_state": existing.get("state", "running"),
-                "status": "EN_COURS" if existing.get("state") == "running" else "DONE",
+                "status": "EN_COURS" if existing.get("state") == "running" else ("INTERROMPU" if existing.get("state") == "interrupted" else "DONE"),
             }
             if existing.get("state") in ("done", "error"):
                 payload["result"] = existing.get("result")
@@ -956,6 +1000,7 @@ def start_mobile_task(request_id, **kwargs):
             "subproject_name": kwargs.get("subproject_name"),
             "result": None,
         }
+        _persist_task_jobs_locked()
     threading.Thread(target=_task_worker, args=(rid, worker_kwargs), daemon=True, name="BAZOR-TASK-" + rid[:18]).start()
     journal("MOBILE_TASK_JOB_START", {
         "request_id": rid,
@@ -975,7 +1020,7 @@ def get_mobile_task(request_id):
             "ok": True,
             "request_id": rid,
             "job_state": job.get("state", "running"),
-            "status": "EN_COURS" if job.get("state") == "running" else "DONE",
+            "status": "EN_COURS" if job.get("state") == "running" else ("INTERROMPU" if job.get("state") == "interrupted" else "DONE"),
             "created_at": job.get("created_at"),
             "updated_at": job.get("updated_at"),
         }
