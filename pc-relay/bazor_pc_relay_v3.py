@@ -912,7 +912,7 @@ def _restore_task_jobs():
                 job = {k: saved.get(k) for k in (
                     "created_ts", "updated_ts", "created_at", "updated_at",
                     "project_id", "subproject_name")}
-                job["state"] = "interrupted" if saved.get("state") == "running" else saved.get("state", "interrupted")
+                job["state"] = "interrupted" if saved.get("state") == "running" else "archived"
                 job["result"] = None
                 TASK_JOBS[rid] = job
             _persist_task_jobs_locked()
@@ -985,7 +985,7 @@ def start_mobile_task(request_id, **kwargs):
                 "ok": True,
                 "request_id": rid,
                 "job_state": existing.get("state", "running"),
-                "status": "EN_COURS" if existing.get("state") == "running" else ("INTERROMPU" if existing.get("state") == "interrupted" else "DONE"),
+                "status": "EN_COURS" if existing.get("state") == "running" else ("INTERROMPU" if existing.get("state") == "interrupted" else ("ARCHIVE_SANS_RESULTAT" if existing.get("state") == "archived" else "DONE")),
             }
             if existing.get("state") in ("done", "error"):
                 payload["result"] = existing.get("result")
@@ -1020,7 +1020,7 @@ def get_mobile_task(request_id):
             "ok": True,
             "request_id": rid,
             "job_state": job.get("state", "running"),
-            "status": "EN_COURS" if job.get("state") == "running" else ("INTERROMPU" if job.get("state") == "interrupted" else "DONE"),
+            "status": "EN_COURS" if job.get("state") == "running" else ("INTERROMPU" if job.get("state") == "interrupted" else ("ARCHIVE_SANS_RESULTAT" if job.get("state") == "archived" else "DONE")),
             "created_at": job.get("created_at"),
             "updated_at": job.get("updated_at"),
         }
