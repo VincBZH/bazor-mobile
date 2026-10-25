@@ -34,7 +34,7 @@ jobs:
           git -C android/llama.cpp checkout 6050b467c07a95c7b87debd4ddac2f8ba8d9b807
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.13"
+          gradle-version: "8.14.3"
       - name: Run unit tests and assemble debug APK
         working-directory: android/bazor-chat
         run: gradle :app:testDebugUnitTest :app:assembleDebug --stacktrace
