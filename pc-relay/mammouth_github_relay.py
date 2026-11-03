@@ -449,10 +449,34 @@ def process_comment(comment):
     log(f"Retour publie id={cid} model={result.get('model')} ok={bool(result.get('ok'))}")
 
 
+def is_to_ollama(comment):
+    body = str(comment.get("body") or "")
+    return "[TO_OLLAMA]" in body and "[FROM_OLLAMA]" not in body
+
+
+def process_ollama_comment(comment):
+    cid = int(comment.get("id") or 0)
+    body = str(comment.get("body") or "")
+    request_id = request_id_from(body, cid)
+    prompt = body.split("[TO_OLLAMA]", 1)[1].split("[/TO_OLLAMA]", 1)[0].strip()[:6000]
+    if not prompt:
+        post_comment(f"[FROM_OLLAMA]\nREQUEST_ID: {request_id}\nSTATUS: BLOCKED\nERROR: empty_prompt\n[/FROM_OLLAMA]")
+        return
+    result = ollama_review(prompt)
+    answer = str(result.get("answer") or "").strip()
+    status = "OK" if result.get("ok") and answer else "BLOCKED"
+    model = result.get("model") or "UNKNOWN"
+    post_comment(
+        f"[FROM_OLLAMA]\nREQUEST_ID: {request_id}\nSTATUS: {status}\n"
+        f"MODEL: {model}\nSOURCE_COMMENT_ID: {cid}\n"
+        f"ANSWER: {answer[:8000] if status == 'OK' else result.get('error', 'no_response')}\n[/FROM_OLLAMA]"
+    )
+
+
 def pending_comments(comments, processed):
     return [
         c for c in (comments or [])
-        if int(c.get("id") or 0) not in processed and (is_to_mammouth(c) or is_to_trio(c))
+        if int(c.get("id") or 0) not in processed and (is_to_mammouth(c) or is_to_trio(c) or is_to_ollama(c))
     ]
 
 
@@ -516,8 +540,7 @@ def main():
         return 2
 
     if not mammouth_client.configured():
-        log("BLOQUE: MAMMOUTH_API_KEY absente.")
-        return 3
+        log("Mammouth indisponible; mode Ollama local toujours actif.")
 
     state = load_state()
     processed = {int(x) for x in state.get("processed_ids", []) if str(x).isdigit()}
@@ -536,7 +559,9 @@ def main():
             for comment in pending:
                 cid = int(comment.get("id") or 0)
                 try:
-                    if is_to_trio(comment):
+                    if is_to_ollama(comment):
+                        process_ollama_comment(comment)
+                    elif is_to_trio(comment):
                         process_trio_comment(comment)
                     else:
                         process_comment(comment)
