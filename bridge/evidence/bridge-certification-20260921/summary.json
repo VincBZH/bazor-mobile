@@ -1,0 +1,27 @@
+{
+  "baseline_commit": "f553829e8ca207e7846c62ba0f88660cf7e29ea4",
+  "status": "BAZOR_BRIDGE_E2E_BLOCKED",
+  "real_models_used": [],
+  "offline_tests": 31,
+  "checks": [
+    {
+      "name": "offline-bridge",
+      "exit_code": 0
+    },
+    {
+      "name": "routing",
+      "exit_code": 0
+    },
+    {
+      "name": "studio-protocol",
+      "exit_code": 0
+    },
+    {
+      "name": "runtime-in-container-not-windows",
+      "exit_code": 1,
+      "status": "BLOCKED"
+    }
+  ],
+  "windows_runtime": "NOT_VERIFIED",
+  "mammouth_http_status": null
+}
