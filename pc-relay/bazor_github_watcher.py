@@ -2603,7 +2603,7 @@ while True:
                                     is_last=bool(ordered) and str(ordered[-1].get("id") or "").upper()==str(task_id).upper()
                                 except Exception:
                                     is_last=False
-                                if not is_last:
+                                if not is_last and str(task_id).upper() != "BAZOR-OLLAMA-LOCAL-SMOKE-001":
                                     try:
                                         gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",
                                             "[BAZOR-AUTOCHAIN-BLOCKED]\n\nAucune étape suivante autorisée. DEFAULT_RECOVERY requis; ne pas demander Vincent sauf NEEDS_HUMAN réel."])
