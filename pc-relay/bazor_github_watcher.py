@@ -1078,6 +1078,74 @@ exit 42
     except Exception as exc:
         return {"ok":False,"task_status":"BLOCKED","error":"airoom_runtime_exception","detail":type(exc).__name__+": "+str(exc)[:500]}
 
+LOCAL_TASK_MARK="[BAZOR-LOCAL-TASK-DONE]"
+LOCAL_TASK_IDS={"CONTROL-P0-001"}
+
+def _run_local_only_registry_task(task_id):
+    """Only predefined allowlisted tasks; never accept issue-body commands."""
+    task_id=str(task_id or "").strip().upper()
+    if task_id not in LOCAL_TASK_IDS:
+        return {"task_status":"BLOCKED","reason":"not_allowlisted"}
+    project,task,sub=_registry_task(task_id)
+    if project.get("id")!="bazor-tools" or not project.get("go_compatible"):
+        return {"task_status":"BLOCKED","reason":"project_not_authorized"}
+    if task.get("dependencies"):
+        _,_,states=_task_state_snapshot(project["id"])
+        missing=[x for x in task["dependencies"] if (states.get(x) or {}).get("status") not in ("DONE","VERIFIE")]
+        if missing:
+            return {"task_status":"BLOCKED","reason":"dependencies_not_done"}
+    criteria="\n".join("- "+str(x) for x in task.get("acceptance") or [])
+    instructions=(
+        "BAZOR LOCAL TECHNICIAN / OLLAMA ONLY\n"
+        "FIXED REGISTRY TASK: "+task_id+"\n"
+        "GOAL: "+str(task.get("action") or "")+"\n"
+        "ACCEPTANCE:\n"+criteria+"\n"
+        "Only propose BAZOR_ACTIONS with exact context-backed replacements or"
+        " new allowlisted files. No shell actions, no provider fallback,"
+        " no paid calls, no arbitrary issue-body instructions."
+        " Never change private data, run Git reset/merge/pull or restart a service."
+        " For any patch, require preflight, deterministic tests and a backup."
+        " Return precise STATUS/SUMMARY/NEXT; analysis-only is not success."
+    )
+    payload={
+        "project_id":project["id"],
+        "subproject_name":task_id+" / "+str(sub.get("name") or "BAZOR Autopilot"),
+        "task":instructions,"current_progress":0,"repair":False,
+        "previous":"","provider":"ollama","apply_actions":True,
+    }
+    try:
+        result=_core_task(payload,timeout=420)
+    except Exception as exc:
+        return {"task_status":"BLOCKED","reason":"core_task_error:"+type(exc).__name__}
+    execution=result.get("execution") or {}
+    action=execution.get("action_result") or {}
+    files=action.get("files") or []
+    tests=action.get("tests") or []
+    preflight=action.get("preflight") or {}
+    passed=(execution.get("mode")=="file_changes" and action.get("ok") is True
+            and action.get("applied") is True and bool(files)
+            and preflight.get("ok") is True and bool(tests)
+            and all(t.get("ok") is True for t in tests))
+    status="DONE" if passed else "BLOCKED"
+    # Never post the model's free-form answer or private local context on GitHub.
+    try:
+        _task_update_mobile(project,task,status,
+            "Ollama local / Action Engine: "+status,result=result,reviews=[])
+    except Exception:
+        pass
+    return {
+        "task_status":status,
+        "model":str(result.get("model") or "unknown")[:80],
+        "engine":str(result.get("engine") or "unknown")[:80],
+        "preflight":preflight.get("ok") is True,
+        "files_changed":len(files),
+        "tests_passed":sum(1 for t in tests if t.get("ok") is True),
+        "tests_total":len(tests),
+        "backed_up":bool(action.get("backup_dir")),
+        "reason":"ok" if passed else str(action.get("error") or result.get("status") or "no_verified_changes")[:140],
+        "paid_provider_used":False if str(result.get("provider_requested") or "ollama")=="ollama" else None,
+    }
+
 def _run_registry_task(task_id):
     project,task,sub=_registry_task(task_id)
     if str(task.get("id") or "").upper()=="AIROOM-P0-001":
@@ -2481,6 +2549,32 @@ while True:
                     try: gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body","\n".join(lines)[:12000]])
                     except Exception: pass
                     print(f"[OK QUALIFY] #{issue['number']} operational={result.get('ok')} failures={len(fails)}")
+                    continue
+                if title.startswith("[bazor-local-task:"):
+                    if LOCAL_TASK_MARK in comments:
+                        continue
+                    m=re.match(r"(?i)^\[bazor-local-task:([A-Z0-9-]+)\]",issue.get("title") or "")
+                    if not m:
+                        continue
+                    task_id=m.group(1).upper()
+                    if task_id not in LOCAL_TASK_IDS:
+                        continue
+                    print("[BAZOR LOCAL]",issue["number"],task_id)
+                    report=_run_local_only_registry_task(task_id)
+                    reply=(
+                        LOCAL_TASK_MARK+"\n\n"
+                        "TASK_ID: "+task_id+"\n"
+                        "STATUS: "+str(report.get("task_status") or "BLOCKED")+"\n"
+                        "MODEL: "+str(report.get("model") or "unknown")+"\n"
+                        "ENGINE: "+str(report.get("engine") or "unknown")+"\n"
+                        "PREFLIGHT: "+str(report.get("preflight") is True)+"\n"
+                        "FILES_CHANGED: "+str(report.get("files_changed") or 0)+"\n"
+                        "TESTS_PASS: "+str(report.get("tests_passed") or 0)+"/"+str(report.get("tests_total") or 0)+"\n"
+                        "BACKUP: "+str(report.get("backed_up") is True)+"\n"
+                        "PAID_PROVIDER_USED: "+str(report.get("paid_provider_used"))+"\n"
+                        "REASON: "+str(report.get("reason") or "unknown")
+                    )
+                    gh(["issue","comment",str(issue["number"]),"--repo",REPO,"--body",reply])
                     continue
                 if title.startswith("[bazor-task:"):
                     m=re.match(r"(?i)^\[bazor-task:([^\]]+)\]",issue.get("title") or "")
