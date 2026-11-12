@@ -1,5 +1,13 @@
 import json, subprocess, time, urllib.request, os, sys, re, concurrent.futures, zipfile, hashlib
 
+# BAZOR runtime: make Windows cp1252 consoles and redirected logs Unicode-safe.
+for _bazor_stream in (sys.stdout, sys.stderr):
+    try:
+        if hasattr(_bazor_stream, "reconfigure"):
+            _bazor_stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+    except (ValueError, OSError, AttributeError):
+        pass
+
 REPO="VincBZH/bazor-mobile"
 COORD_REPO="VincBZH/projetWII-ai-relay"
 CORE="http://127.0.0.1:8775/api/v1/chat"
@@ -7,6 +15,9 @@ CORE_HEALTH="http://127.0.0.1:8775/api/v1/security/status"
 CORE_FAILS=0
 PENDING_CORE_RESTART=False
 POLL=10
+# GitHub GraphQL errors should not produce hundreds of attempts per minute.
+_GH_COOLDOWN_UNTIL = 0.0
+_ISSUE_DONE_CACHE = set()
 MARK="[BAZOR-WATCHER-DONE]"
 DIAG_MARK="[BAZOR-DIAG-DONE]"
 MAMMOUTH_MARK="[BAZOR-MAMMOUTH-DONE]"
@@ -458,9 +469,19 @@ def diagnostic_summary(force_usb=False, task_smoke=False):
     return "\n".join(lines)
 
 def gh(args):
+    global _GH_COOLDOWN_UNTIL
+    left = _GH_COOLDOWN_UNTIL - time.monotonic()
+    if left > 0:
+        raise RuntimeError("github_rate_limit_cooldown_"+str(int(left))+"s")
     flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
     p=subprocess.run(["gh"]+args,capture_output=True,text=True,encoding="utf-8",errors="replace",creationflags=flags)
-    if p.returncode: raise RuntimeError(p.stderr.strip() or p.stdout.strip())
+    if p.returncode:
+        detail=(p.stderr or p.stdout).strip()
+        lowered=detail.lower()
+        if ("rate limit" in lowered or "secondary rate limit" in lowered or "graphql" in lowered and "limit" in lowered):
+            _GH_COOLDOWN_UNTIL=time.monotonic()+300
+            raise RuntimeError("github_rate_limit_backoff_300s")
+        raise RuntimeError(detail)
     return p.stdout
 
 def core_chat(text, timeout=180, model=None):
@@ -2276,12 +2297,40 @@ while True:
         _control_heartbeat()
         _control_process_request()
         _control_autorun_tick()
+        # Keep local Core/Room duties alive while pausing only GitHub calls.
+        if time.monotonic() < _GH_COOLDOWN_UNTIL:
+            time.sleep(POLL)
+            continue
         _process_filebus_repo(COORD_REPO)
         try:
             issues=json.loads(gh(["issue","list","--repo",REPO,"--state","open","--limit","30","--json","number,title,body"]))
             for issue in issues:
                 title=issue["title"].lower()
-                comments=gh(["issue","view",str(issue["number"]),"--repo",REPO,"--comments"])
+                # Ignore unrelated GitHub issues before requesting comments.
+                if not title.startswith((
+                    "[bazor-room-control:", "[bazor-v3-beta]", "[bazor-diag]",
+                    "[bazor-hotfix:h3-ui-api]", "[bazor-workflows-audit]",
+                    "[bazor-h3-audit]", "[bazor-certify:studio]",
+                    "[bazor-qualify:studio]", "[bazor-task:", "[bazor-filebus:",
+                    "[bazor-mammouth", "[bazor-queue]"
+                )):
+                    continue
+                number=int(issue["number"])
+                # Cache only immutable one-shot receipts. Studio retries and
+                # open controls remain uncached. Cache is RAM-only.
+                if number in _ISSUE_DONE_CACHE:
+                    continue
+                comments=gh(["issue","view",str(number),"--repo",REPO,"--comments"])
+                done = (
+                    (title.startswith("[bazor-queue]") and MARK in comments)
+                    or (title.startswith("[bazor-filebus:") and FILEBUS_MARK in comments)
+                    or (title.startswith("[bazor-mammouth") and MAMMOUTH_MARK in comments)
+                    or (title.startswith("[bazor-task:") and not title.startswith("[bazor-task:studio-") and TASK_MARK in comments)
+                    or (title.startswith("[bazor-diag]") and DIAG_MARK in comments)
+                )
+                if done:
+                    _ISSUE_DONE_CACHE.add(number)
+                    continue
                 if title.startswith("[bazor-room-control:status]"):
                     mark="[BAZOR-ROOM-STATUS-DONE]"
                     if mark in comments:
