@@ -1,0 +1,11 @@
+﻿REFERENCES HISTORIQUES BAZOR (audit ChatGPT du 11/09/2026)
+MODO : historique jusqu'a V11.3 Ollama Kernel, fonctionnement complet V10/V11 non prouve.
+ChatGPT Extractor : historique jusqu'a V5.3, exhaustivite multi-conversations non prouvee.
+Bazor Tchat Companion : historique jusqu'a V3.4.
+BAZOR AI ROOM : installateur historique retrouve jusqu'a V1.7.
+Simple Studio : le PC local reste la reference; ne pas reconstruire ComfyUI/Wan s'ils fonctionnent.
+
+Le HUB pointe uniquement vers des cibles REELLEMENT PRESENTES sur ce PC.
+BAZOR PC CLEANER ULTIMATE est l'unique outil de nettoyage référencé; PANIC est son bouton interne. Aucun lanceur PANIC ou Deep Cleaner séparé ne doit être réinstallé.
+
+BAZOR PC CLEANER ULTIMATE : v4.0 (reprise de la source Cleaner 3.8), seule version de travail : C:\BAZOR\PC_Cleaner\BAZOR_PC_CLEANER.py. Lanceur : C:\Users\vgour\OneDrive\Desktop\BAZOR_CLEANER.cmd (emplacement Desktop Windows redirigé). Bilan 2026-11-24 : C:\BAZOR TOOL\DeepClean\BAZOR_CLEANER_BILAN_TECHNIQUE_20261124.md. Anciennes copies de distribution PC Cleaner retirées après validation de lancement; fichiers de référence historiques et projets non supprimés.

@@ -1,0 +1,38 @@
+NETTOYAGE PC MAX - VINCENT - 10 NOVEMBRE 2026
+
+Ce package est fusionne dans BAZOR PC CLEANER ULTIMATE. Pour l'execution actuelle, utiliser le lanceur Bureau BAZOR_CLEANER.cmd. Le script historique NETTOYAGE_PC_MAX.ps1 est conserve comme NETTOYAGE_PC_MAX_HISTORIQUE.source.txt et n'est pas executable.
+
+POUR DEMARRER :
+1. Decompresser le ZIP.
+2. Double-cliquer sur LANCER_NETTOYAGE_PC_MAX.cmd.
+3. Accepter la demande administrateur Windows.
+4. Lire le chiffre ESPACE LIBERE OBSERVE en bas du rapport.
+
+Le nettoyage est AGRESSIF :
+- Vide les caches temporaires Windows, Windows Update, DirectX, NVIDIA, pip, npm,
+  Opera, Chrome et Edge, ainsi que le dossier temporaire ComfyUI.
+- Supprime des archives ZIP volumineuses UNIQUEMENT si tous leurs fichiers
+  sont deja extraits, presents et identiques (comparaison CRC32).
+- Supprime des installateurs/archives volumineux en double UNIQUEMENT si le
+  contenu est strictement identique (SHA256).
+- Vide la corbeille du lecteur C:.
+- Retire les vieux journaux de plantage (en preservant McAfee).
+- Limite l'espace pris par les anciens points de restauration a 3 Go.
+  ATTENTION : les anciens points de restauration peuvent etre supprimes.
+- Lance un nettoyage DISM du magasin de composants Windows (sans ResetBase).
+
+INTENTIONNELLEMENT CONSERVE :
+- Tous les fichiers personnels (photos, musique, videos, etc.).
+- Tous les modeles IA (ComfyUI, Ollama, HuggingFace, Miko).
+- Les fichiers des projets BAZOR/STUDIO/CINEMA, leurs dossiers d'installation,
+  les environnements Python/CUDA, leurs parametres et sauvegardes.
+- pagefile.sys (48 Go identifies precedemment), essentiel en cas de saturation RAM.
+- Les fichiers de preuve McAfee.
+- Windows.old et ancienne installation ComfyUI : signales dans le rapport,
+  mais non supprimes automatiquement car ils pourraient contenir des fichiers uniques.
+
+Le nettoyage peut etre moins efficace si des programmes gardent leurs caches ouverts.
+Le nettoyage DISM peut etre long; ne fermez pas la fenetre pendant son execution.
+Le gain est mesure sur votre PC, pas estime a l'avance.
+
+RAPPORT : C:\Users\[ton compte]\Downloads\BAZOR\Logs\NETTOYAGE_PC_MAX_*.log

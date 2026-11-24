@@ -1,0 +1,159 @@
+# NETTOYAGE PC MAX - Windows 10/11 - PowerShell 5.1+
+# Cibles: caches regenerables, fichiers temporaires, vieux installateurs identiques.
+# Ne touche PAS : pagefile.sys, hiberfil.sys, modeles IA (ComfyUI/Ollama/HF hub),
+# projets BAZOR, poids Miko, Python actif, CUDA, pilotes, photos, musique, videos.
+$ErrorActionPreference = 'Continue'
+$ProgressPreference = 'SilentlyContinue'
+$Download = Join-Path $env:USERPROFILE 'Downloads'
+$LogFolder = Join-Path $Download 'BAZOR\Logs'
+New-Item -Path $LogFolder -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
+if (!(Test-Path -LiteralPath $LogFolder)) { $LogFolder = $env:TEMP }
+$Stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+$LogFile = Join-Path $LogFolder ("NETTOYAGE_PC_MAX_{0}.log" -f $Stamp)
+function Log([string]$s) {
+    $line = (Get-Date -Format 'HH:mm:ss') + ' ' + $s
+    Write-Host $line
+    try { Add-Content -LiteralPath $LogFile -Value $line -Encoding UTF8 -ErrorAction Stop } catch {}
+}
+function FreeGB {
+    try { return [math]::Round((Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'").FreeSpace / 1GB, 2) }
+    catch { try { return [math]::Round((Get-PSDrive C).Free/1GB,2) } catch { return -1 } }
+}
+function Clear-Contents([string]$Folder, [string]$Label) {
+    if (![string]::IsNullOrWhiteSpace($Folder) -and (Test-Path -LiteralPath $Folder -PathType Container)) {
+        $b = FreeGB
+        Log ("TRAITEMENT : {0} -> {1}" -f $Label,$Folder)
+        Get-ChildItem -LiteralPath $Folder -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            try { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction Stop }
+            catch { } # fichiers en cours d'utilisation: laisses en place
+        }
+        Log ("GAIN observe: {0} Go" -f [math]::Round((FreeGB)-$b,2))
+    }
+}
+function Clear-OldFiles([string]$Folder, [int]$Days, [string]$Label) {
+    if (!(Test-Path -LiteralPath $Folder -PathType Container)) { return }
+    $b=FreeGB
+    Log ("FICHIERS DE PLUS DE {0} JOURS : {1}" -f $Days,$Label)
+    $limit = (Get-Date).AddDays(-$Days)
+    Get-ChildItem -LiteralPath $Folder -File -Recurse -Force -ErrorAction SilentlyContinue | Where-Object {
+        $_.LastWriteTime -lt $limit -and $_.Name -notmatch '(?i)mcafee|mc-fw-host'
+    } | ForEach-Object { try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop } catch {} }
+    Log ("GAIN observe: {0} Go" -f [math]::Round((FreeGB)-$b,2))
+}
+function FolderGB([string]$Folder) {
+    if (!(Test-Path -LiteralPath $Folder)) { return 0 }
+    try {
+        $total = (Get-ChildItem -LiteralPath $Folder -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+        return [math]::Round($total/1GB,2)
+    } catch { return -1 }
+}
+
+Log '============== NETTOYAGE PC AGRESSIF =============='
+Log 'Mode: suppression de caches recreables, doublons binaires verifies, reduction restauration systeme a 3 Go.'
+Log 'Preserves: donnees personnelles, modeles, projets, programmes, pagefile, CUDA, preuves McAfee.'
+$start = FreeGB
+Log ("DISQUE C: LIBRE AVANT = {0} Go" -f $start)
+Log '--- PHASE 1/5 : caches temporaires ---'
+Clear-Contents $env:TEMP 'Temp utilisateur'
+Clear-Contents (Join-Path $env:LOCALAPPDATA 'Temp') 'Temp Windows utilisateur'
+Clear-Contents 'C:\Windows\Temp' 'Temp systeme'
+Clear-Contents (Join-Path $env:LOCALAPPDATA 'pip\Cache') 'Cache pip Python'
+Clear-Contents (Join-Path $env:USERPROFILE '.cache\pip') 'Ancien cache pip'
+Clear-Contents (Join-Path $env:LOCALAPPDATA 'npm-cache') 'Cache npm'
+Clear-Contents (Join-Path $env:APPDATA 'npm-cache') 'Cache npm ancien'
+Clear-Contents (Join-Path $env:LOCALAPPDATA 'uv\cache') 'Cache uv'
+Clear-Contents (Join-Path $env:LOCALAPPDATA 'torch\hub\checkpoints\.cache') 'Cache transitoire Torch'
+Clear-Contents (Join-Path $env:USERPROFILE '.cache\torch_extensions') 'Modules Torch temporaires re-compilables'
+Clear-Contents (Join-Path $env:USERPROFILE '.triton\cache') 'Cache de compilation Triton'
+Clear-Contents (Join-Path $env:USERPROFILE '.cache\huggingface\xet\chunk_cache') 'Chunks de telechargement HF-Xet'
+Clear-Contents (Join-Path $env:USERPROFILE '.cache\huggingface\xet\shard_cache') 'Index de telechargement HF-Xet'
+
+Log '--- PHASE 2/5 : caches Windows et GPU ---'
+Clear-Contents 'C:\Windows\SoftwareDistribution\Download' 'Paquets deja telecharges par Windows Update'
+Clear-Contents 'C:\ProgramData\Microsoft\Windows\DeliveryOptimization\Cache' 'Cache Delivery Optimization'
+Clear-Contents (Join-Path $env:LOCALAPPDATA 'D3DSCache') 'Shaders DirectX'
+Clear-Contents (Join-Path $env:LOCALAPPDATA 'NVIDIA\DXCache') 'Shaders NVIDIA DirectX'
+Clear-Contents (Join-Path $env:LOCALAPPDATA 'NVIDIA\GLCache') 'Shaders NVIDIA OpenGL'
+Clear-Contents (Join-Path $env:LOCALAPPDATA 'NVIDIA Corporation\NV_Cache') 'Shaders NVIDIA anciens'
+Clear-Contents 'C:\ProgramData\NVIDIA Corporation\NV_Cache' 'Shaders NVIDIA globaux'
+Clear-Contents 'C:\ProgramData\NVIDIA Corporation\Downloader' 'Installateurs pilotes NVIDIA deja telecharges'
+Clear-OldFiles (Join-Path $env:LOCALAPPDATA 'CrashDumps') 30 'Anciens rapports de plantage, sauf McAfee'
+Clear-OldFiles 'C:\ProgramData\Microsoft\Windows\WER\ReportArchive' 45 'Vieux rapports WER non McAfee'
+Clear-OldFiles 'C:\ProgramData\Microsoft\Windows\WER\ReportQueue' 45 'Vieille file WER non McAfee'
+
+Log '--- PHASE 3/5 : caches navigateurs, sans historique ni mots de passe ---'
+$chromeRoot = Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data'
+$edgeRoot   = Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data'
+foreach ($root in @($chromeRoot,$edgeRoot)) {
+    if (Test-Path -LiteralPath $root) {
+        Clear-Contents (Join-Path $root 'ShaderCache') 'Shaders navigateur'
+        Clear-Contents (Join-Path $root 'GrShaderCache') 'Shaders GPU navigateur'
+        Clear-Contents (Join-Path $root 'DawnCache') 'Cache GPU navigateur'
+        Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -eq 'Default' -or $_.Name -like 'Profile *'
+        } | ForEach-Object {
+            foreach ($relative in @('Cache','Code Cache','GPUCache','GrShaderCache','DawnCache')) {
+                Clear-Contents (Join-Path $_.FullName $relative) ("Cache navigateur: {0} / {1}" -f $_.Name,$relative)
+            }
+        }
+    }
+}
+$operaRoot = Join-Path $env:APPDATA 'Opera Software\Opera Stable'
+foreach ($relative in @('Cache','Code Cache','GPUCache','GrShaderCache','DawnCache')) {
+    Clear-Contents (Join-Path $operaRoot $relative) ("Cache Opera {0}" -f $relative)
+}
+
+Log '--- PHASE 4/5 : applications IA, sans toucher aux modeles ni productions ---'
+foreach ($folder in @(
+    'C:\AI\ComfyUI\ComfyUI_windows_portable\ComfyUI\temp',
+    'C:\AI\ComfyUI\ComfyUI_windows_portable\ComfyUI\web\extensions\.cache',
+    'C:\AI\SimpleStudioV2\temp',
+    'C:\AI\SimpleStudioV5\temp'
+)) { Clear-Contents $folder 'Dossier temporaire application IA' }
+try {
+    Clear-RecycleBin -DriveLetter C -Force -ErrorAction Stop | Out-Null
+    Log 'Corbeille du disque C: videe.'
+} catch {
+    Log 'Corbeille C: non videe ou deja vide (acces refusé).'
+}
+
+Log '--- BONUS : grandes copies binaires et archives ZIP deja extraites ---'
+$dedupe = Join-Path $PSScriptRoot 'DEDUP_TELECHARGEMENTS.py'
+if (Test-Path -LiteralPath $dedupe) {
+    try {
+        $py = Get-Command py -ErrorAction SilentlyContinue
+        if ($py) {
+            & py -3.11 $dedupe $Download 2>&1 | ForEach-Object { Log ([string]$_) }
+        } else { Log 'Python py -3.11 introuvable: optimisation ZIP ignoree.' }
+    } catch { Log ('Verification archives non executee : ' + $_.Exception.Message) }
+}
+Log '--- PHASE 5/5 : restauration et composants Windows ---' 
+Log 'Redimensionnement du stockage de restauration C: a 3 Go (les anciens points peuvent etre effaces).'
+try {
+    $out = & vssadmin.exe resize shadowstorage /For=C: /On=C: /MaxSize=3GB 2>&1
+    Log ("VSS : {0}" -f (($out | Out-String).Trim()))
+} catch { Log ('VSS : ' + $_.Exception.Message) }
+Log 'Nettoyage du magasin de composants Windows (DISM). Peut prendre plusieurs minutes.'
+try {
+    $process=Start-Process -FilePath "$env:WINDIR\System32\Dism.exe" -ArgumentList '/Online','/Cleanup-Image','/StartComponentCleanup','/Quiet','/NoRestart' -Wait -PassThru -WindowStyle Hidden
+    Log ("DISM termine, code retour: {0}" -f $process.ExitCode)
+} catch { Log ('DISM non lance: ' + $_.Exception.Message) }
+
+Log '--- SUPPLEMENT : installation et volumes suspects (rapport seulement) ---'
+foreach ($candidate in @(
+    'C:\Windows\System32\comfyui_workspace',
+    'C:\Windows.old',
+    (Join-Path $Download 'Miko-main'),
+    (Join-Path $Download 'BAZOR_CINEMA_V3_1_1_CORRECTIF_COMFYUI'),
+    'C:\AI\ComfyUI\ComfyUI_windows_portable\ComfyUI\models',
+    (Join-Path $env:USERPROFILE '.ollama\models'),
+    (Join-Path $env:USERPROFILE '.cache\huggingface\hub')
+)) {
+    if (Test-Path -LiteralPath $candidate) { Log ("CONSERVE - {0} Go - {1}" -f (FolderGB $candidate),$candidate) }
+}
+$end=FreeGB
+Log ("DISQUE C: LIBRE AVANT = {0} Go" -f $start)
+Log ("DISQUE C: LIBRE APRES = {0} Go" -f $end)
+Log ("ESPACE LIBERE OBSERVE = {0} Go" -f [math]::Round($end-$start,2))
+Log ("JOURNAL COMPLET = {0}" -f $LogFile)
+Log 'Si Windows demande un redemarrage, tes projets et donnees restent conserves.'
