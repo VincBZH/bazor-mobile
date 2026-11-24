@@ -1,5 +1,10 @@
 ﻿BAZOR HUB - INVENTAIRE DU 2026-09-19 13:38:27  Raccourci Bureau : C:\Users\vgour\OneDrive\Desktop\BAZOR.lnk Menu central     : C:\BAZOR TOOL\Hub\BAZOR_MENU_BUREAU.cmd Raccourcis outils: C:\BAZOR TOOL\Hub\Outils Journaux         : C:\BAZOR TOOL\Logs\BAZOR_HUB_INSTALL.log Quarantaine      : C:\Users\vgour\AppData\Local\BazorDiskCleaner\Quarantine\BAZOR\HUB  Les elements absents ne sont pas inventes et ne generent pas de raccourci casse. Les versions precedentes sont conservees dans la quarantaine.
 
+BAZOR PC CLEANER ULTIMATE v4.0 remplace PC Cleaner 3.8 et le lanceur NETTOYAGE_PC_MAX historique.
+Utiliser uniquement le lanceur Bureau BAZOR_CLEANER.cmd.
+Le fichier NETTOYAGE_PC_MAX.ps1 historique redirige vers le Cleaner Ultimate.
+Les archives de distribution PC Cleaner remplacees sont retirees; sources et rapports historiques gardes hors execution.
+
 Cleaner unique : BAZOR PC CLEANER ULTIMATE 4.0
 Lanceur Bureau (emplacement Windows redirige vers OneDrive) : C:\Users\vgour\OneDrive\Desktop\BAZOR_CLEANER.cmd
 Application : C:\BAZOR\PC_Cleaner\BAZOR_PC_CLEANER.py

@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 title BAZOR - Hub central des outils
@@ -31,7 +31,6 @@ call :resolve_wii
 call :resolve_core
 call :resolve_extractor
 call :resolve_organizer
-rem Legacy deep cleaner is intentionally not resolved; PC Cleaner Ultimate is the sole cleaner.
 
 call :status "1  AI ROOM" AIROOM_TARGET
 if exist "C:\AI\SimpleStudioV2" (echo [OK] 2  AI Simple Studio BAZOR) else (echo [--] 2  AI Simple Studio BAZOR)
@@ -282,8 +281,3 @@ for /f "delims=" %%P in ('dir /b /s "C:\BAZOR TOOL\BazorOrganizer.exe" 2^>nul') 
 set "ORGANIZER_TARGET=!TARGET!"
 exit /b 0
 
-:resolve_deep_cleaner
-set "TARGET="
-for /f "delims=" %%P in ('dir /b /s "C:\BAZOR TOOL\BazorDeepCleaner.exe" 2^>nul') do if not defined TARGET set "TARGET=%%P"
-set "DEEP_CLEANER_TARGET=!TARGET!"
-exit /b 0
