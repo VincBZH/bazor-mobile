@@ -42,7 +42,8 @@ TEMP_AGE = {"Temporaires utilisateur anciens": 7, "Temporaires Windows anciens":
 
 def connect_db():
     c = sqlite3.connect(DB)
-    c.execute("CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, ts TEXT, action TEXT, path TEXT, bytes INTEGER, result TEXT)")
+    # Keep the pre-existing BAZOR Cleaner 3.8 tracking schema untouched.
+    c.execute("CREATE TABLE IF NOT EXISTS cleaner_history(id INTEGER PRIMARY KEY, ts TEXT, action TEXT, path TEXT, bytes INTEGER, result TEXT)")
     c.commit()
     return c
 
@@ -50,7 +51,7 @@ def connect_db():
 def record(action, path, size, result):
     try:
         with connect_db() as c:
-            c.execute("INSERT INTO events(ts,action,path,bytes,result) VALUES(?,?,?,?,?)",
+            c.execute("INSERT INTO cleaner_history(ts,action,path,bytes,result) VALUES(?,?,?,?,?)",
                       (datetime.now().isoformat(timespec="seconds"), action, str(path), int(size), result))
     except Exception:
         pass
@@ -127,7 +128,13 @@ def inventory(progress=None):
             pass
         if count:
             risk = "TRÈS FAIBLE" if label in ("Cache pip HTTP", "Cache roues pip", "Cache NVIDIA DX", "Cache NVIDIA GL") else "FAIBLE — fichiers anciens seulement"
-            rows.append({"path": str(root), "label": label, "reason": why, "size": total,
+            if label.startswith("Cache NVIDIA"):
+                ui_label = label + " — post-nettoyage des caches pip"
+                ui_reason = why + " Aucun fichier supplémentaire depuis le passage de nettoyage effectué."
+            else:
+                ui_label = label
+                ui_reason = why
+            rows.append({"path": str(root), "label": ui_label, "reason": ui_reason, "size": total,
                          "eligible": eligible, "count": count, "risk": risk,
                          "safe": True, "age_days": TEMP_AGE.get(label, 0)})
     return rows
@@ -210,6 +217,7 @@ class Cleaner(tk.Tk):
         self.scan_btn = self._button(bar, "ANALYSER", self.scan, "#00ddff")
         self.clean_btn = self._button(bar, "NETTOYER ET OPTIMISER", self.clean, "#00f2a9")
         self.panic_btn = self._button(bar, "PANIC", self.panic, "#ff4567", side="right")
+        self.clean_btn.config(text="NETTOYER ET OPTIMISER")
         self.status = tk.Label(self, text="Analyse locale uniquement — aucun appel IA/API.", fg="#86a7ba", bg="#07131b", anchor="w")
         self.status.pack(fill="x", padx=20, pady=(0, 6))
         cols = ("risk", "label", "size", "gain", "detail", "path")
@@ -219,6 +227,7 @@ class Cleaner(tk.Tk):
         for c in cols:
             self.tree.heading(c, text=headers[c]); self.tree.column(c, width=widths[c], anchor="w")
         self.tree.pack(fill="both", expand=True, padx=18, pady=5)
+        self.tree.bind("<Double-1>", self._select_row)
         self.system = tk.Text(self, height=5, bg="#0e2230", fg="#b9d8e7", relief="flat", wrap="word")
         self.system.pack(fill="x", padx=18, pady=(7, 4)); self.system.insert("end", "Contrôles de protection…")
         self.history = tk.Label(self, text="Historique : prêt", fg="#86a7ba", bg="#07131b", anchor="w")
@@ -228,6 +237,12 @@ class Cleaner(tk.Tk):
         b = tk.Button(parent, text=text, command=cmd, bg="#102635", fg=color, activebackground="#143346",
                       activeforeground="white", bd=1, relief="flat", font=("Segoe UI", 10, "bold"), padx=14, pady=10)
         b.pack(side=side, padx=(0, 8)); return b
+
+    def _select_row(self, event):
+        row = self.tree.identify_row(event.y)
+        if row:
+            if row in self.tree.selection(): self.tree.selection_remove(row)
+            else: self.tree.selection_add(row)
 
     def scan(self):
         if self.busy: return
@@ -257,6 +272,10 @@ class Cleaner(tk.Tk):
         selected = self.tree.selection()
         chosen = [self.rows[int(self.tree.item(i, "tags")[0])] for i in selected] if selected else [r for r in self.rows if r["safe"]]
         if not chosen: return
+        chosen = [x for x in chosen if x["eligible"] > 0]
+        if not chosen:
+            self.status.config(text="Rien à supprimer dans les zones sélectionnées.")
+            return
         risky = [x for x in chosen if x["label"] not in ("Cache pip HTTP", "Cache roues pip", "Cache NVIDIA DX", "Cache NVIDIA GL")]
         if risky:
             labels = "\n".join(f"• {x['label']} — {human(x['eligible'])}" for x in risky)
@@ -293,7 +312,7 @@ class Cleaner(tk.Tk):
     def refresh_history(self):
         try:
             with connect_db() as c:
-                n, b = c.execute("SELECT COUNT(*), COALESCE(SUM(bytes),0) FROM events WHERE action='DELETE_CACHE_FILE'").fetchone()
+                n, b = c.execute("SELECT COUNT(*), COALESCE(SUM(bytes),0) FROM cleaner_history WHERE action='DELETE_CACHE_FILE'").fetchone()
             self.history.config(text=f"Historique des suppressions : {n} fichier(s), {human(b)} cumulés — journal local SQLite")
         except Exception: pass
 

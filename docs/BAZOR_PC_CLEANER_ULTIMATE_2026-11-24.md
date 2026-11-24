@@ -1,40 +1,45 @@
-﻿# BAZOR PC CLEANER ULTIMATE â€” bilan technique
+﻿# BAZOR PC CLEANER ULTIMATE — bilan technique
 
-Date : 2026-11-24
+Date : 24 novembre 2026
 
-## Livrable
-- Application historique BAZOR PC Cleaner 3.8 reprise et remplacÃ©e par BAZOR PC Cleaner Ultimate 4.0.
-- Source : `C:\BAZOR\PC_Cleaner\BAZOR_PC_CLEANER.py`.
-- Lanceur Bureau unique : `C:\Users\vgour\OneDrive\Desktop\BAZOR_CLEANER.cmd` (emplacement Desktop Windows redirigÃ© vers OneDrive).
-- PANIC indÃ©pendant, limitÃ© Ã  l'arrÃªt du Cleaner : `BAZOR_PANIC.py`.
-- Mode local, sans Ollama, modÃ¨le IA, API ni tÃ©lÃ©chargement.
-- UI fournit inventaire, classification gain/risque, surveillance d'espace toutes les 10 s, historique SQLite, nettoyage avec confirmation et PANIC.
-- PÃ©rimÃ¨tre destructif limitÃ© au cache HTTP/roues pip et caches graphiques NVIDIA rÃ©gÃ©nÃ©rables, plus temporaires de l'utilisateur/Windows anciens et non verrouillÃ©s aprÃ¨s confirmation.
-- Aucun mÃ©canisme ne touche aux modÃ¨les, environnements Python, CUDA, pilote, donnÃ©es personnelles, rÃ©pertoires IA ou ports moteurs.
+## Livraison
+- BAZOR PC Cleaner 3.8 repris et remplacé par **BAZOR PC Cleaner Ultimate 4.0**.
+- Application : `C:\BAZOR\PC_Cleaner\BAZOR_PC_CLEANER.py`.
+- Lanceur Bureau Windows (Bureau redirigé vers OneDrive) : `C:\Users\vgour\OneDrive\Desktop\BAZOR_CLEANER.cmd`.
+- Le PANIC est un bouton intégré à l’application et n’arrête que le Cleaner.
+- Application locale sans Ollama, modèle IA, API ni téléchargement.
+- Interface : inventaire avec gain/risque, surveillance du disque, bouton « NETTOYER ET OPTIMISER », bouton PANIC et historique SQLite.
+- Périmètre d’effacement volontairement restreint aux caches pip HTTP et NVIDIA régénérables, et aux fichiers temporaires anciens déverrouillés après confirmation. Aucune nouvelle quarantaine.
+- Les copies d’archives de distribution Cleaner 3.8 ont été retirées après remplacement validé. Le lanceur historique `NETTOYAGE_PC_MAX.ps1` redirige vers Ultimate; sa source historique est conservée comme fichier texte inerte.
+- Menu BAZOR mis à jour : le Cleaner Ultimate remplace l’entrée Deep Cleaner. Les anciens raccourcis Cleaner/PANIC du Hub ont été retirés; le lanceur de référence est celui du Bureau.
 
-## ExÃ©cution et mesure
-- Volume C: mesurÃ© avant : libre `29 021 503 488` octets.
-- Cache pip HTTP supprimÃ© dÃ©finitivement : `4 062 883 680` octets.
-- Cache NVIDIA DX supprimÃ© dÃ©finitivement : `4 857 856` octets.
-- Cache NVIDIA GL supprimÃ© dÃ©finitivement : `97 153` octets.
-- Total fichier dÃ©clarÃ© supprimÃ© : `4 067 838 689` octets (environ `3,79 Gio`).
-- Volume C: mesurÃ© aprÃ¨s : libre `33 093 693 440` octets (`30,821 Gio`).
-- Variation rÃ©elle d'espace libre : `4 072 189 952` octets (environ `3,79 Gio`). L'Ã©cart de quelques Mo inclut les variations concurrentes du systÃ¨me.
+## Nettoyage exécuté et mesure réelle
+- Espace libre C: juste avant : **29 021 503 488 octets**.
+- Cache pip HTTP supprimé définitivement : **4 062 883 680 octets**.
+- Cache NVIDIA DX supprimé définitivement : **4 857 856 octets**.
+- Cache NVIDIA GL supprimé définitivement : **97 153 octets**.
+- Total des fichiers supprimés : **4 067 838 689 octets** (~3,79 Gio).
+- Espace libre C: juste après : **33 093 693 440 octets** (~30,82 Gio).
+- Hausse mesurée de l’espace libre : **4 072 189 952 octets** (~3,79 Gio). Le petit écart entre fichiers supprimés et espace disque tient aux écritures simultanées du système.
+- Une mesure ultérieure, après activité concurrente, indique environ **31,78 Go libres** sur C:; la mesure immédiate avant/après ci-dessus reste la preuve du gain de cette opération.
 
-## Protection et contrÃ´les
-- Syntaxe Python compilÃ©e et initialisation Tk vÃ©rifiÃ©es.
-- Processus ComfyUI portable dÃ©tectÃ© depuis `C:\AI\ComfyUI\ComfyUI_windows_portable`; aucun second moteur n'a Ã©tÃ© lancÃ©. Le contrÃ´le HTTP local du port 8188 n'a pas rÃ©pondu pendant la mesure, donc le service n'a pas Ã©tÃ© certifiÃ© fonctionnel.
-- Ollama, modÃ¨les et applications IA laissÃ©s intacts.
-- GPU prÃ©sent : NVIDIA GeForce RTX 4060; `nvidia-smi` rapporte pilote 610.62 et runtime CUDA 13.3.
-- CUDA 13.2 et 13.3 prÃ©sents; aucun toolkit dÃ©sinstallÃ© car dÃ©pendances possibles de Forge/ComfyUI et Build Tools. CUDA toolkit ne se dÃ©duit pas du runtime du pilote.
-- Audit IA local prÃ©cÃ©dent : Wan 2.2, UMT5, VAE et autres modÃ¨les rÃ©fÃ©rencÃ©s protÃ©gÃ©s; modÃ¨les sans rÃ©fÃ©rence conservÃ©s faute de preuve d'inutilitÃ©.
-- Deux temporaires UMT5 signalÃ©s par un ancien audit Ã©taient absents au contrÃ´le actuel au moment de la demande; les sources d'audit/lecture ont Ã©tÃ© concurrentes et aucun fichier modÃ¨le ou temporaire IA supprimÃ©.
-- Quarantaine historique `BazorDiskCleaner` observÃ©e vide; aucune quarantaine crÃ©Ã©e et aucune ancienne quarantaine vidÃ©e.
-- Processus Python/Ollama observÃ©s mais identifiÃ©s Ã  des moteurs/services actifs; aucun processus arrÃªtÃ©.
+## Vérifications et protections
+- Compilation syntaxique Python et initialisation de l’interface Tk vérifiées; l’application a été lancée réellement.
+- ComfyUI portable existant détecté; aucun second ComfyUI n’a été lancé. Le port 8188 n’a pas répondu au contrôle HTTP, donc son fonctionnement n’est pas certifié ici.
+- Ollama, modèles IA, Wan 2.2, UMT5, VAE, configurations, ComfyUI portable, WanGP et AI Simple Studio n’ont pas été supprimés ni démarrés par le Cleaner.
+- GPU NVIDIA RTX 4060; `nvidia-smi` : pilote 610.62, runtime CUDA 13.3.
+- Toolkits CUDA 13.2 et 13.3 observés. Aucun toolkit désinstallé faute de preuve de non-dépendance; le runtime du pilote ne prouve pas qu’un toolkit est inutilisé.
+- Les modèles IA actifs/référencés sont protégés; modèles uniques non référencés également conservés faute de preuve. Les deux anciens chemins de fichiers temporaires UMT5 n’étaient pas présents lors du contrôle final; aucune donnée IA supprimée.
+- Quarantaine historique observée vide; aucune quarantaine vidée. Processus Ollama/Python actifs identifiés et laissés intacts.
+- L’historique local enregistre les suppressions de caches et les archives Cleaner remplacées.
 
-## Non exÃ©cutÃ© â€” validation requise
-- DÃ©sinstallation CUDA 13.2 (environ 4,08 Go installÃ©s) : non exÃ©cutÃ©e, dÃ©pendances d'applications non dÃ©montrÃ©es.
-- Suppression de modÃ¨les IA non rÃ©fÃ©rencÃ©s et archivages/sauvegardes BAZOR : non exÃ©cutÃ©e.
-- RÃ©fÃ©rences du menu central intÃ©grÃ©es au nouveau lanceur et PANIC bornÃ© au Cleaner. RÃ©fÃ©rences MÃ©cano/encyclopÃ©die et autres raccourcis non reconfigurÃ©s : l'encyclopÃ©die est un service local actif, aucune rÃ©fÃ©rence existante n'a Ã©tÃ© modifiÃ©e sans correspondance vÃ©rifiable.
-- Bilan technique expurgÃ© publiÃ© dans le dÃ©pÃ´t public BAZOR `VincBZH/bazor-mobile` : `docs/BAZOR_PC_CLEANER_ULTIMATE_2026-11-24.md`.
+## Limites restantes
+- Nettoyage volontairement sûr, gain obtenu ~4,07 Go, inférieur à l’objectif souhaité de 30–50 Go.
+- La désinstallation CUDA 13.2 (~4,08 Go installés), les modèles, environnements Python, sauvegardes BAZOR, jeux, archives de projet et autres quarantaines n’ont pas été effacés : leur inutilité n’est pas démontrée.
+- Pas de suppression par âge, nom ou taille seuls; aucune tâche planifiée/service inconnu n’a été désactivé.
+- Références de l’encyclopédie/Mécano non modifiées en l’absence d’un point d’intégration spécifique vérifié.
 
+## Publication
+Le rapport assaini et les sources de l’application sont publiés dans une branche du dépôt public `VincBZH/bazor-mobile` et proposés en revue :
+- PR : https://github.com/VincBZH/bazor-mobile/pull/227
+- Branche : `feature/bazor-pc-cleaner-ultimate-release-20261124`

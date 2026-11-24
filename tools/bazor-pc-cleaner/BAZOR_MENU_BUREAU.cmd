@@ -25,7 +25,6 @@ call :resolve_studio
 call :resolve_comfy
 call :resolve_autopilot
 call :resolve_pc
-call :resolve_panic
 call :resolve_tor
 call :resolve_wii
 call :resolve_core
@@ -37,7 +36,6 @@ if exist "C:\AI\SimpleStudioV2" (echo [OK] 2  AI Simple Studio BAZOR) else (echo
 call :status "3  ComfyUI GPU" COMFY_TARGET
 call :status "4  BAZOR Autopilot V5" AUTOPILOT_TARGET
 call :status "5  BAZOR PC Cleaner Ultimate" PC_TARGET
-call :status "6  BAZOR PANIC (Cleaner)" PANIC_TARGET
 call :status "7  TOR Model Scout / TOR" TOR_TARGET
 call :status "8  Wii AI Relay" WII_TARGET
 call :status "9  BAZOR Core" CORE_TARGET
@@ -100,11 +98,6 @@ goto MENU
 
 :RUN_PC
 if defined PC_TARGET (call :run_target "!PC_TARGET!") else (call :missing "BAZOR PC Cleaner Ultimate")
-pause
-goto MENU
-
-:RUN_PANIC
-if defined PANIC_TARGET (call :run_target "!PANIC_TARGET!") else (call :missing "BAZOR PANIC")
 pause
 goto MENU
 
@@ -240,12 +233,6 @@ exit /b 0
 set "TARGET="
 for %%P in ("%USERPROFILE%\OneDrive\Desktop\BAZOR_CLEANER.cmd" "%USERPROFILE%\Desktop\BAZOR_CLEANER.cmd") do if not defined TARGET if exist "%%~P" set "TARGET=%%~P"
 set "PC_TARGET=!TARGET!"
-exit /b 0
-
-:resolve_panic
-set "TARGET="
-for %%P in ("C:\BAZOR\PC_Cleaner\LANCER_PANIC.cmd") do if not defined TARGET if exist "%%~P" set "TARGET=%%~P"
-set "PANIC_TARGET=!TARGET!"
 exit /b 0
 
 :resolve_tor

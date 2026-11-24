@@ -11,8 +11,6 @@ if errorlevel 1 (
     exit /b 1
   )
   start "BAZOR PC CLEANER ULTIMATE" pyw -3 "%APP%"
-  start "BAZOR PANIC" pyw -3 "%PANIC%"
 ) else (
   start "BAZOR PC CLEANER ULTIMATE" pythonw "%APP%"
-  start "BAZOR PANIC" pythonw "%PANIC%"
 )

@@ -12,7 +12,7 @@ PANIC associe : C:\BAZOR\PC_Cleaner\BAZOR_PANIC.py
 Bilan : C:\BAZOR TOOL\DeepClean\BAZOR_CLEANER_BILAN_TECHNIQUE_20261124.md
 
 Cleaner unique : BAZOR PC CLEANER ULTIMATE 4.0
-Lanceur Bureau Windows : C:\Users\vgour\Desktop\BAZOR_CLEANER.cmd
+Lanceur Bureau Windows (redirige OneDrive) : C:\Users\vgour\OneDrive\Desktop\BAZOR_CLEANER.cmd
 Lanceur Bureau OneDrive : C:\Users\vgour\OneDrive\Desktop\BAZOR_CLEANER.cmd
 Application : C:\BAZOR\PC_Cleaner\BAZOR_PC_CLEANER.py
 PANIC associé, limité au Cleaner : C:\BAZOR\PC_Cleaner\BAZOR_PANIC.py
